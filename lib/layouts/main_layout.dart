@@ -21,45 +21,25 @@ class MainLayout extends StatelessWidget {
 
             padding: const EdgeInsets.symmetric(horizontal: 25),
 
-            child: const Row(
-              children: [
-                Icon(Icons.badge, color: Colors.white, size: 28),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _navButton(Icons.dashboard, "Dashboard"),
+                  const SizedBox(width: 10),
 
-                SizedBox(width: 12),
+                  _navButton(Icons.people, "Students"),
+                  const SizedBox(width: 10),
 
-                Text(
-                  "ID Card Master",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
+                  _navButton(Icons.add, "Add"),
+                  const SizedBox(width: 10),
 
-          // NAVIGATION
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(15),
+                  _navButton(Icons.palette, "Design"),
+                  const SizedBox(width: 10),
 
-            child: Row(
-              children: [
-                _navButton(Icons.dashboard, "Dashboard"),
-                const SizedBox(width: 10),
-
-                _navButton(Icons.people, "Students"),
-                const SizedBox(width: 10),
-
-                _navButton(Icons.add, "Add"),
-                const SizedBox(width: 10),
-
-                _navButton(Icons.palette, "Design"),
-                const SizedBox(width: 10),
-
-                _navButton(Icons.badge_outlined, "Cards"),
-              ],
+                  _navButton(Icons.badge_outlined, "Cards"),
+                ],
+              ),
             ),
           ),
 
@@ -83,7 +63,7 @@ class MainLayout extends StatelessWidget {
 
                   Center(
                     child: Container(
-                      width: 900,
+                      width: 1100,
 
                       padding: const EdgeInsets.all(25),
 
