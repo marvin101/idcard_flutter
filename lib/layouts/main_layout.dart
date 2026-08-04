@@ -112,19 +112,21 @@ class MainLayout extends StatelessWidget {
   }
 
   Widget _navButton(IconData icon, String text) {
-    return ElevatedButton.icon(
-      onPressed: () {},
+    return IntrinsicWidth(
+      child: ElevatedButton.icon(
+        onPressed: () {},
 
-      icon: Icon(icon),
+        icon: Icon(icon),
 
-      label: Text(text),
+        label: Text(text),
 
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        backgroundColor: Colors.grey.shade100,
-        foregroundColor: Colors.indigo,
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: Colors.grey.shade100,
+          foregroundColor: Colors.indigo,
+          shape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        ),
       ),
     );
   }
