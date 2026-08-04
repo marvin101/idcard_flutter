@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../layouts/main_layout.dart';
+import '../widgets/dob_input.dart';
 
 class StudentFormScreen extends StatelessWidget {
   const StudentFormScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MainLayout(
+    return MainLayout(
       title: "Add Student",
 
       child: Column(
@@ -49,28 +50,14 @@ class StudentFormScreen extends StatelessWidget {
 
           TextField(
             decoration: InputDecoration(
-              labelText: "Phone Number",
+              labelText: "Mobile Number",
               border: OutlineInputBorder(),
             ),
           ),
 
           SizedBox(height: 20),
 
-          TextField(
-            decoration: InputDecoration(
-              labelText: "Email",
-              border: OutlineInputBorder(),
-            ),
-          ),
-
-          SizedBox(height: 20),
-
-          TextField(
-            decoration: InputDecoration(
-              labelText: "Date of Birth",
-              border: OutlineInputBorder(),
-            ),
-          ),
+          DobInput(label: "Date of Birth"),
 
           SizedBox(height: 20),
 
