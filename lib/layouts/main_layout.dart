@@ -62,24 +62,27 @@ class MainLayout extends StatelessWidget {
                   const SizedBox(height: 30),
 
                   Center(
-                    child: Container(
-                      width: 1100,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: Container(
+                        width: double.infinity,
 
-                      padding: const EdgeInsets.all(25),
+                        padding: const EdgeInsets.all(25),
 
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 10,
-                            offset: Offset(0, 3),
-                          ),
-                        ],
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
+
+                        child: child,
                       ),
-
-                      child: child,
                     ),
                   ),
                 ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/app_text_input.dart';
 import '../widgets/dob_input.dart';
+import '../widgets/responsive_row.dart';
 
 class PersonalInformationSection extends StatelessWidget {
   const PersonalInformationSection({super.key});
@@ -18,29 +19,19 @@ class PersonalInformationSection extends StatelessWidget {
 
         const SizedBox(height: 25),
 
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        ResponsiveRow(
           children: [
-            Expanded(
-              child: AppTextInput(label: "Full Name", requiredField: true),
-            ),
-
-            const SizedBox(width: 20),
-
-            Expanded(child: AppTextInput(label: "Father Name")),
+            AppTextInput(label: "Full Name", requiredField: true),
+            AppTextInput(label: "Father Name"),
           ],
         ),
 
         const SizedBox(height: 20),
 
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        ResponsiveRow(
           children: [
-            Expanded(child: AppTextInput(label: "Mother Name")),
-
-            const SizedBox(width: 20),
-
-            Expanded(child: DobInput(label: "Date of Birth")),
+            AppTextInput(label: "Mother Name"),
+            DobInput(label: "Date of Birth"),
           ],
         ),
       ],
