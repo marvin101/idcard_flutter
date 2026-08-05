@@ -1,36 +1,36 @@
 import 'package:flutter/material.dart';
+
 import 'dob_field.dart';
 
 class DobInput extends StatefulWidget {
   final String label;
 
-  const DobInput({super.key, required this.label});
+  final TextEditingController dayController;
+  final TextEditingController monthController;
+  final TextEditingController yearController;
+
+  const DobInput({
+    super.key,
+    required this.label,
+    required this.dayController,
+    required this.monthController,
+    required this.yearController,
+  });
 
   @override
   State<DobInput> createState() => _DobInputState();
 }
 
 class _DobInputState extends State<DobInput> {
-  // Controllers
-  final TextEditingController dayController = TextEditingController();
-  final TextEditingController monthController = TextEditingController();
-  final TextEditingController yearController = TextEditingController();
-
-  // Focus Nodes
   final FocusNode dayFocus = FocusNode();
   final FocusNode monthFocus = FocusNode();
   final FocusNode yearFocus = FocusNode();
 
   @override
   void dispose() {
-    dayController.dispose();
-    monthController.dispose();
-    yearController.dispose();
-
     dayFocus.dispose();
     monthFocus.dispose();
     yearFocus.dispose();
-
     super.dispose();
   }
 
@@ -49,7 +49,7 @@ class _DobInputState extends State<DobInput> {
         Row(
           children: [
             DobField(
-              controller: dayController,
+              controller: widget.dayController,
               focusNode: dayFocus,
               nextFocus: monthFocus,
               hint: "DD",
@@ -59,7 +59,7 @@ class _DobInputState extends State<DobInput> {
             const SizedBox(width: 12),
 
             DobField(
-              controller: monthController,
+              controller: widget.monthController,
               focusNode: monthFocus,
               nextFocus: yearFocus,
               hint: "MM",
@@ -69,7 +69,7 @@ class _DobInputState extends State<DobInput> {
             const SizedBox(width: 12),
 
             DobField(
-              controller: yearController,
+              controller: widget.yearController,
               focusNode: yearFocus,
               hint: "YYYY",
               maxLength: 4,
