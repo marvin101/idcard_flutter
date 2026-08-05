@@ -10,6 +10,10 @@ class AppTextInput extends StatelessWidget {
 
   final TextInputType keyboardType;
 
+  final TextCapitalization textCapitalization;
+
+  final bool autoCapitalizeWords;
+
   final bool readOnly;
 
   final bool enabled;
@@ -44,6 +48,8 @@ class AppTextInput extends StatelessWidget {
     this.hintText,
     this.controller,
     this.keyboardType = TextInputType.text,
+    this.textCapitalization = TextCapitalization.none,
+    this.autoCapitalizeWords = false,
     this.readOnly = false,
     this.enabled = true,
     this.obscureText = false,
@@ -60,6 +66,16 @@ class AppTextInput extends StatelessWidget {
     this.textInputAction = TextInputAction.next,
   });
 
+  String _capitalizeWords(String text) {
+    if (text.trim().isEmpty) return text;
+
+    return text.split(RegExp(r'(\s+)')).map((part) {
+      if (part.trim().isEmpty) return part;
+
+      return part[0].toUpperCase() + part.substring(1).toLowerCase();
+    }).join();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -74,7 +90,6 @@ class AppTextInput extends StatelessWidget {
             ),
             children: [
               TextSpan(text: label),
-
               if (requiredField)
                 const TextSpan(
                   text: " *",
@@ -89,52 +104,55 @@ class AppTextInput extends StatelessWidget {
         TextFormField(
           controller: controller,
           focusNode: focusNode,
-
           keyboardType: keyboardType,
-
+          textCapitalization: textCapitalization,
           textInputAction: textInputAction,
-
           obscureText: obscureText,
-
           readOnly: readOnly,
-
           enabled: enabled,
-
           maxLines: maxLines,
-
           maxLength: maxLength,
-
           validator: validator,
-
           inputFormatters: inputFormatters,
 
           decoration: InputDecoration(
             hintText: hintText,
-
             prefixIcon: prefixIcon,
-
             suffixIcon: suffixIcon,
-
             counterText: "",
-
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 18,
             ),
-
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
             ),
-
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Colors.indigo, width: 2),
             ),
           ),
 
-          onChanged: onChanged,
+          onChanged: (value) {
+            if (autoCapitalizeWords && controller != null) {
+              final selection = controller!.selection;
+              final capitalized = _capitalizeWords(value);
+
+              if (capitalized != value) {
+                controller!.value = TextEditingValue(
+                  text: capitalized,
+                  selection: TextSelection.collapsed(
+                    offset: selection.baseOffset.clamp(0, capitalized.length),
+                  ),
+                );
+              }
+            }
+
+            if (onChanged != null) {
+              onChanged!(controller?.text ?? value);
+            }
+          },
 
           onFieldSubmitted: (_) {
             if (nextFocus != null) {
