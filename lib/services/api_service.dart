@@ -196,6 +196,104 @@ class ApiService {
     return _decodeMap(response);
   }
 
+  Future<List<dynamic>> getClasses(String schoolUuid) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/classes'),
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<Map<String, dynamic>> createClass({
+    required String schoolUuid,
+    required String name,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/classes'),
+      headers: _headers,
+      body: jsonEncode({'name': name}),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> updateClass({
+    required String schoolUuid,
+    required String classUuid,
+    required String name,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/classes/$classUuid'),
+      headers: _headers,
+      body: jsonEncode({'name': name}),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<void> deleteClass({
+    required String schoolUuid,
+    required String classUuid,
+  }) async {
+    final response = await _client.delete(
+      _uri('/schools/$schoolUuid/classes/$classUuid'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _apiException(response);
+    }
+  }
+
+  Future<List<dynamic>> getSections({
+    required String schoolUuid,
+    required String classUuid,
+  }) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/classes/$classUuid/sections'),
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<Map<String, dynamic>> createSection({
+    required String schoolUuid,
+    required String classUuid,
+    required String name,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/classes/$classUuid/sections'),
+      headers: _headers,
+      body: jsonEncode({'name': name}),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> updateSection({
+    required String schoolUuid,
+    required String classUuid,
+    required String sectionUuid,
+    required String name,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/classes/$classUuid/sections/$sectionUuid'),
+      headers: _headers,
+      body: jsonEncode({'name': name}),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<void> deleteSection({
+    required String schoolUuid,
+    required String classUuid,
+    required String sectionUuid,
+  }) async {
+    final response = await _client.delete(
+      _uri('/schools/$schoolUuid/classes/$classUuid/sections/$sectionUuid'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _apiException(response);
+    }
+  }
+
   Future<Map<String, dynamic>> updateAcademicSession({
     required String schoolUuid,
     required String sessionUuid,

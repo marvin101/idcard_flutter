@@ -34,6 +34,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool get canManageAcademicSessions => canManageUsers;
+  bool get canManageClasses => canManageUsers;
 
   SchoolAccess? get selectedSchoolAccess {
     final id = _selectedSchool?.uuid;
