@@ -33,6 +33,8 @@ class AuthProvider extends ChangeNotifier {
     return role == 'school_admin';
   }
 
+  bool get canManageAcademicSessions => canManageUsers;
+
   SchoolAccess? get selectedSchoolAccess {
     final id = _selectedSchool?.uuid;
     if (id == null) return null;

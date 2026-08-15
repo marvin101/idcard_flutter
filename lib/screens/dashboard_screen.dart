@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import 'academic_sessions_screen.dart';
 import 'school_user_assignment_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -147,7 +148,22 @@ class _ModuleGrid extends StatelessWidget {
           ),
         ));
       }),
-      _DashboardModule('Academic Sessions', 'Manage sessions for the selected school.', Icons.calendar_month_outlined, school != null, null),
+      _DashboardModule(
+        'Academic Sessions',
+        'Manage sessions for the selected school.',
+        Icons.calendar_month_outlined,
+        school != null,
+        () {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => AcademicSessionsScreen(
+              schoolUuid: school!.uuid,
+              schoolName: school.name,
+              api: auth.api,
+              canManage: auth.canManageAcademicSessions,
+            ),
+          ));
+        },
+      ),
       _DashboardModule('Classes & Sections', 'Organize classes and sections.', Icons.account_tree_outlined, school != null, null),
       _DashboardModule('Students', 'Student records and ID-card data.', Icons.school_outlined, school != null, null),
       _DashboardModule('ID Cards', 'Prepare and manage ID cards.', Icons.badge_outlined, school != null, null),

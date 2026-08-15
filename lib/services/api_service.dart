@@ -168,6 +168,61 @@ class ApiService {
     return _decodeMap(response);
   }
 
+  Future<List<dynamic>> getAcademicSessions(String schoolUuid) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/academic-sessions'),
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<Map<String, dynamic>> createAcademicSession({
+    required String schoolUuid,
+    required String name,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool isCurrent = false,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/academic-sessions'),
+      headers: _headers,
+      body: jsonEncode({
+        'name': name,
+        'start_date': _formatDate(startDate),
+        'end_date': _formatDate(endDate),
+        'is_current': isCurrent,
+      }),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> updateAcademicSession({
+    required String schoolUuid,
+    required String sessionUuid,
+    required String name,
+    DateTime? startDate,
+    DateTime? endDate,
+    required bool isCurrent,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/academic-sessions/$sessionUuid'),
+      headers: _headers,
+      body: jsonEncode({
+        'name': name,
+        'start_date': _formatDate(startDate),
+        'end_date': _formatDate(endDate),
+        'is_current': isCurrent,
+      }),
+    );
+    return _decodeMap(response);
+  }
+
+  String? _formatDate(DateTime? date) {
+    if (date == null) return null;
+    final local = DateTime(date.year, date.month, date.day);
+    return local.toIso8601String().split('T').first;
+  }
+
   Future<void> revokeSchoolAccess({
     required String userUuid,
     required String schoolUuid,
