@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite_common/sqlite_api.dart';
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 /// Local SQLite service retained for the existing student repository.
@@ -86,11 +86,13 @@ class ApiException implements Exception {
 
 class ApiService {
   ApiService({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        baseUrl = baseUrl ?? const String.fromEnvironment(
-          'API_BASE_URL',
-          defaultValue: 'http://127.0.0.1:8000',
-        );
+    : _client = client ?? http.Client(),
+      baseUrl =
+          baseUrl ??
+          const String.fromEnvironment(
+            'API_BASE_URL',
+            defaultValue: 'http://127.0.0.1:8000',
+          );
 
   final http.Client _client;
   final String baseUrl;
@@ -99,9 +101,9 @@ class ApiService {
   void setToken(String? token) => _token = token;
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        if (_token != null) 'Authorization': 'Bearer $_token',
-      };
+    'Content-Type': 'application/json',
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
@@ -115,18 +117,12 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getMe() async {
-    final response = await _client.get(
-      _uri('/users/me'),
-      headers: _headers,
-    );
+    final response = await _client.get(_uri('/users/me'), headers: _headers);
     return _decodeMap(response);
   }
 
   Future<List<dynamic>> getSchools() async {
-    final response = await _client.get(
-      _uri('/schools'),
-      headers: _headers,
-    );
+    final response = await _client.get(_uri('/schools'), headers: _headers);
     return _decodeList(response);
   }
 

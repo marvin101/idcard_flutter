@@ -1,5 +1,5 @@
 import '../models/student.dart';
-import '../services/sqlite_service.dart';
+import '../services/api_service.dart';
 import 'student_repository.dart';
 
 class SqliteStudentRepository implements StudentRepository {
@@ -7,21 +7,18 @@ class SqliteStudentRepository implements StudentRepository {
 
   SqliteStudentRepository(this.sqliteService);
 
-  // ==========================================================
-  // CREATE
-  // ==========================================================
-
   @override
   Future<int> addStudent(Student student) async {
     throw UnimplementedError();
   }
 
-  // ==========================================================
-  // READ
-  // ==========================================================
+  @override
+  Future<void> clearDatabase() async {
+    throw UnimplementedError();
+  }
 
   @override
-  Future<Student?> getStudentById(int id) async {
+  Future<void> deleteStudent(int id) async {
     throw UnimplementedError();
   }
 
@@ -30,36 +27,15 @@ class SqliteStudentRepository implements StudentRepository {
     throw UnimplementedError();
   }
 
-  // ==========================================================
-  // UPDATE
-  // ==========================================================
-
   @override
-  Future<void> updateStudent(Student student) async {
+  Future<Student?> getStudentById(int id) async {
     throw UnimplementedError();
   }
 
-  // ==========================================================
-  // DELETE
-  // ==========================================================
-
   @override
-  Future<void> deleteStudent(int id) async {
+  Future<int> getStudentCount() async {
     throw UnimplementedError();
   }
-
-  // ==========================================================
-  // SEARCH
-  // ==========================================================
-
-  @override
-  Future<List<Student>> searchStudents(String query) async {
-    throw UnimplementedError();
-  }
-
-  // ==========================================================
-  // FILTERS
-  // ==========================================================
 
   @override
   Future<List<Student>> getStudentsByClass(String className) async {
@@ -76,17 +52,13 @@ class SqliteStudentRepository implements StudentRepository {
     throw UnimplementedError();
   }
 
-  // ==========================================================
-  // UTILITIES
-  // ==========================================================
-
   @override
-  Future<int> getStudentCount() async {
+  Future<List<Student>> searchStudents(String query) async {
     throw UnimplementedError();
   }
 
   @override
-  Future<void> clearDatabase() async {
+  Future<void> updateStudent(Student student) async {
     throw UnimplementedError();
   }
 }

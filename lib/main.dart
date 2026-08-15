@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'providers/auth_provider.dart';
+import 'screens/dashboard_screen.dart';
+import 'screens/login_screen.dart';
 import 'theme/app_theme.dart';
 
-import 'screens/student_form.dart';
-
-import 'providers/student_form_provider.dart';
-
-import 'repositories/student_repository.dart';
-import 'repositories/sqlite_student_repository.dart';
-
-import 'services/sqlite_service.dart';
-
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -21,38 +16,27 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        //---------------------------------------------------------
-        // SQLite Service
-        //---------------------------------------------------------
-        Provider<SQLiteService>(create: (_) => SQLiteService()),
-
-        //---------------------------------------------------------
-        // Student Repository
-        //---------------------------------------------------------
-        Provider<StudentRepository>(
-          create: (context) =>
-              SqliteStudentRepository(context.read<SQLiteService>()),
-        ),
-
-        //---------------------------------------------------------
-        // Student Form Provider
-        //---------------------------------------------------------
-        ChangeNotifierProvider<StudentFormProvider>(
-          create: (context) => StudentFormProvider(
-            repository: context.read<StudentRepository>(),
-          ),
-        ),
-      ],
-
+    return ChangeNotifierProvider(
+      create: (_) => AuthProvider()..initialize(),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-
         theme: AppTheme.lightTheme,
-
-        home: const StudentFormScreen(),
+        home: const _AuthGate(),
       ),
     );
+  }
+}
+
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (auth.loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!auth.isAuthenticated) return const LoginScreen();
+    return const DashboardScreen();
   }
 }
