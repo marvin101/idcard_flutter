@@ -504,7 +504,7 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Material(
-              color: selected ? AppColors.primary.withOpacity(.08) : Colors.white,
+              color: selected ? AppColors.primary.withAlpha(20) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
@@ -643,7 +643,7 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
                   height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(.09),
+                    color: AppColors.primary.withAlpha(23),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
