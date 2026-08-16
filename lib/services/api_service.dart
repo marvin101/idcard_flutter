@@ -393,13 +393,13 @@ class ApiService {
   Future<ApiStudent> updateStudent({
     required String schoolUuid,
     required String studentUuid,
-    String? admissionNo,
+    required String sessionUuid,
+    required String classUuid,
+    required String sectionUuid,
+    required String admissionNo,
     String? rollNo,
     String? stream,
-    String? sessionUuid,
-    String? classUuid,
-    String? sectionUuid,
-    String? fullName,
+    required String fullName,
     String? fatherName,
     String? motherName,
     DateTime? dob,
@@ -409,18 +409,17 @@ class ApiService {
     String? aadhaar,
     String? address,
     String? photoPath,
-    bool? isActive,
   }) async {
     final response = await _client.put(
       _uri('/schools/$schoolUuid/students/$studentUuid'),
       headers: _headers,
       body: jsonEncode({
-        'admission_no': admissionNo,
-        'roll_no': rollNo,
-        'stream': stream,
         'session_uuid': sessionUuid,
         'class_uuid': classUuid,
         'section_uuid': sectionUuid,
+        'admission_no': admissionNo,
+        'roll_no': rollNo,
+        'stream': stream,
         'full_name': fullName,
         'father_name': fatherName,
         'mother_name': motherName,
@@ -431,7 +430,6 @@ class ApiService {
         'aadhaar': aadhaar,
         'address': address,
         'photo_path': photoPath,
-        'is_active': isActive,
       }),
     );
 
