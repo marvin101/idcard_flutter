@@ -4,15 +4,20 @@ import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../services/api_service.dart';
+import '../models/api_student.dart';
 
 class ApiStudentFormProvider extends ChangeNotifier {
-  ApiStudentFormProvider({required this.api, required this.schoolUuid}) {
+  ApiStudentFormProvider({
+    required this.api,
+    required this.schoolUuid,
+    this.student,
+  }) {
     _loadAcademicData();
   }
 
   final ApiService api;
   final String schoolUuid;
-
+  final ApiStudent? student;
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
   // ----------------------------------------------------------
@@ -79,14 +84,47 @@ class ApiStudentFormProvider extends ChangeNotifier {
       sessions = await api.getAcademicSessions(schoolUuid);
       classes = await api.getClasses(schoolUuid);
 
-      final currentSession = sessions.where((s) => s.isCurrent).isEmpty
-          ? null
-          : sessions.where((s) => s.isCurrent).first;
+      // ----------------------------------------------------------
+      // Edit mode
+      // ----------------------------------------------------------
 
-      selectedSessionUuid = currentSession?.uuid;
+      if (student != null) {
+        _populateStudentFields(student!);
 
-      if (selectedSessionUuid == null && sessions.isNotEmpty) {
-        selectedSessionUuid = sessions.first.uuid;
+        // Set the existing session.
+        if (sessions.any((s) => s.uuid == student!.sessionUuid)) {
+          selectedSessionUuid = student!.sessionUuid;
+        }
+
+        // Set the existing class.
+        if (classes.any((c) => c.uuid == student!.classUuid)) {
+          selectedClassUuid = student!.classUuid;
+
+          // Sections depend on the selected class.
+          sections = await api.getSections(
+            schoolUuid: schoolUuid,
+            classUuid: student!.classUuid,
+          );
+
+          if (sections.any((s) => s.uuid == student!.sectionUuid)) {
+            selectedSectionUuid = student!.sectionUuid;
+          }
+        }
+      }
+
+      // ----------------------------------------------------------
+      // Add mode
+      // ----------------------------------------------------------
+      else {
+        final currentSession = sessions.where((s) => s.isCurrent).isEmpty
+            ? null
+            : sessions.where((s) => s.isCurrent).first;
+
+        selectedSessionUuid = currentSession?.uuid;
+
+        if (selectedSessionUuid == null && sessions.isNotEmpty) {
+          selectedSessionUuid = sessions.first.uuid;
+        }
       }
     } on ApiException catch (e) {
       _error = e.message;
@@ -95,6 +133,33 @@ class ApiStudentFormProvider extends ChangeNotifier {
     } finally {
       _loading = false;
       notifyListeners();
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Student field population
+  // ----------------------------------------------------------
+
+  void _populateStudentFields(ApiStudent student) {
+    fullNameController.text = student.fullName;
+    fatherNameController.text = student.fatherName ?? '';
+    motherNameController.text = student.motherName ?? '';
+
+    admissionNoController.text = student.admissionNo;
+    rollNoController.text = student.rollNo ?? '';
+    streamController.text = student.stream ?? '';
+
+    mobileController.text = student.mobile ?? '';
+    aadhaarController.text = student.aadhaar ?? '';
+    addressController.text = student.address ?? '';
+
+    selectedGender = student.gender;
+    selectedBloodGroup = student.bloodGroup;
+
+    if (student.dob != null) {
+      dobDayController.text = student.dob!.day.toString().padLeft(2, '0');
+      dobMonthController.text = student.dob!.month.toString().padLeft(2, '0');
+      dobYearController.text = student.dob!.year.toString();
     }
   }
 

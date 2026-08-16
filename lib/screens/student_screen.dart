@@ -83,6 +83,22 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }).toList();
   }
 
+  Future<void> _editStudent(ApiStudent student) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StudentFormScreen(
+          schoolUuid: widget.schoolUuid,
+          api: widget.api,
+          student: student,
+        ),
+      ),
+    );
+
+    if (mounted) {
+      await _loadStudents();
+    }
+  }
+
   Future<void> _deleteStudent(ApiStudent student) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -264,11 +280,14 @@ class _StudentsScreenState extends State<StudentsScreen> {
             trailing: widget.canManage
                 ? PopupMenuButton<String>(
                     onSelected: (value) {
-                      if (value == 'delete') {
+                      if (value == 'edit') {
+                        _editStudent(student);
+                      } else if (value == 'delete') {
                         _deleteStudent(student);
                       }
                     },
                     itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit')),
                       PopupMenuItem(value: 'delete', child: Text('Delete')),
                     ],
                   )

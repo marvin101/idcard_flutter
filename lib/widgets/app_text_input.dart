@@ -67,13 +67,15 @@ class AppTextInput extends StatelessWidget {
   });
 
   String _capitalizeWords(String text) {
-    if (text.trim().isEmpty) return text;
+    return text.replaceAllMapped(RegExp(r'[A-Za-z]+'), (match) {
+      final word = match.group(0)!;
 
-    return text.split(RegExp(r'(\s+)')).map((part) {
-      if (part.trim().isEmpty) return part;
+      if (word.isEmpty) {
+        return word;
+      }
 
-      return part[0].toUpperCase() + part.substring(1).toLowerCase();
-    }).join();
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    });
   }
 
   @override
