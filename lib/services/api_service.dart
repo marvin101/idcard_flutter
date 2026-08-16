@@ -3,6 +3,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import '../models/api_student.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -289,6 +290,151 @@ class ApiService {
       _uri('/schools/$schoolUuid/classes/$classUuid/sections/$sectionUuid'),
       headers: _headers,
     );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _apiException(response);
+    }
+  }
+
+  Future<List<ApiStudent>> getStudents({
+    required String schoolUuid,
+    String? admissionNo,
+    String? sessionUuid,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (admissionNo != null && admissionNo.trim().isNotEmpty) {
+      queryParameters['admission_no'] = admissionNo.trim();
+    }
+
+    if (sessionUuid != null && sessionUuid.isNotEmpty) {
+      queryParameters['session_uuid'] = sessionUuid;
+    }
+
+    final uri = Uri.parse('$baseUrl/schools/$schoolUuid/students').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+
+    final response = await _client.get(uri, headers: _headers);
+
+    final data = _decodeList(response);
+
+    return data.map((item) => ApiStudent.fromJson(item)).toList();
+  }
+
+  Future<ApiStudent> getStudent({
+    required String schoolUuid,
+    required String studentUuid,
+  }) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/students/$studentUuid'),
+      headers: _headers,
+    );
+
+    return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiStudent> createStudent({
+    required String schoolUuid,
+    required String sessionUuid,
+    required String classUuid,
+    required String sectionUuid,
+    required String admissionNo,
+    String? rollNo,
+    String? stream,
+    required String fullName,
+    String? fatherName,
+    String? motherName,
+    DateTime? dob,
+    String? gender,
+    String? bloodGroup,
+    String? mobile,
+    String? aadhaar,
+    String? address,
+    String? photoPath,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/students'),
+      headers: _headers,
+      body: jsonEncode({
+        'session_uuid': sessionUuid,
+        'class_uuid': classUuid,
+        'section_uuid': sectionUuid,
+        'admission_no': admissionNo,
+        'roll_no': rollNo,
+        'stream': stream,
+        'full_name': fullName,
+        'father_name': fatherName,
+        'mother_name': motherName,
+        'dob': _formatDate(dob),
+        'gender': gender,
+        'blood_group': bloodGroup,
+        'mobile': mobile,
+        'aadhaar': aadhaar,
+        'address': address,
+        'photo_path': photoPath,
+      }),
+    );
+
+    return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiStudent> updateStudent({
+    required String schoolUuid,
+    required String studentUuid,
+    String? admissionNo,
+    String? rollNo,
+    String? stream,
+    String? sessionUuid,
+    String? classUuid,
+    String? sectionUuid,
+    String? fullName,
+    String? fatherName,
+    String? motherName,
+    DateTime? dob,
+    String? gender,
+    String? bloodGroup,
+    String? mobile,
+    String? aadhaar,
+    String? address,
+    String? photoPath,
+    bool? isActive,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/students/$studentUuid'),
+      headers: _headers,
+      body: jsonEncode({
+        'admission_no': admissionNo,
+        'roll_no': rollNo,
+        'stream': stream,
+        'session_uuid': sessionUuid,
+        'class_uuid': classUuid,
+        'section_uuid': sectionUuid,
+        'full_name': fullName,
+        'father_name': fatherName,
+        'mother_name': motherName,
+        'dob': _formatDate(dob),
+        'gender': gender,
+        'blood_group': bloodGroup,
+        'mobile': mobile,
+        'aadhaar': aadhaar,
+        'address': address,
+        'photo_path': photoPath,
+        'is_active': isActive,
+      }),
+    );
+
+    return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<void> deleteStudent({
+    required String schoolUuid,
+    required String studentUuid,
+  }) async {
+    final response = await _client.delete(
+      _uri('/schools/$schoolUuid/students/$studentUuid'),
+      headers: _headers,
+    );
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _apiException(response);
     }
