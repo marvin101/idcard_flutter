@@ -111,7 +111,6 @@ class ApiStudentFormProvider extends ChangeNotifier {
           }
         }
       }
-
       // ----------------------------------------------------------
       // Add mode
       // ----------------------------------------------------------
@@ -288,24 +287,52 @@ class ApiStudentFormProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await api.createStudent(
-        schoolUuid: schoolUuid,
-        sessionUuid: selectedSessionUuid!,
-        classUuid: selectedClassUuid!,
-        sectionUuid: selectedSectionUuid!,
-        admissionNo: admissionNoController.text.trim(),
-        rollNo: _nullable(rollNoController.text),
-        stream: _nullable(streamController.text),
-        fullName: fullNameController.text.trim(),
-        fatherName: _nullable(fatherNameController.text),
-        motherName: _nullable(motherNameController.text),
-        dob: dob,
-        gender: selectedGender,
-        bloodGroup: selectedBloodGroup,
-        mobile: _nullable(mobileController.text),
-        aadhaar: _nullable(aadhaarController.text),
-        address: _nullable(addressController.text),
-      );
+      if (student == null) {
+        // --------------------------------------------------------
+        // ADD MODE
+        // --------------------------------------------------------
+        await api.createStudent(
+          schoolUuid: schoolUuid,
+          sessionUuid: selectedSessionUuid!,
+          classUuid: selectedClassUuid!,
+          sectionUuid: selectedSectionUuid!,
+          admissionNo: admissionNoController.text.trim(),
+          rollNo: _nullable(rollNoController.text),
+          stream: _nullable(streamController.text),
+          fullName: fullNameController.text.trim(),
+          fatherName: _nullable(fatherNameController.text),
+          motherName: _nullable(motherNameController.text),
+          dob: dob,
+          gender: selectedGender,
+          bloodGroup: selectedBloodGroup,
+          mobile: _nullable(mobileController.text),
+          aadhaar: _nullable(aadhaarController.text),
+          address: _nullable(addressController.text),
+        );
+      } else {
+        // --------------------------------------------------------
+        // EDIT MODE
+        // --------------------------------------------------------
+        await api.updateStudent(
+          schoolUuid: schoolUuid,
+          studentUuid: student!.uuid,
+          sessionUuid: selectedSessionUuid!,
+          classUuid: selectedClassUuid!,
+          sectionUuid: selectedSectionUuid!,
+          admissionNo: admissionNoController.text.trim(),
+          rollNo: _nullable(rollNoController.text),
+          stream: _nullable(streamController.text),
+          fullName: fullNameController.text.trim(),
+          fatherName: _nullable(fatherNameController.text),
+          motherName: _nullable(motherNameController.text),
+          dob: dob,
+          gender: selectedGender,
+          bloodGroup: selectedBloodGroup,
+          mobile: _nullable(mobileController.text),
+          aadhaar: _nullable(aadhaarController.text),
+          address: _nullable(addressController.text),
+        );
+      }
 
       return true;
     } on ApiException catch (e) {

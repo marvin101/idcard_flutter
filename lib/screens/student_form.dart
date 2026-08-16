@@ -47,7 +47,13 @@ class _StudentFormView extends StatelessWidget {
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Student created successfully.')),
+        SnackBar(
+          content: Text(
+            provider.student == null
+                ? 'Student created successfully.'
+                : 'Student updated successfully.',
+          ),
+        ),
       );
 
       Navigator.of(context).pop();
