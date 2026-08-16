@@ -64,7 +64,9 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
       }
       next ??= _selectedClass == null
           ? (classes.isEmpty ? null : classes.first)
-          : classes.where((item) => item.uuid == _selectedClass!.uuid).firstOrNull;
+          : classes
+                .where((item) => item.uuid == _selectedClass!.uuid)
+                .firstOrNull;
       next ??= classes.isEmpty ? null : classes.first;
 
       if (!mounted) return;
@@ -200,7 +202,10 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
   Future<void> _addSection() async {
     final schoolClass = _selectedClass;
     if (schoolClass == null) return;
-    final name = await _showNameDialog(title: 'Add section', label: 'Section name');
+    final name = await _showNameDialog(
+      title: 'Add section',
+      label: 'Section name',
+    );
     if (name == null) return;
     try {
       await widget.api.createSection(
@@ -269,52 +274,18 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
     required String title,
     required String label,
     String initialValue = '',
-  }) async {
-    final controller = TextEditingController(text: initialValue);
-    final formKey = GlobalKey<FormState>();
-    final result = await showDialog<String>(
+  }) {
+    return showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            decoration: InputDecoration(labelText: label),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) return 'Enter a name.';
-              return null;
-            },
-            onFieldSubmitted: (_) {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(dialogContext).pop(controller.text.trim());
-              }
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(dialogContext).pop(controller.text.trim());
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      builder: (_) =>
+          _NameDialog(title: title, label: label, initialValue: initialValue),
     );
-    controller.dispose();
-    return result;
   }
 
-  Future<bool> _confirm({required String title, required String message}) async {
+  Future<bool> _confirm({
+    required String title,
+    required String message,
+  }) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -504,20 +475,27 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Material(
-              color: selected ? AppColors.primary.withAlpha(20) : Colors.white,
+              color: selected
+                  ? AppColors.primary.withValues(alpha: 0.08)
+                  : Colors.white,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
                 onTap: busy ? null : () => _selectClass(schoolClass),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       Container(
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: selected ? AppColors.primary : const Color(0xffeef1f7),
+                          color: selected
+                              ? AppColors.primary
+                              : const Color(0xffeef1f7),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
@@ -536,16 +514,23 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
                       if (widget.canManage) ...[
                         IconButton(
                           tooltip: 'Edit class',
-                          onPressed: busy ? null : () => _editClass(schoolClass),
+                          onPressed: busy
+                              ? null
+                              : () => _editClass(schoolClass),
                           icon: const Icon(Icons.edit_outlined, size: 20),
                         ),
                         IconButton(
                           tooltip: 'Delete class',
-                          onPressed: busy ? null : () => _deleteClass(schoolClass),
+                          onPressed: busy
+                              ? null
+                              : () => _deleteClass(schoolClass),
                           icon: const Icon(Icons.delete_outline, size: 20),
                         ),
                       ] else if (selected)
-                        const Icon(Icons.chevron_right, color: AppColors.primary),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppColors.primary,
+                        ),
                     ],
                   ),
                 ),
@@ -560,7 +545,9 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
   Widget _sectionsPanel() {
     final schoolClass = _selectedClass;
     return _Panel(
-      title: schoolClass == null ? 'Sections' : 'Sections · ${schoolClass.name}',
+      title: schoolClass == null
+          ? 'Sections'
+          : 'Sections · ${schoolClass.name}',
       count: _sections.length,
       action: widget.canManage && schoolClass != null
           ? TextButton.icon(
@@ -572,7 +559,9 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
       child: schoolClass == null
           ? const Padding(
               padding: EdgeInsets.all(30),
-              child: Center(child: Text('Select a class to view its sections.')),
+              child: Center(
+                child: Text('Select a class to view its sections.'),
+              ),
             )
           : _buildSectionsContent(),
     );
@@ -602,12 +591,21 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
         padding: const EdgeInsets.all(30),
         child: Column(
           children: [
-            const Icon(Icons.layers_outlined, size: 38, color: AppColors.textSecondary),
+            const Icon(
+              Icons.layers_outlined,
+              size: 38,
+              color: AppColors.textSecondary,
+            ),
             const SizedBox(height: 12),
-            const Text('No sections yet', style: TextStyle(fontWeight: FontWeight.w700)),
+            const Text(
+              'No sections yet',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 5),
             Text(
-              widget.canManage ? 'Add a section to this class.' : 'No sections have been configured.',
+              widget.canManage
+                  ? 'Add a section to this class.'
+                  : 'No sections have been configured.',
               style: const TextStyle(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -643,17 +641,25 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
                   height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withAlpha(23),
+                    color: AppColors.primary.withValues(alpha: 0.09),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    section.name.isEmpty ? '?' : section.name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary),
+                    section.name.isEmpty
+                        ? '?'
+                        : section.name.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(section.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  child: Text(
+                    section.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
                 if (widget.canManage) ...[
                   IconButton(
@@ -676,8 +682,84 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
   }
 }
 
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({
+    required this.title,
+    required this.label,
+    required this.initialValue,
+  });
+
+  final String title;
+  final String label;
+  final String initialValue;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final TextEditingController _controller;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(labelText: widget.label),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Enter a name.';
+            }
+
+            return null;
+          },
+          onFieldSubmitted: (_) => _save(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+}
+
 class _Panel extends StatelessWidget {
-  const _Panel({required this.title, required this.count, required this.child, this.action});
+  const _Panel({
+    required this.title,
+    required this.count,
+    required this.child,
+    this.action,
+  });
 
   final String title;
   final int count;
@@ -701,20 +783,35 @@ class _Panel extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xffeef1f7),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text('$count', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (action != null) action!,
+              ?action,
             ],
           ),
           const SizedBox(height: 16),
@@ -726,7 +823,12 @@ class _Panel extends StatelessWidget {
 }
 
 class _StateCard extends StatelessWidget {
-  const _StateCard({required this.icon, required this.title, required this.message, this.action});
+  const _StateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
 
   final IconData icon;
   final String title;
@@ -747,9 +849,16 @@ class _StateCard extends StatelessWidget {
         children: [
           Icon(icon, size: 42, color: AppColors.textSecondary),
           const SizedBox(height: 14),
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 6),
-          Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
           if (action != null) ...[const SizedBox(height: 16), action!],
         ],
       ),
