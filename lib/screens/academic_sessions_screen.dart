@@ -42,13 +42,10 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
     });
 
     try {
-      final data = await widget.api.getAcademicSessions(widget.schoolUuid);
-      final sessions = data
-          .whereType<Map<String, dynamic>>()
-          .map(AcademicSession.fromJson)
-          .toList();
+      final sessions = await widget.api.getAcademicSessions(widget.schoolUuid);
 
       if (!mounted) return;
+
       setState(() {
         _sessions = sessions;
         _loading = false;
@@ -445,7 +442,11 @@ class _SessionCard extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
-                const Icon(Icons.date_range_outlined, size: 18, color: AppColors.textSecondary),
+                const Icon(
+                  Icons.date_range_outlined,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   _dateRange(session),
@@ -474,9 +475,14 @@ class _SessionCard extends StatelessWidget {
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
-                                : const Icon(Icons.check_circle_outline, size: 18),
+                                : const Icon(
+                                    Icons.check_circle_outline,
+                                    size: 18,
+                                  ),
                             label: const Text('Set current'),
                           ),
                   ),
@@ -609,11 +615,11 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
   }
 
   Future<DateTime?> _pickDate(DateTime? initial) => showDatePicker(
-        context: context,
-        initialDate: initial ?? DateTime.now(),
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
-      );
+    context: context,
+    initialDate: initial ?? DateTime.now(),
+    firstDate: DateTime(2000),
+    lastDate: DateTime(2100),
+  );
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
@@ -685,7 +691,8 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _isCurrent,
-                  onChanged: (value) => setState(() => _isCurrent = value ?? false),
+                  onChanged: (value) =>
+                      setState(() => _isCurrent = value ?? false),
                   title: const Text('Set as current session'),
                   subtitle: const Text(
                     'Any other current session for this school will be unset automatically.',
@@ -744,7 +751,9 @@ class _DateField extends StatelessWidget {
         child: Text(
           value == null ? 'Not specified' : _format(value!),
           style: TextStyle(
-            color: value == null ? AppColors.textSecondary : AppColors.textPrimary,
+            color: value == null
+                ? AppColors.textSecondary
+                : AppColors.textPrimary,
           ),
         ),
       ),

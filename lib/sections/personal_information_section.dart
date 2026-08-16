@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/student_form_provider.dart';
+import '../providers/api_student_form_provider.dart';
 import '../utils/validators.dart';
 import '../widgets/app_text_input.dart';
 import '../widgets/dob_input.dart';
@@ -12,7 +12,7 @@ class PersonalInformationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<StudentFormProvider>();
+    final provider = context.read<ApiStudentFormProvider>();
 
     return Card(
       elevation: 3,

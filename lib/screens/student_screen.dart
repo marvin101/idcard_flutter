@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/api_student.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
+import 'student_form.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({
@@ -189,13 +190,19 @@ class _StudentsScreenState extends State<StudentsScreen> {
         if (widget.canManage) ...[
           const SizedBox(width: 12),
           FilledButton.icon(
-            onPressed: () {
-              // Student form will be connected in the next step.
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Student form will be connected next.'),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StudentFormScreen(
+                    schoolUuid: widget.schoolUuid,
+                    api: widget.api,
+                  ),
                 ),
               );
+
+              if (mounted) {
+                await _loadStudents();
+              }
             },
             icon: const Icon(Icons.add),
             label: const Text('Add Student'),

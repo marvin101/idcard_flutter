@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/api_student_form_provider.dart';
 import '../widgets/app_text_input.dart';
 import '../widgets/responsive_row.dart';
 
@@ -9,6 +11,8 @@ class ContactInformationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.read<ApiStudentFormProvider>();
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -29,6 +33,7 @@ class ContactInformationSection extends StatelessWidget {
             ResponsiveRow(
               children: [
                 AppTextInput(
+                  controller: provider.mobileController,
                   label: "Mobile No.",
                   hintText: "10-digit mobile number",
                   keyboardType: TextInputType.phone,
@@ -49,6 +54,7 @@ class ContactInformationSection extends StatelessWidget {
                 ),
 
                 AppTextInput(
+                  controller: provider.aadhaarController,
                   label: "Aadhaar No.",
                   hintText: "12-digit Aadhaar number",
                   keyboardType: TextInputType.number,
@@ -72,6 +78,7 @@ class ContactInformationSection extends StatelessWidget {
             const SizedBox(height: 20),
 
             AppTextInput(
+              controller: provider.addressController,
               label: "Address",
               hintText: "House No., Street, City, State, PIN",
               maxLines: 3,

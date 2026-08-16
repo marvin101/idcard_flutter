@@ -47,11 +47,7 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
     });
 
     try {
-      final data = await widget.api.getClasses(widget.schoolUuid);
-      final classes = data
-          .whereType<Map<String, dynamic>>()
-          .map(SchoolClass.fromJson)
-          .toList();
+      final classes = await widget.api.getClasses(widget.schoolUuid);
 
       SchoolClass? next;
       if (selectUuid != null) {
@@ -106,14 +102,10 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
     });
 
     try {
-      final data = await widget.api.getSections(
+      final sections = await widget.api.getSections(
         schoolUuid: widget.schoolUuid,
         classUuid: schoolClass.uuid,
       );
-      final sections = data
-          .whereType<Map<String, dynamic>>()
-          .map(SchoolSection.fromJson)
-          .toList();
       if (!mounted) return;
       setState(() {
         _sections = sections;

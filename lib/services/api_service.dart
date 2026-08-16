@@ -4,6 +4,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import '../models/api_student.dart';
+import '../models/academic_session.dart';
+import '../models/school_class.dart';
+import '../models/section.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -169,12 +172,15 @@ class ApiService {
     return _decodeMap(response);
   }
 
-  Future<List<dynamic>> getAcademicSessions(String schoolUuid) async {
+  Future<List<AcademicSession>> getAcademicSessions(String schoolUuid) async {
     final response = await _client.get(
       _uri('/schools/$schoolUuid/academic-sessions'),
       headers: _headers,
     );
-    return _decodeList(response);
+
+    return _decodeList(
+      response,
+    ).map((item) => AcademicSession.fromJson(item)).toList();
   }
 
   Future<Map<String, dynamic>> createAcademicSession({
@@ -197,12 +203,15 @@ class ApiService {
     return _decodeMap(response);
   }
 
-  Future<List<dynamic>> getClasses(String schoolUuid) async {
+  Future<List<SchoolClass>> getClasses(String schoolUuid) async {
     final response = await _client.get(
       _uri('/schools/$schoolUuid/classes'),
       headers: _headers,
     );
-    return _decodeList(response);
+
+    return _decodeList(
+      response,
+    ).map((item) => SchoolClass.fromJson(item)).toList();
   }
 
   Future<Map<String, dynamic>> createClass({
@@ -243,7 +252,7 @@ class ApiService {
     }
   }
 
-  Future<List<dynamic>> getSections({
+  Future<List<SchoolSection>> getSections({
     required String schoolUuid,
     required String classUuid,
   }) async {
@@ -251,7 +260,10 @@ class ApiService {
       _uri('/schools/$schoolUuid/classes/$classUuid/sections'),
       headers: _headers,
     );
-    return _decodeList(response);
+
+    return _decodeList(
+      response,
+    ).map((item) => SchoolSection.fromJson(item)).toList();
   }
 
   Future<Map<String, dynamic>> createSection({
