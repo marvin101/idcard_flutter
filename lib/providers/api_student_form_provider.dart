@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:image_picker/image_picker.dart';
 import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
@@ -54,6 +54,8 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
   String? selectedGender;
   String? selectedBloodGroup;
+
+  XFile? selectedPhoto;
 
   // ----------------------------------------------------------
   // State
@@ -229,6 +231,22 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
   void setBloodGroup(String? value) {
     selectedBloodGroup = value;
+    notifyListeners();
+  }
+
+  Future<void> pickPhoto() async {
+    final picker = ImagePicker();
+
+    final photo = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+
+    if (photo == null) {
+      return;
+    }
+
+    selectedPhoto = photo;
     notifyListeners();
   }
 
