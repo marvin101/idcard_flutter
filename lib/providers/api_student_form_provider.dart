@@ -168,6 +168,13 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
   void setSession(String? uuid) {
     selectedSessionUuid = uuid;
+
+    selectedClassUuid = null;
+    selectedSectionUuid = null;
+    sections = const [];
+
+    _error = null;
+
     notifyListeners();
   }
 

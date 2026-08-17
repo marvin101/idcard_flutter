@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/api_student.dart';
+import '../models/academic_session.dart';
+import '../models/school_class.dart';
+import '../models/section.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import 'student_form.dart';
@@ -29,10 +32,63 @@ class _StudentsScreenState extends State<StudentsScreen> {
   List<ApiStudent> _students = [];
   String _search = '';
 
+  List<AcademicSession> _sessions = [];
+  List<SchoolClass> _classes = [];
+  List<SchoolSection> _sections = [];
+
+  String? _selectedSessionUuid;
+  String? _selectedClassUuid;
+  String? _selectedSectionUuid;
+
+  bool _loadingFilters = true;
+  bool _loadingSections = false;
+  String? _sectionError;
+
   @override
   void initState() {
     super.initState();
-    _loadStudents();
+    _loadFilterData();
+  }
+
+  Future<void> _loadFilterData() async {
+    setState(() {
+      _loadingFilters = true;
+      _error = null;
+    });
+
+    try {
+      final sessions = await widget.api.getAcademicSessions(widget.schoolUuid);
+
+      final classes = await widget.api.getClasses(widget.schoolUuid);
+
+      if (!mounted) return;
+
+      setState(() {
+        _sessions = sessions;
+        _classes = classes;
+        _selectedSessionUuid = null;
+        _selectedClassUuid = null;
+        _selectedSectionUuid = null;
+        _sections = [];
+        _loadingFilters = false;
+      });
+
+      await _loadStudents();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingFilters = false;
+        _error = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingFilters = false;
+        _error = e.toString();
+      });
+    }
   }
 
   Future<void> _loadStudents() async {
@@ -44,6 +100,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
     try {
       final students = await widget.api.getStudents(
         schoolUuid: widget.schoolUuid,
+        sessionUuid: _selectedSessionUuid,
+        classUuid: _selectedClassUuid,
+        sectionUuid: _selectedSectionUuid,
       );
 
       if (!mounted) return;
@@ -67,6 +126,71 @@ class _StudentsScreenState extends State<StudentsScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _selectSession(String? sessionUuid) async {
+    setState(() {
+      _selectedSessionUuid = sessionUuid;
+      _selectedClassUuid = null;
+      _selectedSectionUuid = null;
+      _sections = [];
+      _sectionError = null;
+    });
+
+    await _loadStudents();
+  }
+
+  Future<void> _selectClass(String? classUuid) async {
+    setState(() {
+      _selectedClassUuid = classUuid;
+      _selectedSectionUuid = null;
+      _sections = [];
+      _sectionError = null;
+    });
+
+    if (classUuid != null) {
+      setState(() {
+        _loadingSections = true;
+      });
+
+      try {
+        final sections = await widget.api.getSections(
+          schoolUuid: widget.schoolUuid,
+          classUuid: classUuid,
+        );
+
+        if (!mounted) return;
+
+        setState(() {
+          _sections = sections;
+          _loadingSections = false;
+        });
+      } on ApiException catch (e) {
+        if (!mounted) return;
+
+        setState(() {
+          _loadingSections = false;
+          _sectionError = e.message;
+        });
+      } catch (e) {
+        if (!mounted) return;
+
+        setState(() {
+          _loadingSections = false;
+          _sectionError = e.toString();
+        });
+      }
+    }
+
+    await _loadStudents();
+  }
+
+  Future<void> _selectSection(String? sectionUuid) async {
+    setState(() {
+      _selectedSectionUuid = sectionUuid;
+    });
+
+    await _loadStudents();
   }
 
   List<ApiStudent> get _filteredStudents {
@@ -178,53 +302,220 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Widget _buildHeader() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Search by name, admission number or roll number',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xffe4e8f0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xffe4e8f0)),
-              ),
-            ),
-            onChanged: (value) {
-              setState(() {
-                _search = value;
-              });
-            },
-          ),
-        ),
-        if (widget.canManage) ...[
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => StudentFormScreen(
-                    schoolUuid: widget.schoolUuid,
-                    api: widget.api,
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search by name, admission number or roll number',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xffe4e8f0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xffe4e8f0)),
                   ),
                 ),
+                onChanged: (value) {
+                  setState(() {
+                    _search = value;
+                  });
+                },
+              ),
+            ),
+            if (widget.canManage) ...[
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StudentFormScreen(
+                        schoolUuid: widget.schoolUuid,
+                        api: widget.api,
+                      ),
+                    ),
+                  );
+
+                  if (mounted) {
+                    await _loadStudents();
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add Student'),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildFilters(),
+      ],
+    );
+  }
+
+  Widget _buildFilters() {
+    if (_loadingFilters) {
+      return const Card(
+        elevation: 0,
+        color: Colors.white,
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 12),
+              Text('Loading academic filters...'),
+            ],
+          ),
+        ),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 750;
+
+        final sessionDropdown = _buildDropdown<String>(
+          label: 'Academic Session',
+          value: _selectedSessionUuid,
+          items: [
+            const DropdownMenuItem<String>(
+              value: null,
+              child: Text('All Sessions'),
+            ),
+            ..._sessions.map(
+              (session) => DropdownMenuItem<String>(
+                value: session.uuid,
+                child: Text(session.name),
+              ),
+            ),
+          ],
+          onChanged: _selectSession,
+        );
+
+        final classDropdown = _buildDropdown<String>(
+          label: 'Class',
+          value: _selectedClassUuid,
+          items: [
+            const DropdownMenuItem<String>(
+              value: null,
+              child: Text('All Classes'),
+            ),
+            ..._classes.map(
+              (schoolClass) => DropdownMenuItem<String>(
+                value: schoolClass.uuid,
+                child: Text(schoolClass.name),
+              ),
+            ),
+          ],
+          onChanged: _selectClass,
+        );
+
+        final sectionDropdown = _loadingSections
+            ? const InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Section',
+                  border: OutlineInputBorder(),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 10),
+                    Text('Loading sections...'),
+                  ],
+                ),
+              )
+            : _sectionError != null
+            ? InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Section',
+                  border: OutlineInputBorder(),
+                ),
+                child: Text(
+                  _sectionError!,
+                  style: const TextStyle(color: AppColors.danger),
+                ),
+              )
+            : _buildDropdown<String>(
+                label: 'Section',
+                value: _selectedSectionUuid,
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('All Sections'),
+                  ),
+                  ..._sections.map(
+                    (section) => DropdownMenuItem<String>(
+                      value: section.uuid,
+                      child: Text(section.name),
+                    ),
+                  ),
+                ],
+                onChanged: _selectedClassUuid == null ? null : _selectSection,
               );
 
-              if (mounted) {
-                await _loadStudents();
-              }
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add Student'),
-          ),
-        ],
-      ],
+        if (narrow) {
+          return Column(
+            children: [
+              sessionDropdown,
+              const SizedBox(height: 10),
+              classDropdown,
+              const SizedBox(height: 10),
+              sectionDropdown,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: sessionDropdown),
+            const SizedBox(width: 10),
+            Expanded(child: classDropdown),
+            const SizedBox(width: 10),
+            Expanded(child: sectionDropdown),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDropdown<T>({
+    required String label,
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?>? onChanged,
+  }) {
+    return DropdownButtonFormField<T>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xffe4e8f0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xffe4e8f0)),
+        ),
+      ),
+      items: items,
+      onChanged: onChanged,
     );
   }
 

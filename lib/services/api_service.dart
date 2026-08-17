@@ -311,6 +311,8 @@ class ApiService {
     required String schoolUuid,
     String? admissionNo,
     String? sessionUuid,
+    String? classUuid,
+    String? sectionUuid,
   }) async {
     final queryParameters = <String, String>{};
 
@@ -320,6 +322,14 @@ class ApiService {
 
     if (sessionUuid != null && sessionUuid.isNotEmpty) {
       queryParameters['session_uuid'] = sessionUuid;
+    }
+
+    if (classUuid != null && classUuid.isNotEmpty) {
+      queryParameters['class_uuid'] = classUuid;
+    }
+
+    if (sectionUuid != null && sectionUuid.isNotEmpty) {
+      queryParameters['section_uuid'] = sectionUuid;
     }
 
     final uri = Uri.parse('$baseUrl/schools/$schoolUuid/students').replace(

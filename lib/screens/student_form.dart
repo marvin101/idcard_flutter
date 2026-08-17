@@ -72,7 +72,7 @@ class _StudentFormView extends StatelessWidget {
     final provider = context.watch<ApiStudentFormProvider>();
 
     return MainLayout(
-      title: 'Add Student',
+      title: provider.student == null ? 'Add student' : 'Edit student',
       child: Form(
         key: provider.formKey,
         child: SingleChildScrollView(
