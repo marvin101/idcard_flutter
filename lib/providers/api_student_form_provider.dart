@@ -333,6 +333,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
           mobile: _nullable(mobileController.text),
           aadhaar: _nullable(aadhaarController.text),
           address: _nullable(addressController.text),
+          photo: selectedPhoto,
         );
       } else {
         // --------------------------------------------------------
