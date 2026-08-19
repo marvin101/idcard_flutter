@@ -15,8 +15,8 @@ class PhotoSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ApiStudentFormProvider>(
       builder: (context, provider, _) {
-        final photo = provider.selectedPhoto;
-        final existingPhotoPath = provider.student?.photoPath;
+        final localPhoto = provider.selectedPhoto;
+        final existingPhotoUrl = provider.existingPhotoUrl;
 
         return Card(
           elevation: 3,
@@ -45,62 +45,11 @@ class PhotoSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: photo != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: FutureBuilder<Uint8List>(
-                            future: photo.readAsBytes(),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-
-                              if (snapshot.hasError || snapshot.data == null) {
-                                return const Center(
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    size: 52,
-                                    color: Colors.grey,
-                                  ),
-                                );
-                              }
-
-                              return Image.memory(
-                                snapshot.data!,
-                                width: double.infinity,
-                                height: 180,
-                                fit: BoxFit.contain,
-                              );
-                            },
-                          ),
-                        )
-                      : existingPhotoPath != null &&
-                            existingPhotoPath.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.network(
-                            '${provider.api.baseUrl}$existingPhotoPath',
-                            width: double.infinity,
-                            height: 180,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const _EmptyPhotoPreview();
-                            },
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) {
-                                return child;
-                              }
-
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            },
-                          ),
-                        )
-                      : const _EmptyPhotoPreview(),
+                  child: _buildPhotoPreview(
+                    context,
+                    localPhoto: localPhoto,
+                    existingPhotoUrl: existingPhotoUrl,
+                  ),
                 ),
 
                 const SizedBox(height: 20),
@@ -113,7 +62,7 @@ class PhotoSection extends StatelessWidget {
                         : () => _selectPhoto(context, provider),
                     icon: const Icon(Icons.upload_file),
                     label: Text(
-                      photo != null || (existingPhotoPath?.isNotEmpty ?? false)
+                      localPhoto != null || existingPhotoUrl != null
                           ? 'Change Photo'
                           : 'Upload Photo',
                     ),
@@ -124,6 +73,94 @@ class PhotoSection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPhotoPreview(
+    BuildContext context, {
+    required XFile? localPhoto,
+    required String? existingPhotoUrl,
+  }) {
+    // ----------------------------------------------------------
+    // 1. Newly selected/cropped photo takes priority.
+    // ----------------------------------------------------------
+
+    if (localPhoto != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: FutureBuilder<Uint8List>(
+          future: localPhoto.readAsBytes(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError || snapshot.data == null) {
+              return const Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  size: 52,
+                  color: Colors.grey,
+                ),
+              );
+            }
+
+            return Image.memory(
+              snapshot.data!,
+              width: double.infinity,
+              height: 180,
+              fit: BoxFit.contain,
+            );
+          },
+        ),
+      );
+    }
+
+    // ----------------------------------------------------------
+    // 2. Existing photo from backend.
+    // ----------------------------------------------------------
+
+    if (existingPhotoUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.network(
+          existingPhotoUrl,
+          width: double.infinity,
+          height: 180,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+
+            return const Center(child: CircularProgressIndicator());
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return const Center(
+              child: Icon(
+                Icons.broken_image_outlined,
+                size: 52,
+                color: Colors.grey,
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    // ----------------------------------------------------------
+    // 3. No photo.
+    // ----------------------------------------------------------
+
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.photo_camera, size: 52, color: Colors.grey),
+          SizedBox(height: 12),
+          Text('Upload a student photo', style: TextStyle(color: Colors.grey)),
+        ],
+      ),
     );
   }
 
@@ -150,24 +187,6 @@ class PhotoSection extends StatelessWidget {
     }
 
     provider.setSelectedPhoto(croppedPhoto);
-  }
-}
-
-class _EmptyPhotoPreview extends StatelessWidget {
-  const _EmptyPhotoPreview();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.photo_camera, size: 52, color: Colors.grey),
-          SizedBox(height: 12),
-          Text('Upload a student photo', style: TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
   }
 }
 

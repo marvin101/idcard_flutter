@@ -65,6 +65,32 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
   XFile? get selectedPhoto => _selectedPhoto;
 
+  /// Existing photo already stored by the backend.
+  ///
+  /// The backend returns values such as:
+  /// /media/students/`student-uuid`/photo.jpg
+  String? get existingPhotoUrl {
+    final path = student?.photoPath;
+
+    if (path == null || path.trim().isEmpty) {
+      return null;
+    }
+
+    final trimmed = path.trim();
+
+    // Already a complete URL.
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    // Backend normally returns an absolute path beginning with /media/...
+    if (trimmed.startsWith('/')) {
+      return '${api.baseUrl}$trimmed';
+    }
+
+    return '${api.baseUrl}/$trimmed';
+  }
+
   void setSelectedPhoto(XFile photo) {
     _selectedPhoto = photo;
     notifyListeners();
