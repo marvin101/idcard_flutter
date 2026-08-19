@@ -3,6 +3,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/api_student.dart';
 import '../models/academic_session.dart';
@@ -400,7 +401,7 @@ class ApiService {
     return ApiStudent.fromJson(_decodeMap(response));
   }
 
-  Future<ApiStudent> uploadStudentPhoto({
+  Future<void> uploadStudentPhoto({
     required String schoolUuid,
     required String studentUuid,
     required XFile photo,
@@ -410,6 +411,8 @@ class ApiService {
       _uri('/schools/$schoolUuid/students/$studentUuid/photo'),
     );
 
+    // Authentication header only.
+    // MultipartRequest creates its own Content-Type boundary.
     request.headers.addAll(
       Map<String, String>.from(_headers)
         ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
@@ -418,13 +421,18 @@ class ApiService {
     final bytes = await photo.readAsBytes();
 
     request.files.add(
-      http.MultipartFile.fromBytes('photo', bytes, filename: photo.name),
+      http.MultipartFile.fromBytes(
+        'photo',
+        bytes,
+        filename: 'student_photo.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ),
     );
 
     final streamedResponse = await _client.send(request);
     final response = await http.Response.fromStream(streamedResponse);
 
-    return ApiStudent.fromJson(_decodeMap(response));
+    _decodeMap(response);
   }
 
   Future<ApiStudent> updateStudent({

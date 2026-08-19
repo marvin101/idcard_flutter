@@ -16,6 +16,7 @@ class PhotoSection extends StatelessWidget {
     return Consumer<ApiStudentFormProvider>(
       builder: (context, provider, _) {
         final photo = provider.selectedPhoto;
+        final existingPhotoPath = provider.student?.photoPath;
 
         return Card(
           elevation: 3,
@@ -44,9 +45,8 @@ class PhotoSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: photo == null
-                      ? const _EmptyPhotoPreview()
-                      : ClipRRect(
+                  child: photo != null
+                      ? ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: FutureBuilder<Uint8List>(
                             future: photo.readAsBytes(),
@@ -76,7 +76,31 @@ class PhotoSection extends StatelessWidget {
                               );
                             },
                           ),
-                        ),
+                        )
+                      : existingPhotoPath != null &&
+                            existingPhotoPath.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(
+                            '${provider.api.baseUrl}$existingPhotoPath',
+                            width: double.infinity,
+                            height: 180,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const _EmptyPhotoPreview();
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) {
+                                return child;
+                              }
+
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            },
+                          ),
+                        )
+                      : const _EmptyPhotoPreview(),
                 ),
 
                 const SizedBox(height: 20),
@@ -89,7 +113,9 @@ class PhotoSection extends StatelessWidget {
                         : () => _selectPhoto(context, provider),
                     icon: const Icon(Icons.upload_file),
                     label: Text(
-                      photo == null ? 'Upload Photo' : 'Change Photo',
+                      photo != null || (existingPhotoPath?.isNotEmpty ?? false)
+                          ? 'Change Photo'
+                          : 'Upload Photo',
                     ),
                   ),
                 ),
