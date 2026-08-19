@@ -373,52 +373,55 @@ class ApiService {
     String? mobile,
     String? aadhaar,
     String? address,
-    XFile? photo,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/students'),
+      headers: _headers,
+      body: jsonEncode({
+        'session_uuid': sessionUuid,
+        'class_uuid': classUuid,
+        'section_uuid': sectionUuid,
+        'admission_no': admissionNo,
+        'roll_no': rollNo,
+        'stream': stream,
+        'full_name': fullName,
+        'father_name': fatherName,
+        'mother_name': motherName,
+        'dob': _formatDate(dob),
+        'gender': gender,
+        'blood_group': bloodGroup,
+        'mobile': mobile,
+        'aadhaar': aadhaar,
+        'address': address,
+        'photo_path': null,
+      }),
+    );
+
+    return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiStudent> uploadStudentPhoto({
+    required String schoolUuid,
+    required String studentUuid,
+    required XFile photo,
   }) async {
     final request = http.MultipartRequest(
       'POST',
-      _uri('/schools/$schoolUuid/students'),
+      _uri('/schools/$schoolUuid/students/$studentUuid/photo'),
     );
 
-    // Copy authentication headers, but do not send the JSON
-    // Content-Type header. MultipartRequest sets its own boundary.
     request.headers.addAll(
       Map<String, String>.from(_headers)
         ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
     );
 
-    // Student data is sent as a JSON string field.
-    request.fields['student_data_json'] = jsonEncode({
-      'session_uuid': sessionUuid,
-      'class_uuid': classUuid,
-      'section_uuid': sectionUuid,
-      'admission_no': admissionNo,
-      'roll_no': rollNo,
-      'stream': stream,
-      'full_name': fullName,
-      'father_name': fatherName,
-      'mother_name': motherName,
-      'dob': _formatDate(dob),
-      'gender': gender,
-      'blood_group': bloodGroup,
-      'mobile': mobile,
-      'aadhaar': aadhaar,
-      'address': address,
-      'photo_path': null,
-    });
+    final bytes = await photo.readAsBytes();
 
-    // Attach the photo only when one has been selected.
-    // Attach the photo only when one has been selected.
-    if (photo != null) {
-      final bytes = await photo.readAsBytes();
-
-      request.files.add(
-        http.MultipartFile.fromBytes('photo', bytes, filename: photo.name),
-      );
-    }
+    request.files.add(
+      http.MultipartFile.fromBytes('photo', bytes, filename: photo.name),
+    );
 
     final streamedResponse = await _client.send(request);
-
     final response = await http.Response.fromStream(streamedResponse);
 
     return ApiStudent.fromJson(_decodeMap(response));

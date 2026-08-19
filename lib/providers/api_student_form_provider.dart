@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
@@ -18,6 +19,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
   final ApiService api;
   final String schoolUuid;
   final ApiStudent? student;
+
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
   // ----------------------------------------------------------
@@ -55,7 +57,23 @@ class ApiStudentFormProvider extends ChangeNotifier {
   String? selectedGender;
   String? selectedBloodGroup;
 
-  XFile? selectedPhoto;
+  // ----------------------------------------------------------
+  // Student photo
+  // ----------------------------------------------------------
+
+  XFile? _selectedPhoto;
+
+  XFile? get selectedPhoto => _selectedPhoto;
+
+  void setSelectedPhoto(XFile photo) {
+    _selectedPhoto = photo;
+    notifyListeners();
+  }
+
+  void clearSelectedPhoto() {
+    _selectedPhoto = null;
+    notifyListeners();
+  }
 
   // ----------------------------------------------------------
   // State
@@ -86,19 +104,19 @@ class ApiStudentFormProvider extends ChangeNotifier {
       sessions = await api.getAcademicSessions(schoolUuid);
       classes = await api.getClasses(schoolUuid);
 
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
       // Edit mode
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
 
       if (student != null) {
         _populateStudentFields(student!);
 
-        // Set the existing session.
+        // Existing academic session.
         if (sessions.any((s) => s.uuid == student!.sessionUuid)) {
           selectedSessionUuid = student!.sessionUuid;
         }
 
-        // Set the existing class.
+        // Existing class.
         if (classes.any((c) => c.uuid == student!.classUuid)) {
           selectedClassUuid = student!.classUuid;
 
@@ -113,17 +131,15 @@ class ApiStudentFormProvider extends ChangeNotifier {
           }
         }
       }
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
       // Add mode
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
       else {
-        final currentSession = sessions.where((s) => s.isCurrent).isEmpty
-            ? null
-            : sessions.where((s) => s.isCurrent).first;
+        final currentSessions = sessions.where((s) => s.isCurrent).toList();
 
-        selectedSessionUuid = currentSession?.uuid;
-
-        if (selectedSessionUuid == null && sessions.isNotEmpty) {
+        if (currentSessions.isNotEmpty) {
+          selectedSessionUuid = currentSessions.first.uuid;
+        } else if (sessions.isNotEmpty) {
           selectedSessionUuid = sessions.first.uuid;
         }
       }
@@ -143,6 +159,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
   void _populateStudentFields(ApiStudent student) {
     fullNameController.text = student.fullName;
+
     fatherNameController.text = student.fatherName ?? '';
     motherNameController.text = student.motherName ?? '';
 
@@ -159,7 +176,9 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
     if (student.dob != null) {
       dobDayController.text = student.dob!.day.toString().padLeft(2, '0');
+
       dobMonthController.text = student.dob!.month.toString().padLeft(2, '0');
+
       dobYearController.text = student.dob!.year.toString();
     }
   }
@@ -171,8 +190,10 @@ class ApiStudentFormProvider extends ChangeNotifier {
   void setSession(String? uuid) {
     selectedSessionUuid = uuid;
 
+    // Cascading reset.
     selectedClassUuid = null;
     selectedSectionUuid = null;
+
     sections = const [];
 
     _error = null;
@@ -187,8 +208,11 @@ class ApiStudentFormProvider extends ChangeNotifier {
   Future<void> setClass(String? uuid) async {
     selectedClassUuid = uuid;
 
+    // Cascading reset.
     selectedSectionUuid = null;
     sections = const [];
+
+    _error = null;
 
     notifyListeners();
 
@@ -234,22 +258,6 @@ class ApiStudentFormProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> pickPhoto() async {
-    final picker = ImagePicker();
-
-    final photo = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-
-    if (photo == null) {
-      return;
-    }
-
-    selectedPhoto = photo;
-    notifyListeners();
-  }
-
   // ----------------------------------------------------------
   // Date of birth
   // ----------------------------------------------------------
@@ -264,7 +272,14 @@ class ApiStudentFormProvider extends ChangeNotifier {
     }
 
     try {
-      return DateTime(year, month, day);
+      final date = DateTime(year, month, day);
+
+      // Prevent DateTime from silently normalising invalid dates.
+      if (date.year != year || date.month != month || date.day != day) {
+        return null;
+      }
+
+      return date;
     } catch (_) {
       return null;
     }
@@ -301,22 +316,25 @@ class ApiStudentFormProvider extends ChangeNotifier {
   }
 
   // ----------------------------------------------------------
-  // Create student
+  // Save student
   // ----------------------------------------------------------
 
   Future<bool> saveStudent() async {
-    if (!validate()) return false;
+    if (!validate()) {
+      return false;
+    }
 
     _saving = true;
     _error = null;
     notifyListeners();
 
     try {
+      // ========================================================
+      // ADD MODE
+      // ========================================================
+
       if (student == null) {
-        // --------------------------------------------------------
-        // ADD MODE
-        // --------------------------------------------------------
-        await api.createStudent(
+        final createdStudent = await api.createStudent(
           schoolUuid: schoolUuid,
           sessionUuid: selectedSessionUuid!,
           classUuid: selectedClassUuid!,
@@ -333,12 +351,28 @@ class ApiStudentFormProvider extends ChangeNotifier {
           mobile: _nullable(mobileController.text),
           aadhaar: _nullable(aadhaarController.text),
           address: _nullable(addressController.text),
-          photo: selectedPhoto,
         );
-      } else {
-        // --------------------------------------------------------
-        // EDIT MODE
-        // --------------------------------------------------------
+
+        // ------------------------------------------------------
+        // Photo upload is deliberately separate from student
+        // creation.
+        //
+        // We will upload _selectedPhoto using the newly created
+        // student's UUID in the next step.
+        // ------------------------------------------------------
+
+        if (_selectedPhoto != null) {
+          await api.uploadStudentPhoto(
+            schoolUuid: schoolUuid,
+            studentUuid: createdStudent.uuid,
+            photo: _selectedPhoto!,
+          );
+        }
+      }
+      // ========================================================
+      // EDIT MODE
+      // ========================================================
+      else {
         await api.updateStudent(
           schoolUuid: schoolUuid,
           studentUuid: student!.uuid,
@@ -358,6 +392,19 @@ class ApiStudentFormProvider extends ChangeNotifier {
           aadhaar: _nullable(aadhaarController.text),
           address: _nullable(addressController.text),
         );
+
+        // ------------------------------------------------------
+        // If a new photo was selected during editing, upload it
+        // separately.
+        // ------------------------------------------------------
+
+        if (_selectedPhoto != null) {
+          await api.uploadStudentPhoto(
+            schoolUuid: schoolUuid,
+            studentUuid: student!.uuid,
+            photo: _selectedPhoto!,
+          );
+        }
       }
 
       return true;
@@ -373,8 +420,13 @@ class ApiStudentFormProvider extends ChangeNotifier {
     }
   }
 
+  // ----------------------------------------------------------
+  // Helper
+  // ----------------------------------------------------------
+
   String? _nullable(String value) {
     final trimmed = value.trim();
+
     return trimmed.isEmpty ? null : trimmed;
   }
 
