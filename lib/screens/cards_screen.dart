@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/academic_session.dart';
@@ -28,20 +30,36 @@ class CardsScreen extends StatefulWidget {
 }
 
 class _CardsScreenState extends State<CardsScreen> {
-  static const int _batchSize = 800;
+  // Backend allows a maximum of 200.
+  // 100 is a good balance between network requests and memory usage.
+  static const int _pageSize = 10;
+
+  // Start loading the next page before the user reaches the bottom.
+  static const double _loadMoreThreshold = 600;
 
   bool _loadingFilters = true;
   bool _loadingStudents = false;
+  bool _loadingMore = false;
+  bool _hasMore = true;
 
   String? _error;
   String? _sectionError;
 
   String _search = '';
 
+  int _offset = 0;
+  int _totalStudents = 0;
+
+  // Used to invalidate older requests when filters/search change.
+  int _requestVersion = 0;
+
+  Timer? _searchDebounce;
+  late final ScrollController _scrollController;
+
   List<AcademicSession> _sessions = const [];
   List<SchoolClass> _classes = const [];
   List<SchoolSection> _sections = const [];
-  List<ApiStudent> _students = const [];
+  List<ApiStudent> _students = [];
 
   String? _selectedSessionUuid;
   String? _selectedClassUuid;
@@ -50,14 +68,46 @@ class _CardsScreenState extends State<CardsScreen> {
   @override
   void initState() {
     super.initState();
+
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+
     _loadFilterData();
   }
 
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ------------------------------------------------------------
+  // Infinite scrolling
+  // ------------------------------------------------------------
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+
+    if (position.maxScrollExtent - position.pixels <= _loadMoreThreshold) {
+      _loadMoreStudents();
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Initial filter loading
+  // ------------------------------------------------------------
+
   Future<void> _loadFilterData() async {
-    setState(() {
-      _loadingFilters = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loadingFilters = true;
+        _error = null;
+      });
+    }
 
     try {
       final sessions = await widget.api.getAcademicSessions(widget.schoolUuid);
@@ -72,7 +122,7 @@ class _CardsScreenState extends State<CardsScreen> {
         _loadingFilters = false;
       });
 
-      await _loadStudents();
+      await _loadStudents(reset: true);
     } on ApiException catch (e) {
       if (!mounted) return;
 
@@ -90,35 +140,67 @@ class _CardsScreenState extends State<CardsScreen> {
     }
   }
 
-  Future<void> _loadStudents() async {
-    setState(() {
-      _loadingStudents = true;
-      _error = null;
-    });
+  // ------------------------------------------------------------
+  // Load first page / reload after filter changes
+  // ------------------------------------------------------------
+
+  Future<void> _loadStudents({bool reset = true}) async {
+    if (!reset) {
+      await _loadMoreStudents();
+      return;
+    }
+
+    final requestVersion = ++_requestVersion;
+
+    if (mounted) {
+      setState(() {
+        _loadingStudents = true;
+        _loadingMore = false;
+        _error = null;
+        _students = [];
+        _offset = 0;
+        _totalStudents = 0;
+        _hasMore = true;
+      });
+    }
 
     try {
-      final students = await widget.api.getStudents(
+      final page = await widget.api.getStudentsPage(
         schoolUuid: widget.schoolUuid,
+        limit: _pageSize,
+        offset: 0,
+        search: _search,
         sessionUuid: _selectedSessionUuid,
         classUuid: _selectedClassUuid,
         sectionUuid: _selectedSectionUuid,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
 
       setState(() {
-        _students = students;
+        _students = List<ApiStudent>.from(page.items);
+        _offset = page.items.length;
+        _totalStudents = page.total;
+        _hasMore = page.hasMore;
         _loadingStudents = false;
       });
+
+      _loadMoreIfViewportIsNotFilled();
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
 
       setState(() {
         _loadingStudents = false;
         _error = e.message;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
 
       setState(() {
         _loadingStudents = false;
@@ -126,6 +208,115 @@ class _CardsScreenState extends State<CardsScreen> {
       });
     }
   }
+
+  // ------------------------------------------------------------
+  // Load next page
+  // ------------------------------------------------------------
+
+  Future<void> _loadMoreStudents() async {
+    if (_loadingStudents || _loadingMore || !_hasMore) {
+      return;
+    }
+
+    final requestVersion = _requestVersion;
+    final requestOffset = _offset;
+
+    if (mounted) {
+      setState(() {
+        _loadingMore = true;
+      });
+    }
+
+    try {
+      final page = await widget.api.getStudentsPage(
+        schoolUuid: widget.schoolUuid,
+        limit: _pageSize,
+        offset: requestOffset,
+        search: _search,
+        sessionUuid: _selectedSessionUuid,
+        classUuid: _selectedClassUuid,
+        sectionUuid: _selectedSectionUuid,
+      );
+
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+
+      setState(() {
+        _students.addAll(page.items);
+
+        _offset = requestOffset + page.items.length;
+        _totalStudents = page.total;
+        _hasMore = page.hasMore;
+
+        _loadingMore = false;
+      });
+
+      // Handles cases where the first page does not fill
+      // the available viewport.
+      _loadMoreIfViewportIsNotFilled();
+    } on ApiException catch (e) {
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+
+      setState(() {
+        _loadingMore = false;
+        _error = e.message;
+      });
+    } catch (e) {
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+
+      setState(() {
+        _loadingMore = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  // ------------------------------------------------------------
+  // If there are few cards, automatically continue loading
+  // until the viewport can actually scroll.
+  // ------------------------------------------------------------
+
+  void _loadMoreIfViewportIsNotFilled() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_scrollController.hasClients ||
+          _loadingStudents ||
+          _loadingMore ||
+          !_hasMore) {
+        return;
+      }
+
+      final position = _scrollController.position;
+
+      if (position.maxScrollExtent <= 0) {
+        _loadMoreStudents();
+      }
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Search
+  // ------------------------------------------------------------
+
+  void _onSearchChanged(String value) {
+    _search = value;
+
+    _searchDebounce?.cancel();
+
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      _loadStudents(reset: true);
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Filters
+  // ------------------------------------------------------------
 
   Future<void> _selectSession(String? value) async {
     setState(() {
@@ -136,7 +327,7 @@ class _CardsScreenState extends State<CardsScreen> {
       _sectionError = null;
     });
 
-    await _loadStudents();
+    await _loadStudents(reset: true);
   }
 
   Future<void> _selectClass(String? value) async {
@@ -174,7 +365,7 @@ class _CardsScreenState extends State<CardsScreen> {
       }
     }
 
-    await _loadStudents();
+    await _loadStudents(reset: true);
   }
 
   Future<void> _selectSection(String? value) async {
@@ -182,8 +373,12 @@ class _CardsScreenState extends State<CardsScreen> {
       _selectedSectionUuid = value;
     });
 
-    await _loadStudents();
+    await _loadStudents(reset: true);
   }
+
+  // ------------------------------------------------------------
+  // Edit student
+  // ------------------------------------------------------------
 
   Future<void> _editStudent(ApiStudent student) async {
     await Navigator.of(context).push(
@@ -197,34 +392,16 @@ class _CardsScreenState extends State<CardsScreen> {
     );
 
     if (mounted) {
-      await _loadStudents();
+      await _loadStudents(reset: true);
     }
   }
 
-  List<ApiStudent> get _filteredStudents {
-    final query = _search.trim().toLowerCase();
-
-    if (query.isEmpty) {
-      return _students;
-    }
-
-    return _students.where((student) {
-      return student.fullName.toLowerCase().contains(query) ||
-          student.admissionNo.toLowerCase().contains(query) ||
-          (student.rollNo?.toLowerCase().contains(query) ?? false);
-    }).toList();
-  }
-
-  List<ApiStudent> get _visibleStudents =>
-      _filteredStudents.take(_batchSize).toList(growable: false);
-
-  int get _batchCount => (_filteredStudents.length / _batchSize).ceil();
+  // ------------------------------------------------------------
+  // Build
+  // ------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filteredStudents;
-    final visible = _visibleStudents;
-
     return Scaffold(
       backgroundColor: const Color(0xfff5f7fb),
       appBar: AppBar(
@@ -243,21 +420,23 @@ class _CardsScreenState extends State<CardsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildToolbar(),
+
                     const SizedBox(height: 14),
+
                     Text(
-                      'Showing ${visible.length} of ${filtered.length} students',
+                      _totalStudents == 0
+                          ? 'Showing 0 students'
+                          : 'Showing ${_students.length} of $_totalStudents students',
                       style: const TextStyle(
                         fontSize: 14,
                         color: AppColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (filtered.length > _batchSize) ...[
-                      const SizedBox(height: 10),
-                      _buildBatchWarning(filtered.length),
-                    ],
+
                     const SizedBox(height: 14),
-                    Expanded(child: _buildContent(visible)),
+
+                    Expanded(child: _buildContent()),
                   ],
                 ),
               ),
@@ -267,6 +446,10 @@ class _CardsScreenState extends State<CardsScreen> {
       ),
     );
   }
+
+  // ------------------------------------------------------------
+  // Toolbar
+  // ------------------------------------------------------------
 
   Widget _buildToolbar() {
     if (_loadingFilters) {
@@ -308,11 +491,7 @@ class _CardsScreenState extends State<CardsScreen> {
               borderSide: const BorderSide(color: Color(0xffdfe4ec)),
             ),
           ),
-          onChanged: (value) {
-            setState(() {
-              _search = value;
-            });
-          },
+          onChanged: _onSearchChanged,
         );
 
         final filters = [
@@ -396,6 +575,10 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
+  // ------------------------------------------------------------
+  // Dropdown
+  // ------------------------------------------------------------
+
   Widget _dropdown<T>({
     required String label,
     required T? value,
@@ -420,42 +603,16 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
-  Widget _buildBatchWarning(int count) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xfffffbeb),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xfff1d27a)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, color: Color(0xffb77900)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '$count students is more than the $_batchSize-card '
-              'download limit, so they\'re split into $_batchCount '
-              'batches. Use the batch controls when PDF downloading '
-              'is added.',
-              style: const TextStyle(
-                color: Color(0xff9a5f00),
-                fontSize: 13,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ------------------------------------------------------------
+  // Content
+  // ------------------------------------------------------------
 
-  Widget _buildContent(List<ApiStudent> students) {
+  Widget _buildContent() {
     if (_loadingStudents) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_error != null) {
+    if (_error != null && _students.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -467,7 +624,7 @@ class _CardsScreenState extends State<CardsScreen> {
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: _loadStudents,
+              onPressed: () => _loadStudents(reset: true),
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
             ),
@@ -476,7 +633,7 @@ class _CardsScreenState extends State<CardsScreen> {
       );
     }
 
-    if (students.isEmpty) {
+    if (_students.isEmpty) {
       return const Center(
         child: Text(
           'No students found for the selected filters.',
@@ -486,6 +643,7 @@ class _CardsScreenState extends State<CardsScreen> {
     }
 
     return GridView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.only(bottom: 24),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 250,
@@ -493,9 +651,19 @@ class _CardsScreenState extends State<CardsScreen> {
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
-      itemCount: students.length,
+      itemCount: _students.length + (_loadingMore ? 1 : 0),
       itemBuilder: (context, index) {
-        final student = students[index];
+        // Loading indicator at the bottom of the grid.
+        if (index >= _students.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        }
+
+        final student = _students[index];
 
         AcademicSession? session;
 

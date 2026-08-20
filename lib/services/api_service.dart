@@ -90,6 +90,36 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+class ApiStudentPage {
+  const ApiStudentPage({
+    required this.items,
+    required this.total,
+    required this.offset,
+    required this.limit,
+    required this.hasMore,
+  });
+
+  final List<ApiStudent> items;
+  final int total;
+  final int offset;
+  final int limit;
+  final bool hasMore;
+
+  factory ApiStudentPage.fromJson(Map<String, dynamic> json) {
+    final items = (json['items'] as List<dynamic>? ?? [])
+        .map((item) => ApiStudent.fromJson(item as Map<String, dynamic>))
+        .toList();
+
+    return ApiStudentPage(
+      items: items,
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      offset: (json['offset'] as num?)?.toInt() ?? 0,
+      limit: (json['limit'] as num?)?.toInt() ?? 0,
+      hasMore: json['has_more'] == true,
+    );
+  }
+}
+
 class ApiService {
   ApiService({http.Client? client, String? baseUrl})
     : _client = client ?? http.Client(),
@@ -345,6 +375,45 @@ class ApiService {
     return data.map((item) => ApiStudent.fromJson(item)).toList();
   }
 
+  Future<ApiStudentPage> getStudentsPage({
+    required String schoolUuid,
+    int limit = 100,
+    int offset = 0,
+    String? search,
+    String? sessionUuid,
+    String? classUuid,
+    String? sectionUuid,
+  }) async {
+    final queryParameters = <String, String>{
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+    };
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    if (sessionUuid != null && sessionUuid.isNotEmpty) {
+      queryParameters['session_uuid'] = sessionUuid;
+    }
+
+    if (classUuid != null && classUuid.isNotEmpty) {
+      queryParameters['class_uuid'] = classUuid;
+    }
+
+    if (sectionUuid != null && sectionUuid.isNotEmpty) {
+      queryParameters['section_uuid'] = sectionUuid;
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/schools/$schoolUuid/students/paged',
+    ).replace(queryParameters: queryParameters);
+
+    final response = await _client.get(uri, headers: _headers);
+
+    return ApiStudentPage.fromJson(_decodeMap(response));
+  }
+
   Future<ApiStudent> getStudent({
     required String schoolUuid,
     required String studentUuid,
@@ -375,28 +444,40 @@ class ApiService {
     String? aadhaar,
     String? address,
   }) async {
-    final response = await _client.post(
+    final request = http.MultipartRequest(
+      'POST',
       _uri('/schools/$schoolUuid/students'),
-      headers: _headers,
-      body: jsonEncode({
-        'session_uuid': sessionUuid,
-        'class_uuid': classUuid,
-        'section_uuid': sectionUuid,
-        'admission_no': admissionNo,
-        'roll_no': rollNo,
-        'stream': stream,
-        'full_name': fullName,
-        'father_name': fatherName,
-        'mother_name': motherName,
-        'dob': _formatDate(dob),
-        'gender': gender,
-        'blood_group': bloodGroup,
-        'mobile': mobile,
-        'aadhaar': aadhaar,
-        'address': address,
-        'photo_path': null,
-      }),
     );
+
+    // Keep authentication headers, but let MultipartRequest
+    // create its own Content-Type boundary.
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+
+    final studentData = {
+      'session_uuid': sessionUuid,
+      'class_uuid': classUuid,
+      'section_uuid': sectionUuid,
+      'admission_no': admissionNo,
+      'roll_no': rollNo,
+      'stream': stream,
+      'full_name': fullName,
+      'father_name': fatherName,
+      'mother_name': motherName,
+      'dob': _formatDate(dob),
+      'gender': gender,
+      'blood_group': bloodGroup,
+      'mobile': mobile,
+      'aadhaar': aadhaar,
+      'address': address,
+    };
+
+    request.fields['student_data_json'] = jsonEncode(studentData);
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
 
     return ApiStudent.fromJson(_decodeMap(response));
   }
@@ -557,12 +638,48 @@ class ApiService {
 
   ApiException _apiException(http.Response response) {
     String message = 'Request failed (${response.statusCode}).';
+
     try {
       final body = jsonDecode(response.body);
-      if (body is Map<String, dynamic> && body['detail'] is String) {
-        message = body['detail'] as String;
+
+      if (body is Map<String, dynamic>) {
+        final detail = body['detail'];
+
+        // Normal FastAPI HTTPException.
+        if (detail is String && detail.trim().isNotEmpty) {
+          message = detail;
+        }
+        // FastAPI validation error.
+        else if (detail is List) {
+          final messages = detail
+              .map((item) {
+                if (item is Map<String, dynamic>) {
+                  final msg = item['msg'];
+                  final location = item['loc'];
+
+                  if (msg is String && location is List) {
+                    final field = location.whereType<String>().join('.');
+                    return field.isEmpty ? msg : '$field: $msg';
+                  }
+
+                  if (msg is String) {
+                    return msg;
+                  }
+                }
+
+                return item.toString();
+              })
+              .join('\n');
+
+          if (messages.isNotEmpty) {
+            message = messages;
+          }
+        }
       }
-    } catch (_) {}
+    } catch (_) {
+      // Keep the generic message if the response isn't valid JSON.
+    }
+
     return ApiException(response.statusCode, message);
   }
 
