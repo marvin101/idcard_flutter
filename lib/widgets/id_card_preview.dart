@@ -22,10 +22,15 @@ class IdCardPreview extends StatelessWidget {
 
   String? get _photoUrl {
     final path = student.photoPath?.trim();
-    if (path == null || path.isEmpty) return null;
+
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
     }
+
     return path.startsWith('/')
         ? '${api.baseUrl}$path'
         : '${api.baseUrl}/$path';
@@ -43,13 +48,13 @@ class IdCardPreview extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Expanded(child: _buildCardBody(context)),
+          SizedBox(height: 258, child: _buildCardBody(context)),
           SizedBox(
-            height: 42,
+            height: 38,
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 18),
+              icon: const Icon(Icons.edit_outlined, size: 17),
               label: const Text('Edit Student'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
@@ -67,138 +72,268 @@ class IdCardPreview extends StatelessWidget {
 
   Widget _buildCardBody(BuildContext context) {
     final photoUrl = _photoUrl;
-    final name = student.fullName.trim().isEmpty ? 'Student' : student.fullName;
+
+    final name = student.fullName.trim().isEmpty
+        ? 'Student'
+        : student.fullName.trim();
 
     return Stack(
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(10, 12, 10, 8),
+          padding: const EdgeInsets.fromLTRB(9, 8, 9, 5),
           decoration: const BoxDecoration(color: Colors.white),
           child: Column(
             children: [
+              // ------------------------------------------------------------
+              // SCHOOL NAME
+              // ------------------------------------------------------------
               Text(
                 schoolName.toUpperCase(),
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 13,
                   fontWeight: FontWeight.w900,
                   color: AppColors.primary,
-                  height: 1.05,
+                  height: 1.0,
                 ),
               ),
-              const SizedBox(height: 3),
+
+              const SizedBox(height: 2),
+
+              // ------------------------------------------------------------
+              // CARD TITLE
+              // ------------------------------------------------------------
               const Text(
                 'STUDENT ID CARD',
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 7,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
+                  letterSpacing: 1.0,
                   color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 90,
-                    height: 112,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: const Color(0xffeef2f7),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.primary, width: 2),
-                    ),
-                    child: photoUrl == null
-                        ? const Icon(
-                            Icons.person,
-                            size: 42,
-                            color: AppColors.textSecondary,
-                          )
-                        : Image.network(
-                            photoUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const Icon(
+
+              const SizedBox(height: 6),
+
+              // ------------------------------------------------------------
+              // PHOTO + BASIC INFORMATION
+              // ------------------------------------------------------------
+              SizedBox(
+                height: 96,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 76,
+                      height: 96,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: const Color(0xffeef2f7),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: AppColors.primary, width: 2),
+                      ),
+                      child: photoUrl == null
+                          ? const Icon(
                               Icons.person,
-                              size: 42,
+                              size: 40,
                               color: AppColors.textSecondary,
+                            )
+                          : Image.network(
+                              photoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.person,
+                                  size: 40,
+                                  color: AppColors.textSecondary,
+                                );
+                              },
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) {
+                                  return child;
+                                }
+
+                                return const Center(
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                            loadingBuilder: (context, child, progress) {
-                              if (progress == null) return child;
-                              return const Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                    ),
+
+                    const SizedBox(width: 7),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.primary,
+                              height: 1.05,
+                            ),
+                          ),
+
+                          const SizedBox(height: 4),
+
+                          _field('Adm. No.', student.admissionNo),
+
+                          _field('Roll No.', student.rollNo),
+
+                          _field('Stream', student.stream),
+
+                          _field('Blood', student.bloodGroup),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 5),
+
+              const Divider(height: 1, thickness: 1, color: Color(0xffd7dce5)),
+
+              const SizedBox(height: 4),
+
+              // ------------------------------------------------------------
+              // PERSONAL INFORMATION
+              // ------------------------------------------------------------
+              SizedBox(
+                height: 38,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _field('Father', student.fatherName),
+                          _field('Mother', student.motherName),
+                          _field('DOB', _formatDate(student.dob)),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 5),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _field('Mobile', student.mobile),
+                          _field('Aadhaar', student.aadhaar),
+                          _field('Address', student.address),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // IMPORTANT:
+              // This pushes the signature/session area to the bottom
+              // of the fixed card body.
+              const Spacer(),
+
+              // ------------------------------------------------------------
+              // PRINCIPAL SIGNATURE PLACEHOLDER
+              // ------------------------------------------------------------
+              SizedBox(
+                height: 27,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      width: 88,
+                      height: 25,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: const Color(0xffb8bec9),
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      child: const Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned(
+                            top: -7,
+                            left: 4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(color: Colors.white),
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 3),
+                                child: Text(
+                                  "Principal's Signature",
+                                  style: TextStyle(
+                                    fontSize: 5.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xff555b66),
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                            ),
                           ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        _field('Adm. No.', student.admissionNo),
-                        _field('Roll No.', student.rollNo),
-                        _field('Stream', student.stream),
-                        _field('Blood', student.bloodGroup),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Divider(height: 1),
-              const SizedBox(height: 5),
-              _field('Father', student.fatherName),
-              _field('Mother', student.motherName),
-              _field('DOB', _formatDate(student.dob)),
-              _field('Mobile', student.mobile),
-              _field('Aadhaar', student.aadhaar),
-              _field('Address', student.address, maxLines: 2),
-              const Spacer(),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: Color(0xffe4e8f0))),
+                  ],
                 ),
-                child: Text(
-                  'Session: ${sessionName ?? 'Not specified'}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
+              ),
+
+              const SizedBox(height: 2),
+
+              // ------------------------------------------------------------
+              // SESSION
+              // ------------------------------------------------------------
+              SizedBox(
+                height: 21,
+                width: double.infinity,
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(color: AppColors.primary),
+                  child: Center(
+                    child: Text(
+                      'Session: ${sessionName ?? 'Not specified'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 7,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ],
           ),
         ),
+
+        // --------------------------------------------------------------
+        // PENDING STATUS
+        // --------------------------------------------------------------
         Positioned(
-          top: 8,
-          right: 8,
+          top: 7,
+          right: 7,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
               color: const Color(0xfffff4cf),
               borderRadius: BorderRadius.circular(20),
@@ -206,12 +341,12 @@ class IdCardPreview extends StatelessWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.circle, size: 7, color: Color(0xffe2a800)),
-                SizedBox(width: 4),
+                Icon(Icons.circle, size: 6, color: Color(0xffe2a800)),
+                SizedBox(width: 3),
                 Text(
                   'Pending',
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 8,
                     fontWeight: FontWeight.w800,
                     color: Color(0xffb57d00),
                   ),
@@ -226,18 +361,21 @@ class IdCardPreview extends StatelessWidget {
 
   Widget _field(String label, String? value, {int maxLines = 1}) {
     final text = value?.trim();
-    if (text == null || text.isEmpty) return const SizedBox.shrink();
+
+    if (text == null || text.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: 1),
       child: RichText(
         maxLines: maxLines,
         overflow: TextOverflow.ellipsis,
         text: TextSpan(
           style: const TextStyle(
-            fontSize: 10,
+            fontSize: 8.2,
             color: Color(0xff303641),
-            height: 1.25,
+            height: 1.08,
           ),
           children: [
             TextSpan(
@@ -252,9 +390,13 @@ class IdCardPreview extends StatelessWidget {
   }
 
   String? _formatDate(DateTime? value) {
-    if (value == null) return null;
+    if (value == null) {
+      return null;
+    }
+
     final day = value.day.toString().padLeft(2, '0');
     final month = value.month.toString().padLeft(2, '0');
+
     return '$day/$month/${value.year}';
   }
 }

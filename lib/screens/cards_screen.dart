@@ -32,8 +32,10 @@ class _CardsScreenState extends State<CardsScreen> {
 
   bool _loadingFilters = true;
   bool _loadingStudents = false;
+
   String? _error;
   String? _sectionError;
+
   String _search = '';
 
   List<AcademicSession> _sessions = const [];
@@ -59,6 +61,7 @@ class _CardsScreenState extends State<CardsScreen> {
 
     try {
       final sessions = await widget.api.getAcademicSessions(widget.schoolUuid);
+
       final classes = await widget.api.getClasses(widget.schoolUuid);
 
       if (!mounted) return;
@@ -72,12 +75,14 @@ class _CardsScreenState extends State<CardsScreen> {
       await _loadStudents();
     } on ApiException catch (e) {
       if (!mounted) return;
+
       setState(() {
         _loadingFilters = false;
         _error = e.message;
       });
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _loadingFilters = false;
         _error = e.toString();
@@ -100,18 +105,21 @@ class _CardsScreenState extends State<CardsScreen> {
       );
 
       if (!mounted) return;
+
       setState(() {
         _students = students;
         _loadingStudents = false;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
+
       setState(() {
         _loadingStudents = false;
         _error = e.message;
       });
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _loadingStudents = false;
         _error = e.toString();
@@ -127,6 +135,7 @@ class _CardsScreenState extends State<CardsScreen> {
       _sections = const [];
       _sectionError = null;
     });
+
     await _loadStudents();
   }
 
@@ -144,17 +153,21 @@ class _CardsScreenState extends State<CardsScreen> {
           schoolUuid: widget.schoolUuid,
           classUuid: value,
         );
+
         if (!mounted) return;
+
         setState(() {
           _sections = sections;
         });
       } on ApiException catch (e) {
         if (!mounted) return;
+
         setState(() {
           _sectionError = e.message;
         });
       } catch (e) {
         if (!mounted) return;
+
         setState(() {
           _sectionError = e.toString();
         });
@@ -168,6 +181,7 @@ class _CardsScreenState extends State<CardsScreen> {
     setState(() {
       _selectedSectionUuid = value;
     });
+
     await _loadStudents();
   }
 
@@ -189,7 +203,10 @@ class _CardsScreenState extends State<CardsScreen> {
 
   List<ApiStudent> get _filteredStudents {
     final query = _search.trim().toLowerCase();
-    if (query.isEmpty) return _students;
+
+    if (query.isEmpty) {
+      return _students;
+    }
 
     return _students.where((student) {
       return student.fullName.toLowerCase().contains(query) ||
@@ -275,6 +292,7 @@ class _CardsScreenState extends State<CardsScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 900;
+
         final search = TextField(
           decoration: InputDecoration(
             hintText: 'Search student, admission no. or roll no.',
@@ -290,7 +308,11 @@ class _CardsScreenState extends State<CardsScreen> {
               borderSide: const BorderSide(color: Color(0xffdfe4ec)),
             ),
           ),
-          onChanged: (value) => setState(() => _search = value),
+          onChanged: (value) {
+            setState(() {
+              _search = value;
+            });
+          },
         );
 
         final filters = [
@@ -412,7 +434,10 @@ class _CardsScreenState extends State<CardsScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '$count students is more than the $_batchSize-card download limit, so they\'re split into $_batchCount batches. Use the batch controls when PDF downloading is added.',
+              '$count students is more than the $_batchSize-card '
+              'download limit, so they\'re split into $_batchCount '
+              'batches. Use the batch controls when PDF downloading '
+              'is added.',
               style: const TextStyle(
                 color: Color(0xff9a5f00),
                 fontSize: 13,
@@ -464,20 +489,23 @@ class _CardsScreenState extends State<CardsScreen> {
       padding: const EdgeInsets.only(bottom: 24),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 250,
-        mainAxisExtent: 390,
+        mainAxisExtent: 300,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
       itemCount: students.length,
       itemBuilder: (context, index) {
         final student = students[index];
+
         AcademicSession? session;
+
         for (final item in _sessions) {
           if (item.uuid == student.sessionUuid) {
             session = item;
             break;
           }
         }
+
         return IdCardPreview(
           student: student,
           schoolName: widget.schoolName,
