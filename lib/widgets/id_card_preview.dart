@@ -12,6 +12,7 @@ class IdCardPreview extends StatelessWidget {
     required this.api,
     this.sessionName,
     this.onEdit,
+    this.onPrint,
   });
 
   final ApiStudent student;
@@ -19,6 +20,7 @@ class IdCardPreview extends StatelessWidget {
   final ApiService api;
   final String? sessionName;
   final VoidCallback? onEdit;
+  final VoidCallback? onPrint;
 
   String? get _photoUrl {
     final path = student.photoPath?.trim();
@@ -52,17 +54,37 @@ class IdCardPreview extends StatelessWidget {
           SizedBox(
             height: 38,
             width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 17),
-              label: const Text('Edit Student'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: Color(0xffcbd3df)),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPrint,
+                    icon: const Icon(Icons.print_outlined, size: 17),
+                    label: const Text('Print'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: Color(0xffcbd3df)),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 17),
+                    label: const Text('Edit'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: Color(0xffcbd3df)),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

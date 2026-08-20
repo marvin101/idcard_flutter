@@ -10,6 +10,9 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import 'student_form.dart';
 import '../widgets/id_card_preview.dart';
+import 'package:printing/printing.dart';
+
+import '../services/pdf_service.dart';
 
 class CardsScreen extends StatefulWidget {
   const CardsScreen({
@@ -396,6 +399,44 @@ class _CardsScreenState extends State<CardsScreen> {
     }
   }
 
+  Future<void> _printStudentCard(
+    ApiStudent student,
+    String? sessionName,
+  ) async {
+    String? photoUrl;
+
+    final path = student.photoPath?.trim();
+
+    if (path != null && path.isNotEmpty) {
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        photoUrl = path;
+      } else {
+        photoUrl = path.startsWith('/')
+            ? '${widget.api.baseUrl}$path'
+            : '${widget.api.baseUrl}/$path';
+      }
+    }
+
+    try {
+      await Printing.layoutPdf(
+        onLayout: (format) async {
+          return PdfService.generateStudentCard(
+            student: student,
+            schoolName: widget.schoolName,
+            sessionName: sessionName,
+            photoUrl: photoUrl,
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to generate ID card: $e')));
+    }
+  }
+
   // ------------------------------------------------------------
   // Build
   // ------------------------------------------------------------
@@ -680,6 +721,7 @@ class _CardsScreenState extends State<CardsScreen> {
           api: widget.api,
           sessionName: session?.name,
           onEdit: widget.canManage ? () => _editStudent(student) : null,
+          onPrint: () => _printStudentCard(student, session?.name),
         );
       },
     );
