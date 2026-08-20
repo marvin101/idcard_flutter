@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import 'academic_sessions_screen.dart';
 import 'classes_sections_screen.dart';
+import 'cards_screen.dart';
 import 'school_user_assignment_screen.dart';
 import 'student_screen.dart';
 
@@ -307,7 +308,18 @@ class _ModuleGrid extends StatelessWidget {
         'Prepare and manage ID cards.',
         Icons.badge_outlined,
         school != null,
-        null,
+        () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CardsScreen(
+                schoolUuid: school!.uuid,
+                schoolName: school.name,
+                api: auth.api,
+                canManage: auth.canManageUsers,
+              ),
+            ),
+          );
+        },
       ),
     ];
 
