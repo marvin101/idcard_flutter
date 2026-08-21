@@ -44,3 +44,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment / local configuration
+.env
+.env.*
+!.env.example
+
+# Local development files
+*.local
+
+# Generated deployment files
+/vercel/
+
+# IDE local settings
+.vscode/
