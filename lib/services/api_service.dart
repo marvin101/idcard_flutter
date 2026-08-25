@@ -9,6 +9,7 @@ import '../models/api_student.dart';
 import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
+import '../models/card_template.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -213,6 +214,26 @@ class ApiService {
     return _decodeList(
       response,
     ).map((item) => AcademicSession.fromJson(item)).toList();
+  }
+
+  Future<CardTemplate> getCardTemplate(String schoolUuid) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/card-template'),
+      headers: _headers,
+    );
+    return CardTemplate.fromApi(_decodeMap(response));
+  }
+
+  Future<CardTemplate> saveCardTemplate(
+    String schoolUuid,
+    CardTemplate template,
+  ) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/card-template'),
+      headers: _headers,
+      body: jsonEncode(template.toApi()),
+    );
+    return CardTemplate.fromApi(_decodeMap(response));
   }
 
   Future<Map<String, dynamic>> createAcademicSession({

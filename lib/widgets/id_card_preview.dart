@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../models/api_student.dart';
+import '../models/card_template.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
+import 'template_card.dart';
 
 class IdCardPreview extends StatelessWidget {
   const IdCardPreview({
@@ -10,6 +12,7 @@ class IdCardPreview extends StatelessWidget {
     required this.student,
     required this.schoolName,
     required this.api,
+    required this.template,
     this.sessionName,
     this.onEdit,
     this.onPrint,
@@ -18,6 +21,7 @@ class IdCardPreview extends StatelessWidget {
   final ApiStudent student;
   final String schoolName;
   final ApiService api;
+  final CardTemplate template;
   final String? sessionName;
   final VoidCallback? onEdit;
   final VoidCallback? onPrint;
@@ -50,7 +54,12 @@ class IdCardPreview extends StatelessWidget {
       ),
       child: Column(
         children: [
-          SizedBox(height: 258, child: _buildCardBody(context)),
+          TemplateCard(
+            student: student,
+            template: template,
+            sessionName: sessionName,
+            photoUrl: _photoUrl,
+          ),
           SizedBox(
             height: 38,
             width: double.infinity,
@@ -92,6 +101,7 @@ class IdCardPreview extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   Widget _buildCardBody(BuildContext context) {
     final photoUrl = _photoUrl;
 

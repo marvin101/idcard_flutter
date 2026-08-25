@@ -6,6 +6,7 @@ import '../models/academic_session.dart';
 import '../models/api_student.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
+import '../models/card_template.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import 'student_form.dart';
@@ -13,6 +14,7 @@ import '../widgets/id_card_preview.dart';
 import 'package:printing/printing.dart';
 
 import '../services/pdf_service.dart';
+import 'card_designer_screen.dart';
 
 class CardsScreen extends StatefulWidget {
   const CardsScreen({
@@ -63,6 +65,7 @@ class _CardsScreenState extends State<CardsScreen> {
   List<SchoolClass> _classes = const [];
   List<SchoolSection> _sections = const [];
   List<ApiStudent> _students = [];
+  CardTemplate _cardTemplate = CardTemplate.uploadedDesign;
 
   String? _selectedSessionUuid;
   String? _selectedClassUuid;
@@ -117,11 +120,19 @@ class _CardsScreenState extends State<CardsScreen> {
 
       final classes = await widget.api.getClasses(widget.schoolUuid);
 
+      CardTemplate cardTemplate = CardTemplate.uploadedDesign;
+      try {
+        cardTemplate = await widget.api.getCardTemplate(widget.schoolUuid);
+      } on ApiException catch (e) {
+        if (e.statusCode != 404) rethrow;
+      }
+
       if (!mounted) return;
 
       setState(() {
         _sessions = sessions;
         _classes = classes;
+        _cardTemplate = cardTemplate;
         _loadingFilters = false;
       });
 
@@ -399,6 +410,19 @@ class _CardsScreenState extends State<CardsScreen> {
     }
   }
 
+  Future<void> _openDesigner() async {
+    final saved = await Navigator.of(context).push<CardTemplate>(
+      MaterialPageRoute(
+        builder: (_) => CardDesignerScreen(
+          schoolUuid: widget.schoolUuid,
+          api: widget.api,
+          initialTemplate: _cardTemplate,
+        ),
+      ),
+    );
+    if (saved != null && mounted) setState(() => _cardTemplate = saved);
+  }
+
   Future<void> _printStudentCard(
     ApiStudent student,
     String? sessionName,
@@ -425,6 +449,7 @@ class _CardsScreenState extends State<CardsScreen> {
             schoolName: widget.schoolName,
             sessionName: sessionName,
             photoUrl: photoUrl,
+            template: _cardTemplate,
           );
         },
       );
@@ -448,6 +473,14 @@ class _CardsScreenState extends State<CardsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        actions: [
+          if (widget.canManage)
+            IconButton(
+              tooltip: 'Design card',
+              icon: const Icon(Icons.design_services_outlined),
+              onPressed: _openDesigner,
+            ),
+        ],
         title: Text('ID Cards — ${widget.schoolName}'),
       ),
       body: LayoutBuilder(
@@ -688,7 +721,7 @@ class _CardsScreenState extends State<CardsScreen> {
       padding: const EdgeInsets.only(bottom: 24),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 250,
-        mainAxisExtent: 300,
+        childAspectRatio: 1.22,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -719,6 +752,7 @@ class _CardsScreenState extends State<CardsScreen> {
           student: student,
           schoolName: widget.schoolName,
           api: widget.api,
+          template: _cardTemplate,
           sessionName: session?.name,
           onEdit: widget.canManage ? () => _editStudent(student) : null,
           onPrint: () => _printStudentCard(student, session?.name),

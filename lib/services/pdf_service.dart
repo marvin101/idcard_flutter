@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/api_student.dart';
+import '../models/card_template.dart';
 
 class PdfService {
   // Standard CR80 ID-card size.
@@ -18,10 +19,14 @@ class PdfService {
   static Future<Uint8List> generateStudentCard({
     required ApiStudent student,
     required String schoolName,
+    required CardTemplate template,
     String? sessionName,
     String? photoUrl,
   }) async {
     final pdf = pw.Document();
+    final primary = PdfColor.fromInt(template.primaryColor.toARGB32());
+    final accent = PdfColor.fromInt(template.accentColor.toARGB32());
+    final photoBorder = PdfColor.fromInt(template.photoBorderColor.toARGB32());
 
     pw.MemoryImage? photo;
 
@@ -62,14 +67,16 @@ class PdfService {
                   // SCHOOL NAME
                   // ---------------------------------------------------------
                   pw.Text(
-                    schoolName.toUpperCase(),
+                    template.schoolTitle.trim().isEmpty
+                        ? schoolName.toUpperCase()
+                        : template.schoolTitle.toUpperCase(),
                     maxLines: 1,
                     overflow: pw.TextOverflow.clip,
                     textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontSize: 9,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blue900,
+                      color: primary,
                     ),
                   ),
 
@@ -79,12 +86,12 @@ class PdfService {
                   // CARD TITLE
                   // ---------------------------------------------------------
                   pw.Text(
-                    'STUDENT ID CARD',
+                    template.schoolSubtitle,
                     style: pw.TextStyle(
                       fontSize: 5.5,
                       fontWeight: pw.FontWeight.bold,
                       letterSpacing: 0.8,
-                      color: PdfColors.grey700,
+                      color: accent,
                     ),
                   ),
 
@@ -105,7 +112,7 @@ class PdfService {
                           decoration: pw.BoxDecoration(
                             color: PdfColors.grey100,
                             border: pw.Border.all(
-                              color: PdfColors.blue900,
+                              color: photoBorder,
                               width: 1.2,
                             ),
                           ),
@@ -139,7 +146,7 @@ class PdfService {
                                 style: pw.TextStyle(
                                   fontSize: 8.5,
                                   fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.blue900,
+                                  color: primary,
                                 ),
                               ),
 
@@ -149,9 +156,17 @@ class PdfService {
 
                               _field('Roll No.', student.rollNo),
 
-                              _field('Stream', student.stream),
+                              _field(
+                                'Stream',
+                                template.showStream ? student.stream : null,
+                              ),
 
-                              _field('Blood', student.bloodGroup),
+                              _field(
+                                'Blood',
+                                template.showBloodGroup
+                                    ? student.bloodGroup
+                                    : null,
+                              ),
                             ],
                           ),
                         ),
@@ -197,9 +212,20 @@ class PdfService {
                           child: pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                              _field('Mobile', student.mobile),
-                              _field('Aadhaar', student.aadhaar),
-                              _field('Address', student.address),
+                              _field(
+                                'Mobile',
+                                template.showMobile ? student.mobile : null,
+                              ),
+                              _field(
+                                'Aadhaar',
+                                template.maskAadhaar
+                                    ? maskAadhaarValue(student.aadhaar)
+                                    : student.aadhaar,
+                              ),
+                              _field(
+                                'Address',
+                                template.showAddress ? student.address : null,
+                              ),
                             ],
                           ),
                         ),
@@ -244,7 +270,7 @@ class PdfService {
                   pw.Container(
                     width: double.infinity,
                     height: _mm(5),
-                    color: PdfColors.blue900,
+                    color: primary,
                     alignment: pw.Alignment.center,
                     child: pw.Text(
                       'Session: ${sessionName ?? 'Not specified'}',
