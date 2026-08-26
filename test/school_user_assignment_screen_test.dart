@@ -19,4 +19,34 @@ void main() {
     expect(find.text('Anita Sharma'), findsOneWidget);
     expect(find.text('Search name, email, or designation'), findsOneWidget);
   });
+
+  testWidgets('school administrators cannot select elevated roles', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SchoolUserAssignmentScreen(
+          schoolUuid: 'school-uuid',
+          initialUsers: [
+            SchoolUserAssignment(
+              id: 'user-1',
+              name: 'Arjun Kapoor',
+              username: 'arjun.kapoor',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final roleDropdown = find.byType(DropdownButtonFormField<SchoolRole>);
+
+    await tester.ensureVisible(roleDropdown);
+    await tester.tap(roleDropdown);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Teacher'), findsOneWidget);
+    expect(find.text('Staff'), findsOneWidget);
+    expect(find.text('School administrator'), findsNothing);
+    expect(find.text('Card operator'), findsNothing);
+  });
 }

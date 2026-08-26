@@ -244,6 +244,7 @@ class _ModuleGrid extends StatelessWidget {
                 schoolUuid: school!.uuid,
                 schoolName: school.name,
                 api: auth.api,
+                canManageElevatedRoles: auth.isPlatformAdmin,
               ),
             ),
           );

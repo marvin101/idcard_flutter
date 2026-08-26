@@ -15,6 +15,7 @@ class SchoolUserAssignmentScreen extends StatefulWidget {
     this.initialUsers = const [],
     this.api,
     this.useDemoData = false,
+    this.canManageElevatedRoles = false,
     this.onAssign,
     this.onUpdateRole,
     this.onRevoke,
@@ -25,10 +26,11 @@ class SchoolUserAssignmentScreen extends StatefulWidget {
   final List<SchoolUserAssignment> initialUsers;
   final ApiService? api;
   final bool useDemoData;
+  final bool canManageElevatedRoles;
   final Future<void> Function(SchoolUserAssignment user, SchoolRole role)?
-      onAssign;
+  onAssign;
   final Future<void> Function(SchoolUserAssignment user, SchoolRole role)?
-      onUpdateRole;
+  onUpdateRole;
   final Future<void> Function(SchoolUserAssignment user)? onRevoke;
 
   @override
@@ -101,7 +103,8 @@ class _SchoolUserAssignmentScreenState
         AssignmentFilter.assigned => user.isAssigned,
         AssignmentFilter.unassigned => !user.isAssigned,
       };
-      final matchesQuery = query.isEmpty ||
+      final matchesQuery =
+          query.isEmpty ||
           user.name.toLowerCase().contains(query) ||
           user.username.toLowerCase().contains(query) ||
           (user.email?.toLowerCase().contains(query) ?? false) ||
@@ -110,10 +113,7 @@ class _SchoolUserAssignmentScreenState
     }).toList();
   }
 
-  Future<void> _setRole(
-    SchoolUserAssignment user,
-    SchoolRole role,
-  ) async {
+  Future<void> _setRole(SchoolUserAssignment user, SchoolRole role) async {
     setState(() => _busyUserId = user.id);
     try {
       if (user.isAssigned) {
@@ -144,14 +144,21 @@ class _SchoolUserAssignmentScreenState
       if (!mounted) return;
       setState(() {
         _users = _users
-            .map((item) => item.id == user.id ? item.copyWith(role: role) : item)
+            .map(
+              (item) => item.id == user.id ? item.copyWith(role: role) : item,
+            )
             .toList();
       });
       _showMessage(
-        user.isAssigned ? 'Role updated for ${user.name}.' : '${user.name} assigned.',
+        user.isAssigned
+            ? 'Role updated for ${user.name}.'
+            : '${user.name} assigned.',
       );
     } catch (_) {
-      _showMessage('Could not update this user. Please try again.', error: true);
+      _showMessage(
+        'Could not update this user. Please try again.',
+        error: true,
+      );
     } finally {
       if (mounted) setState(() => _busyUserId = null);
     }
@@ -162,7 +169,9 @@ class _SchoolUserAssignmentScreenState
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove school access?'),
-        content: Text('${user.name} will no longer be able to access ${widget.schoolName}.'),
+        content: Text(
+          '${user.name} will no longer be able to access ${widget.schoolName}.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -193,7 +202,10 @@ class _SchoolUserAssignmentScreenState
       if (!mounted) return;
       setState(() {
         _users = _users
-            .map((item) => item.id == user.id ? item.copyWith(clearRole: true) : item)
+            .map(
+              (item) =>
+                  item.id == user.id ? item.copyWith(clearRole: true) : item,
+            )
             .toList();
       });
       _showMessage('Access removed for ${user.name}.');
@@ -244,7 +256,10 @@ class _SchoolUserAssignmentScreenState
             child: CircleAvatar(
               radius: 16,
               backgroundColor: Color(0xffdbe5ff),
-              child: Text('PA', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              child: Text(
+                'PA',
+                style: TextStyle(color: AppColors.primary, fontSize: 12),
+              ),
             ),
           ),
         ],
@@ -263,17 +278,27 @@ class _SchoolUserAssignmentScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Schools  /  ${widget.schoolName}',
-                        style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
+                    Text(
+                      'Schools  /  ${widget.schoolName}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 12),
-                    Text('User assignments', style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    )),
+                    Text(
+                      'User assignments',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     const Text(
                       'Give people the right level of access for this school.',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 28),
                     _SchoolSummary(
@@ -288,8 +313,10 @@ class _SchoolUserAssignmentScreenState
                       users: _visibleUsers,
                       searchController: _searchController,
                       filter: _filter,
-                      onFilterChanged: (filter) => setState(() => _filter = filter),
+                      onFilterChanged: (filter) =>
+                          setState(() => _filter = filter),
                       busyUserId: _busyUserId,
+                      canManageElevatedRoles: widget.canManageElevatedRoles,
                       onSetRole: _setRole,
                       onRevoke: _revoke,
                       loading: _loadingUsers,
@@ -308,7 +335,11 @@ class _SchoolUserAssignmentScreenState
 }
 
 class _SchoolSummary extends StatelessWidget {
-  const _SchoolSummary({required this.schoolName, required this.total, required this.assigned});
+  const _SchoolSummary({
+    required this.schoolName,
+    required this.total,
+    required this.assigned,
+  });
 
   final String schoolName;
   final int total;
@@ -328,22 +359,44 @@ class _SchoolSummary extends StatelessWidget {
         runSpacing: 20,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            const CircleAvatar(
-              radius: 23,
-              backgroundColor: Color(0xffe8edff),
-              child: Icon(Icons.school_outlined, color: AppColors.accent),
-            ),
-            const SizedBox(width: 12),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Selected school', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-              const SizedBox(height: 2),
-              Text(schoolName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            ]),
-          ]),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircleAvatar(
+                radius: 23,
+                backgroundColor: Color(0xffe8edff),
+                child: Icon(Icons.school_outlined, color: AppColors.accent),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Selected school',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    schoolName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
           _Metric(value: '$total', label: 'User accounts'),
           _Metric(value: '$assigned', label: 'Assigned'),
-          _Metric(value: '${total - assigned}', label: 'Need assignment', color: AppColors.warning),
+          _Metric(
+            value: '${total - assigned}',
+            label: 'Need assignment',
+            color: AppColors.warning,
+          ),
         ],
       ),
     );
@@ -351,7 +404,11 @@ class _SchoolSummary extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({required this.value, required this.label, this.color = AppColors.primary});
+  const _Metric({
+    required this.value,
+    required this.label,
+    this.color = AppColors.primary,
+  });
   final String value;
   final String label;
   final Color color;
@@ -360,8 +417,18 @@ class _Metric extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: color)),
-      Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+      Text(
+        value,
+        style: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+      Text(
+        label,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+      ),
     ],
   );
 }
@@ -375,14 +442,19 @@ class _AccessGuidance extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: const Color(0xfff3dc98)),
     ),
-    child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(Icons.info_outline, color: Color(0xff98700c)),
-      SizedBox(width: 12),
-      Expanded(child: Text(
-        'School administrators can manage teachers and staff. Only platform administrators can assign school administrators or card operators.',
-        style: TextStyle(color: Color(0xff624d15), height: 1.4),
-      )),
-    ]),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.info_outline, color: Color(0xff98700c)),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'School administrators can manage teachers and staff. Only platform administrators can assign school administrators or card operators.',
+            style: TextStyle(color: Color(0xff624d15), height: 1.4),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -393,6 +465,7 @@ class _UserDirectory extends StatelessWidget {
     required this.filter,
     required this.onFilterChanged,
     required this.busyUserId,
+    required this.canManageElevatedRoles,
     required this.onSetRole,
     required this.onRevoke,
     required this.loading,
@@ -405,7 +478,9 @@ class _UserDirectory extends StatelessWidget {
   final AssignmentFilter filter;
   final ValueChanged<AssignmentFilter> onFilterChanged;
   final String? busyUserId;
-  final Future<void> Function(SchoolUserAssignment user, SchoolRole role) onSetRole;
+  final bool canManageElevatedRoles;
+  final Future<void> Function(SchoolUserAssignment user, SchoolRole role)
+  onSetRole;
   final Future<void> Function(SchoolUserAssignment user) onRevoke;
   final bool loading;
   final String? loadError;
@@ -420,69 +495,121 @@ class _UserDirectory extends StatelessWidget {
     ),
     child: Padding(
       padding: const EdgeInsets.all(22),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('People', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4),
-        const Text('Search a user, then assign or update their school role.',
-            style: TextStyle(color: AppColors.textSecondary)),
-        const SizedBox(height: 20),
-        LayoutBuilder(builder: (context, constraints) {
-          final search = TextField(
-            controller: searchController,
-            decoration: InputDecoration(
-              hintText: 'Search name, email, or designation',
-              prefixIcon: const Icon(Icons.search),
-              isDense: true,
-              filled: true,
-              fillColor: const Color(0xfff9fafc),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xffdce1eb))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xffdce1eb))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'People',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Search a user, then assign or update their school role.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final search = TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search name, email, or designation',
+                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                  filled: true,
+                  fillColor: const Color(0xfff9fafc),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xffdce1eb)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xffdce1eb)),
+                  ),
+                ),
+              );
+              final filters = SegmentedButton<AssignmentFilter>(
+                segments: const [
+                  ButtonSegment(
+                    value: AssignmentFilter.all,
+                    label: Text('All'),
+                  ),
+                  ButtonSegment(
+                    value: AssignmentFilter.assigned,
+                    label: Text('Assigned'),
+                  ),
+                  ButtonSegment(
+                    value: AssignmentFilter.unassigned,
+                    label: Text('Unassigned'),
+                  ),
+                ],
+                selected: {filter},
+                onSelectionChanged: (values) => onFilterChanged(values.first),
+                showSelectedIcon: false,
+              );
+              return constraints.maxWidth > 650
+                  ? Row(
+                      children: [
+                        Expanded(child: search),
+                        const SizedBox(width: 16),
+                        filters,
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        search,
+                        const SizedBox(height: 12),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: filters,
+                        ),
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 18),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 44),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (loadError != null)
+            _LoadError(message: loadError!, onRetry: onRetry)
+          else if (users.isEmpty)
+            const _EmptyUsers()
+          else
+            ...users.map(
+              (user) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _UserCard(
+                  user: user,
+                  loading: user.id == busyUserId,
+                  canManageElevatedRoles: canManageElevatedRoles,
+                  onSetRole: onSetRole,
+                  onRevoke: onRevoke,
+                ),
+              ),
             ),
-          );
-          final filters = SegmentedButton<AssignmentFilter>(
-            segments: const [
-              ButtonSegment(value: AssignmentFilter.all, label: Text('All')),
-              ButtonSegment(value: AssignmentFilter.assigned, label: Text('Assigned')),
-              ButtonSegment(value: AssignmentFilter.unassigned, label: Text('Unassigned')),
-            ],
-            selected: {filter},
-            onSelectionChanged: (values) => onFilterChanged(values.first),
-            showSelectedIcon: false,
-          );
-          return constraints.maxWidth > 650
-              ? Row(children: [Expanded(child: search), const SizedBox(width: 16), filters])
-              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [search, const SizedBox(height: 12), SingleChildScrollView(scrollDirection: Axis.horizontal, child: filters)]);
-        }),
-        const SizedBox(height: 18),
-        if (loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 44),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (loadError != null)
-          _LoadError(message: loadError!, onRetry: onRetry)
-        else if (users.isEmpty)
-          const _EmptyUsers()
-        else
-          ...users.map((user) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _UserCard(
-              user: user,
-              loading: user.id == busyUserId,
-              onSetRole: onSetRole,
-              onRevoke: onRevoke,
-            ),
-          )),
-      ]),
+        ],
+      ),
     ),
   );
 }
 
 class _UserCard extends StatelessWidget {
-  const _UserCard({required this.user, required this.loading, required this.onSetRole, required this.onRevoke});
+  const _UserCard({
+    required this.user,
+    required this.loading,
+    required this.canManageElevatedRoles,
+    required this.onSetRole,
+    required this.onRevoke,
+  });
   final SchoolUserAssignment user;
   final bool loading;
-  final Future<void> Function(SchoolUserAssignment user, SchoolRole role) onSetRole;
+  final bool canManageElevatedRoles;
+  final Future<void> Function(SchoolUserAssignment user, SchoolRole role)
+  onSetRole;
   final Future<void> Function(SchoolUserAssignment user) onRevoke;
 
   @override
@@ -490,79 +617,171 @@ class _UserCard extends StatelessWidget {
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       color: user.isAssigned ? Colors.white : const Color(0xfffffcf5),
-      border: Border.all(color: user.isAssigned ? const Color(0xffe5e8ef) : const Color(0xfff1dca9)),
+      border: Border.all(
+        color: user.isAssigned
+            ? const Color(0xffe5e8ef)
+            : const Color(0xfff1dca9),
+      ),
       borderRadius: BorderRadius.circular(12),
     ),
-    child: LayoutBuilder(builder: (context, constraints) {
-      final identity = Row(mainAxisSize: MainAxisSize.min, children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: const Color(0xffe8edff),
-          child: Text(user.initials, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(width: 12),
-        Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(user.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 3),
-          Text(user.email ?? '@${user.username}', overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          if (user.designation != null) Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(user.designation!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          ),
-        ])),
-      ]);
-      final actions = _UserActions(user: user, loading: loading, onSetRole: onSetRole, onRevoke: onRevoke);
-      return constraints.maxWidth > 680
-          ? Row(children: [Expanded(child: identity), const SizedBox(width: 20), actions])
-          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [identity, const SizedBox(height: 16), actions]);
-    }),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final identity = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: const Color(0xffe8edff),
+              child: Text(
+                user.initials,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    user.email ?? '@${user.username}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (user.designation != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        user.designation!,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+        final actions = _UserActions(
+          user: user,
+          loading: loading,
+          canManageElevatedRoles: canManageElevatedRoles,
+          onSetRole: onSetRole,
+          onRevoke: onRevoke,
+        );
+        return constraints.maxWidth > 680
+            ? Row(
+                children: [
+                  Expanded(child: identity),
+                  const SizedBox(width: 20),
+                  actions,
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [identity, const SizedBox(height: 16), actions],
+              );
+      },
+    ),
   );
 }
 
 class _UserActions extends StatelessWidget {
-  const _UserActions({required this.user, required this.loading, required this.onSetRole, required this.onRevoke});
+  const _UserActions({
+    required this.user,
+    required this.loading,
+    required this.canManageElevatedRoles,
+    required this.onSetRole,
+    required this.onRevoke,
+  });
   final SchoolUserAssignment user;
   final bool loading;
-  final Future<void> Function(SchoolUserAssignment user, SchoolRole role) onSetRole;
+  final bool canManageElevatedRoles;
+  final Future<void> Function(SchoolUserAssignment user, SchoolRole role)
+  onSetRole;
   final Future<void> Function(SchoolUserAssignment user) onRevoke;
 
+  bool get _isElevatedAssignment =>
+      user.role == SchoolRole.schoolAdmin ||
+      user.role == SchoolRole.cardOperator;
+
+  List<SchoolRole> get _availableRoles {
+    if (canManageElevatedRoles) return SchoolRole.values;
+    if (_isElevatedAssignment) return [user.role!];
+    return const [SchoolRole.teacher, SchoolRole.staff];
+  }
+
+  bool get _canChangeAssignment =>
+      canManageElevatedRoles || !_isElevatedAssignment;
+
   @override
-  Widget build(BuildContext context) => Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-    SizedBox(
-      width: 175,
-      child: DropdownButtonFormField<SchoolRole>(
-        initialValue: user.role,
-        hint: const Text('Choose role'),
-        isDense: true,
-        isExpanded: true,
-        decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
-        items: SchoolRole.values
-            .map(
-              (role) => DropdownMenuItem(
-                value: role,
-                child: Text(role.label, overflow: TextOverflow.ellipsis),
-              ),
-            )
-            .toList(),
-        onChanged: loading ? null : (role) { if (role != null) onSetRole(user, role); },
+  Widget build(BuildContext context) => Wrap(
+    spacing: 10,
+    runSpacing: 10,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+      SizedBox(
+        width: 175,
+        child: DropdownButtonFormField<SchoolRole>(
+          initialValue: user.role,
+          hint: const Text('Choose role'),
+          isDense: true,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+          items: _availableRoles
+              .map(
+                (role) => DropdownMenuItem(
+                  value: role,
+                  child: Text(role.label, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: loading || !_canChangeAssignment
+              ? null
+              : (role) {
+                  if (role != null) onSetRole(user, role);
+                },
+        ),
       ),
-    ),
-    if (loading)
-      const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 2.5))
-    else if (user.isAssigned)
-      OutlinedButton.icon(
-        onPressed: () => onRevoke(user),
-        icon: const Icon(Icons.person_remove_outlined, size: 18),
-        label: const Text('Remove'),
-        style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
-      )
-    else
-      FilledButton.icon(
-        onPressed: null,
-        icon: const Icon(Icons.person_add_alt_1, size: 18),
-        label: const Text('Choose a role'),
-      ),
-  ]);
+      if (loading)
+        const SizedBox(
+          width: 36,
+          height: 36,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        )
+      else if (user.isAssigned && _canChangeAssignment)
+        OutlinedButton.icon(
+          onPressed: () => onRevoke(user),
+          icon: const Icon(Icons.person_remove_outlined, size: 18),
+          label: const Text('Remove'),
+          style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+        )
+      else
+        FilledButton.icon(
+          onPressed: null,
+          icon: const Icon(Icons.person_add_alt_1, size: 18),
+          label: const Text('Choose a role'),
+        ),
+    ],
+  );
 }
 
 class _LoadError extends StatelessWidget {
@@ -573,13 +792,21 @@ class _LoadError extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 40),
-    child: Center(child: Column(children: [
-      const Icon(Icons.cloud_off_outlined, size: 42, color: AppColors.danger),
-      const SizedBox(height: 12),
-      Text(message, textAlign: TextAlign.center),
-      const SizedBox(height: 12),
-      OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-    ])),
+    child: Center(
+      child: Column(
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 42,
+            color: AppColors.danger,
+          ),
+          const SizedBox(height: 12),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    ),
   );
 }
 
@@ -589,13 +816,27 @@ class _EmptyUsers extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Padding(
     padding: EdgeInsets.symmetric(vertical: 44),
-    child: Center(child: Column(children: [
-      Icon(Icons.person_search_outlined, size: 42, color: AppColors.disabled),
-      SizedBox(height: 12),
-      Text('No matching users', style: TextStyle(fontWeight: FontWeight.w600)),
-      SizedBox(height: 4),
-      Text('Try another search or filter.', style: TextStyle(color: AppColors.textSecondary)),
-    ])),
+    child: Center(
+      child: Column(
+        children: [
+          Icon(
+            Icons.person_search_outlined,
+            size: 42,
+            color: AppColors.disabled,
+          ),
+          SizedBox(height: 12),
+          Text(
+            'No matching users',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Try another search or filter.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -656,22 +897,64 @@ class SchoolUserAssignment {
   }
 
   bool get isAssigned => role != null;
-  String get initials => name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty).take(2).map((part) => part[0]).join().toUpperCase();
+  String get initials => name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .take(2)
+      .map((part) => part[0])
+      .join()
+      .toUpperCase();
 
-  SchoolUserAssignment copyWith({SchoolRole? role, bool clearRole = false}) => SchoolUserAssignment(
-    id: id,
-    name: name,
-    username: username,
-    email: email,
-    designation: designation,
-    role: clearRole ? null : (role ?? this.role),
-  );
+  SchoolUserAssignment copyWith({SchoolRole? role, bool clearRole = false}) =>
+      SchoolUserAssignment(
+        id: id,
+        name: name,
+        username: username,
+        email: email,
+        designation: designation,
+        role: clearRole ? null : (role ?? this.role),
+      );
 }
 
 const _demoUsers = [
-  SchoolUserAssignment(id: '1', name: 'Anita Sharma', username: 'anita.sharma', email: 'anita.sharma@greenfield.edu', designation: 'Vice Principal', role: SchoolRole.schoolAdmin),
-  SchoolUserAssignment(id: '2', name: 'Rahul Verma', username: 'rahul.verma', email: 'rahul.verma@greenfield.edu', designation: 'Class Teacher', role: SchoolRole.teacher),
-  SchoolUserAssignment(id: '3', name: 'Meera Iyer', username: 'meera.iyer', email: 'meera.iyer@greenfield.edu', designation: 'Office Executive', role: SchoolRole.cardOperator),
-  SchoolUserAssignment(id: '4', name: 'Arjun Kapoor', username: 'arjun.kapoor', email: 'arjun.kapoor@greenfield.edu', designation: 'Sports Coordinator'),
-  SchoolUserAssignment(id: '5', name: 'Sana Khan', username: 'sana.khan', email: 'sana.khan@greenfield.edu', designation: 'Librarian', role: SchoolRole.staff),
+  SchoolUserAssignment(
+    id: '1',
+    name: 'Anita Sharma',
+    username: 'anita.sharma',
+    email: 'anita.sharma@greenfield.edu',
+    designation: 'Vice Principal',
+    role: SchoolRole.schoolAdmin,
+  ),
+  SchoolUserAssignment(
+    id: '2',
+    name: 'Rahul Verma',
+    username: 'rahul.verma',
+    email: 'rahul.verma@greenfield.edu',
+    designation: 'Class Teacher',
+    role: SchoolRole.teacher,
+  ),
+  SchoolUserAssignment(
+    id: '3',
+    name: 'Meera Iyer',
+    username: 'meera.iyer',
+    email: 'meera.iyer@greenfield.edu',
+    designation: 'Office Executive',
+    role: SchoolRole.cardOperator,
+  ),
+  SchoolUserAssignment(
+    id: '4',
+    name: 'Arjun Kapoor',
+    username: 'arjun.kapoor',
+    email: 'arjun.kapoor@greenfield.edu',
+    designation: 'Sports Coordinator',
+  ),
+  SchoolUserAssignment(
+    id: '5',
+    name: 'Sana Khan',
+    username: 'sana.khan',
+    email: 'sana.khan@greenfield.edu',
+    designation: 'Librarian',
+    role: SchoolRole.staff,
+  ),
 ];
