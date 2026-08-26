@@ -14,7 +14,7 @@ import '../widgets/id_card_preview.dart';
 import 'package:printing/printing.dart';
 
 import '../services/pdf_service.dart';
-import 'card_designer_route_screen.dart';
+import 'card_designer_screen.dart';
 import 'bulk_pdf_filter_dialog.dart';
 
 class CardsScreen extends StatefulWidget {
@@ -413,9 +413,15 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<void> _openDesigner() async {
-    final saved = await Navigator.of(
-      context,
-    ).pushNamed<CardTemplate>(CardDesignerRouteScreen.routeName);
+    final saved = await Navigator.of(context).push<CardTemplate>(
+      MaterialPageRoute(
+        builder: (_) => CardDesignerScreen(
+          schoolUuid: widget.schoolUuid,
+          api: widget.api,
+          initialTemplate: _cardTemplate,
+        ),
+      ),
+    );
     if (saved != null && mounted) setState(() => _cardTemplate = saved);
   }
 
@@ -514,10 +520,7 @@ class _CardsScreenState extends State<CardsScreen> {
       }
 
       if (students.isEmpty) {
-        throw const ApiException(
-          404,
-          'No students match the selected criteria.',
-        );
+        throw const ApiException(404, 'No students match the selected criteria.');
       }
 
       final bytes = await PdfService.generateStudentCards(
