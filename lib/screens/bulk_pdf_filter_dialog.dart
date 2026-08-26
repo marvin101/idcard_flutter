@@ -103,8 +103,9 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() => from ? _createdFrom = picked : _createdTo = picked);
+    }
   }
 
   String _dateLabel(DateTime? value) => value == null
