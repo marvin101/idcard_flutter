@@ -29,8 +29,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get canManageUsers {
     if (isPlatformAdmin) return true;
-    final role = selectedSchoolAccess?.role;
-    return role == 'school_admin';
+    return selectedSchoolAccess?.isSchoolAdministrator ?? false;
   }
 
   bool get canManageAcademicSessions => canManageUsers;
@@ -74,7 +73,10 @@ class AuthProvider extends ChangeNotifier {
       final result = await _api.login(username.trim(), password);
       final token = result['access_token'] as String?;
       if (token == null || token.isEmpty) {
-        throw const ApiException(500, 'Login response did not contain an access token.');
+        throw const ApiException(
+          500,
+          'Login response did not contain an access token.',
+        );
       }
 
       _api.setToken(token);

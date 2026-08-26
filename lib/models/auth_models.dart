@@ -25,16 +25,16 @@ class AuthUser {
       platformRole == 'platform_admin' || isPlatformAdmin;
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
-        uuid: json['uuid'] as String,
-        username: json['username'] as String,
-        fullName: json['full_name'] as String,
-        email: json['email'] as String?,
-        mobile: json['mobile'] as String?,
-        designation: json['designation'] as String?,
-        platformRole: json['platform_role'] as String?,
-        isPlatformAdmin: json['is_platform_admin'] as bool? ?? false,
-        isActive: json['is_active'] as bool? ?? true,
-      );
+    uuid: json['uuid'] as String,
+    username: json['username'] as String,
+    fullName: json['full_name'] as String,
+    email: json['email'] as String?,
+    mobile: json['mobile'] as String?,
+    designation: json['designation'] as String?,
+    platformRole: json['platform_role'] as String?,
+    isPlatformAdmin: json['is_platform_admin'] as bool? ?? false,
+    isActive: json['is_active'] as bool? ?? true,
+  );
 }
 
 class SchoolSummary {
@@ -51,11 +51,11 @@ class SchoolSummary {
   final bool isActive;
 
   factory SchoolSummary.fromJson(Map<String, dynamic> json) => SchoolSummary(
-        uuid: json['uuid'] as String,
-        code: json['school_code'] as String,
-        name: json['school_name'] as String,
-        isActive: json['is_active'] as bool? ?? true,
-      );
+    uuid: json['uuid'] as String,
+    code: json['school_code'] as String,
+    name: json['school_name'] as String,
+    isActive: json['is_active'] as bool? ?? true,
+  );
 }
 
 class SchoolAccess {
@@ -69,9 +69,11 @@ class SchoolAccess {
   final String schoolName;
   final String role;
 
+  bool get isSchoolAdministrator => role == 'school_admin' || role == 'admin';
+
   factory SchoolAccess.fromJson(Map<String, dynamic> json) => SchoolAccess(
-        schoolUuid: json['school_uuid'] as String,
-        schoolName: json['school_name'] as String,
-        role: json['role'] as String,
-      );
+    schoolUuid: json['school_uuid'] as String,
+    schoolName: json['school_name'] as String,
+    role: json['role'] as String,
+  );
 }
