@@ -58,3 +58,5 @@ app.*.map.json
 
 # IDE local settings
 .vscode/
+.vercel
+.env*
