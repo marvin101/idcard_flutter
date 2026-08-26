@@ -14,7 +14,8 @@ import '../widgets/id_card_preview.dart';
 import 'package:printing/printing.dart';
 
 import '../services/pdf_service.dart';
-import 'card_designer_screen.dart';
+import 'card_designer_route_screen.dart';
+import 'bulk_pdf_filter_dialog.dart';
 
 class CardsScreen extends StatefulWidget {
   const CardsScreen({
@@ -45,6 +46,7 @@ class _CardsScreenState extends State<CardsScreen> {
   bool _loadingFilters = true;
   bool _loadingStudents = false;
   bool _loadingMore = false;
+  bool _exportingBulk = false;
   bool _hasMore = true;
 
   String? _error;
@@ -411,15 +413,9 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<void> _openDesigner() async {
-    final saved = await Navigator.of(context).push<CardTemplate>(
-      MaterialPageRoute(
-        builder: (_) => CardDesignerScreen(
-          schoolUuid: widget.schoolUuid,
-          api: widget.api,
-          initialTemplate: _cardTemplate,
-        ),
-      ),
-    );
+    final saved = await Navigator.of(
+      context,
+    ).pushNamed<CardTemplate>(CardDesignerRouteScreen.routeName);
     if (saved != null && mounted) setState(() => _cardTemplate = saved);
   }
 
@@ -462,6 +458,97 @@ class _CardsScreenState extends State<CardsScreen> {
     }
   }
 
+  String? _photoUrl(ApiStudent student) {
+    final path = student.photoPath?.trim();
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return path.startsWith('/')
+        ? '${widget.api.baseUrl}$path'
+        : '${widget.api.baseUrl}/$path';
+  }
+
+  String? _sessionName(ApiStudent student) {
+    for (final session in _sessions) {
+      if (session.uuid == student.sessionUuid) return session.name;
+    }
+    return null;
+  }
+
+  Future<void> _downloadFilteredCards() async {
+    if (_exportingBulk) return;
+    final filter = await showDialog<BulkPdfFilter>(
+      context: context,
+      builder: (_) => BulkPdfFilterDialog(
+        schoolUuid: widget.schoolUuid,
+        api: widget.api,
+        sessions: _sessions,
+        classes: _classes,
+        initialSearch: _search,
+        initialSessionUuid: _selectedSessionUuid,
+        initialClassUuid: _selectedClassUuid,
+        initialSectionUuid: _selectedSectionUuid,
+      ),
+    );
+    if (filter == null || !mounted) return;
+
+    setState(() => _exportingBulk = true);
+    try {
+      const pageSize = 200;
+      var offset = 0;
+      final students = <ApiStudent>[];
+      while (true) {
+        final page = await widget.api.getStudentsPage(
+          schoolUuid: widget.schoolUuid,
+          limit: pageSize,
+          offset: offset,
+          search: filter.search,
+          sessionUuid: filter.sessionUuid,
+          classUuid: filter.classUuid,
+          sectionUuid: filter.sectionUuid,
+          createdFrom: filter.createdFrom,
+          createdTo: filter.createdTo,
+        );
+        students.addAll(page.items);
+        if (!page.hasMore || page.items.isEmpty) break;
+        offset += page.items.length;
+      }
+
+      if (students.isEmpty) {
+        throw const ApiException(
+          404,
+          'No students match the selected criteria.',
+        );
+      }
+
+      final bytes = await PdfService.generateStudentCards(
+        cards: students
+            .map(
+              (student) => PdfCardData(
+                student: student,
+                sessionName: _sessionName(student),
+                photoUrl: _photoUrl(student),
+              ),
+            )
+            .toList(),
+        schoolName: widget.schoolName,
+        template: _cardTemplate,
+      );
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename:
+            'id-cards-${widget.schoolName.replaceAll(' ', '-').toLowerCase()}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to download ID cards: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingBulk = false);
+    }
+  }
+
   // ------------------------------------------------------------
   // Build
   // ------------------------------------------------------------
@@ -474,6 +561,19 @@ class _CardsScreenState extends State<CardsScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            tooltip: 'Download filtered cards as PDF',
+            onPressed: _exportingBulk ? null : _downloadFilteredCards,
+            icon: _exportingBulk
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+          ),
           if (widget.canManage)
             IconButton(
               tooltip: 'Design card',

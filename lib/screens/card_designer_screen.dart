@@ -234,11 +234,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     const colors = [
       Color(0xff242c61),
       Color(0xff005b96),
+      Color(0xff1565c0),
+      Color(0xff1976d2),
+      Color(0xff3949ab),
+      Color(0xff5e35b1),
+      Color(0xff7b1fa2),
+      Color(0xff8e24aa),
+      Color(0xffad1457),
       Color(0xff00695c),
+      Color(0xff00897b),
+      Color(0xff2e7d32),
+      Color(0xff43a047),
+      Color(0xff7cb342),
+      Color(0xff9e9d24),
       Color(0xff7b1f32),
+      Color(0xffc62828),
+      Color(0xffe53935),
+      Color(0xffef6c00),
+      Color(0xfff9a825),
       Color(0xffffe000),
       Color(0xffe52b24),
       Color(0xff00aee8),
+      Color(0xff00838f),
+      Color(0xff455a64),
+      Color(0xff212121),
+      Color(0xff6d4c41),
+      Color(0xff757575),
     ];
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -249,6 +270,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: colors
                 .map(
                   (color) => InkWell(

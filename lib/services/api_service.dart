@@ -404,6 +404,8 @@ class ApiService {
     String? sessionUuid,
     String? classUuid,
     String? sectionUuid,
+    DateTime? createdFrom,
+    DateTime? createdTo,
   }) async {
     final queryParameters = <String, String>{
       'limit': limit.toString(),
@@ -426,6 +428,14 @@ class ApiService {
       queryParameters['section_uuid'] = sectionUuid;
     }
 
+    if (createdFrom != null) {
+      queryParameters['created_from'] = _dateOnly(createdFrom);
+    }
+
+    if (createdTo != null) {
+      queryParameters['created_to'] = _dateOnly(createdTo);
+    }
+
     final uri = Uri.parse(
       '$baseUrl/schools/$schoolUuid/students/paged',
     ).replace(queryParameters: queryParameters);
@@ -434,6 +444,11 @@ class ApiService {
 
     return ApiStudentPage.fromJson(_decodeMap(response));
   }
+
+  String _dateOnly(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
 
   Future<ApiStudent> getStudent({
     required String schoolUuid,
