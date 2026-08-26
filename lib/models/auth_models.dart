@@ -70,6 +70,7 @@ class SchoolAccess {
   final String role;
 
   bool get isSchoolAdministrator => role == 'school_admin' || role == 'admin';
+  bool get isCardOperator => role == 'card_operator';
 
   factory SchoolAccess.fromJson(Map<String, dynamic> json) => SchoolAccess(
     schoolUuid: json['school_uuid'] as String,

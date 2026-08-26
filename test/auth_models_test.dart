@@ -18,9 +18,16 @@ void main() {
       schoolName: 'School Three',
       role: 'teacher',
     );
+    const cardOperator = SchoolAccess(
+      schoolUuid: 'school-4',
+      schoolName: 'School Four',
+      role: 'card_operator',
+    );
 
     expect(current.isSchoolAdministrator, isTrue);
     expect(legacy.isSchoolAdministrator, isTrue);
     expect(teacher.isSchoolAdministrator, isFalse);
+    expect(cardOperator.isCardOperator, isTrue);
+    expect(teacher.isCardOperator, isFalse);
   });
 }

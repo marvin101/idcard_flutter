@@ -29,7 +29,7 @@ class _CardDesignerRouteScreenState extends State<CardDesignerRouteScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (!auth.isAuthenticated) return const LoginScreen();
-    if (!auth.canManageUsers) {
+    if (!auth.canDesignCards) {
       return const _RouteMessage(
         icon: Icons.lock_outline,
         message: 'You are not authorized to design cards for this school.',

@@ -298,7 +298,8 @@ class _ModuleGrid extends StatelessWidget {
                 schoolUuid: school!.uuid,
                 schoolName: school.name,
                 api: auth.api,
-                canManage: auth.canManageUsers,
+                canEdit: auth.canManageCardData,
+                canDelete: auth.canDeleteStudents,
               ),
             ),
           );
@@ -316,7 +317,9 @@ class _ModuleGrid extends StatelessWidget {
                 schoolUuid: school!.uuid,
                 schoolName: school.name,
                 api: auth.api,
-                canManage: auth.canManageUsers,
+                canEdit: auth.canManageCardData,
+                canDesign: auth.canDesignCards,
+                canPrint: auth.canPrintCards,
               ),
             ),
           );

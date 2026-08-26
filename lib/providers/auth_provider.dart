@@ -34,6 +34,14 @@ class AuthProvider extends ChangeNotifier {
 
   bool get canManageAcademicSessions => canManageUsers;
   bool get canManageClasses => canManageUsers;
+  bool get canManageCardData {
+    if (canManageUsers) return true;
+    return selectedSchoolAccess?.isCardOperator ?? false;
+  }
+
+  bool get canDeleteStudents => canManageUsers;
+  bool get canDesignCards => canManageUsers;
+  bool get canPrintCards => canManageUsers;
 
   SchoolAccess? get selectedSchoolAccess {
     final id = _selectedSchool?.uuid;

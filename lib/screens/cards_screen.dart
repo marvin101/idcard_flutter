@@ -23,13 +23,17 @@ class CardsScreen extends StatefulWidget {
     required this.schoolUuid,
     required this.schoolName,
     required this.api,
-    required this.canManage,
+    required this.canEdit,
+    required this.canDesign,
+    required this.canPrint,
   });
 
   final String schoolUuid;
   final String schoolName;
   final ApiService api;
-  final bool canManage;
+  final bool canEdit;
+  final bool canDesign;
+  final bool canPrint;
 
   @override
   State<CardsScreen> createState() => _CardsScreenState();
@@ -520,7 +524,10 @@ class _CardsScreenState extends State<CardsScreen> {
       }
 
       if (students.isEmpty) {
-        throw const ApiException(404, 'No students match the selected criteria.');
+        throw const ApiException(
+          404,
+          'No students match the selected criteria.',
+        );
       }
 
       final bytes = await PdfService.generateStudentCards(
@@ -564,20 +571,21 @@ class _CardsScreenState extends State<CardsScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            tooltip: 'Download filtered cards as PDF',
-            onPressed: _exportingBulk ? null : _downloadFilteredCards,
-            icon: _exportingBulk
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.picture_as_pdf_outlined),
-          ),
-          if (widget.canManage)
+          if (widget.canPrint)
+            IconButton(
+              tooltip: 'Download filtered cards as PDF',
+              onPressed: _exportingBulk ? null : _downloadFilteredCards,
+              icon: _exportingBulk
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.picture_as_pdf_outlined),
+            ),
+          if (widget.canDesign)
             IconButton(
               tooltip: 'Design card',
               icon: const Icon(Icons.design_services_outlined),
@@ -857,8 +865,10 @@ class _CardsScreenState extends State<CardsScreen> {
           api: widget.api,
           template: _cardTemplate,
           sessionName: session?.name,
-          onEdit: widget.canManage ? () => _editStudent(student) : null,
-          onPrint: () => _printStudentCard(student, session?.name),
+          onEdit: widget.canEdit ? () => _editStudent(student) : null,
+          onPrint: widget.canPrint
+              ? () => _printStudentCard(student, session?.name)
+              : null,
         );
       },
     );

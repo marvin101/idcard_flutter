@@ -14,13 +14,15 @@ class StudentsScreen extends StatefulWidget {
     required this.schoolUuid,
     required this.schoolName,
     required this.api,
-    required this.canManage,
+    required this.canEdit,
+    required this.canDelete,
   });
 
   final String schoolUuid;
   final String schoolName;
   final ApiService api;
-  final bool canManage;
+  final bool canEdit;
+  final bool canDelete;
 
   @override
   State<StudentsScreen> createState() => _StudentsScreenState();
@@ -330,7 +332,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 },
               ),
             ),
-            if (widget.canManage) ...[
+            if (widget.canEdit) ...[
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () async {
@@ -568,7 +570,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
               'Admission: ${student.admissionNo}'
               '${student.rollNo == null ? '' : '  •  Roll: ${student.rollNo}'}',
             ),
-            trailing: widget.canManage
+            trailing: widget.canEdit || widget.canDelete
                 ? PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'edit') {
@@ -577,9 +579,14 @@ class _StudentsScreenState extends State<StudentsScreen> {
                         _deleteStudent(student);
                       }
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    itemBuilder: (_) => [
+                      if (widget.canEdit)
+                        const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      if (widget.canDelete)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
                     ],
                   )
                 : null,
