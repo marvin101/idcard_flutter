@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import 'login_screen.dart';
+import 'register_screen.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -32,6 +35,15 @@ class _LandingScreenState extends State<LandingScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen()));
+  }
+
+  Future<void> _openRegistration() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => RegisterScreen(api: context.read<AuthProvider>().api),
+      ),
+    );
+    if (result == 'sign-in' && mounted) _openSignIn();
   }
 
   @override
@@ -89,11 +101,15 @@ class _LandingScreenState extends State<LandingScreen> {
             SliverToBoxAdapter(
               child: Column(
                 children: [
-                  _HeroSection(key: _homeKey, onGetStarted: _openSignIn),
+                  _HeroSection(
+                    key: _homeKey,
+                    onGetStarted: _openRegistration,
+                    onSignIn: _openSignIn,
+                  ),
                   _FeaturesSection(key: _featuresKey),
                   _SecuritySection(key: _securityKey),
                   _FaqSection(key: _faqKey),
-                  _CallToAction(onGetStarted: _openSignIn),
+                  _CallToAction(onGetStarted: _openRegistration),
                   const _Footer(),
                 ],
               ),
@@ -106,9 +122,14 @@ class _LandingScreenState extends State<LandingScreen> {
 }
 
 class _HeroSection extends StatelessWidget {
-  const _HeroSection({super.key, required this.onGetStarted});
+  const _HeroSection({
+    super.key,
+    required this.onGetStarted,
+    required this.onSignIn,
+  });
 
   final VoidCallback onGetStarted;
+  final VoidCallback onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +148,10 @@ class _HeroSection extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final stacked = constraints.maxWidth < 900;
-              final copy = _HeroCopy(onGetStarted: onGetStarted);
+              final copy = _HeroCopy(
+                onGetStarted: onGetStarted,
+                onSignIn: onSignIn,
+              );
               const preview = _DashboardPreview();
               if (stacked) {
                 return Column(
@@ -151,9 +175,10 @@ class _HeroSection extends StatelessWidget {
 }
 
 class _HeroCopy extends StatelessWidget {
-  const _HeroCopy({required this.onGetStarted});
+  const _HeroCopy({required this.onGetStarted, required this.onSignIn});
 
   final VoidCallback onGetStarted;
+  final VoidCallback onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +223,7 @@ class _HeroCopy extends StatelessWidget {
           runSpacing: 14,
           children: [
             FilledButton.icon(
-              onPressed: onGetStarted,
+              onPressed: onSignIn,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xff11bfc1),
                 padding: const EdgeInsets.symmetric(
@@ -736,7 +761,7 @@ class _CallToAction extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Sign in to your authorized school workspace.',
+          'Create your account, then ask your administrator to assign your school and role.',
           style: TextStyle(color: Color(0xff526579), fontSize: 16),
         ),
         const SizedBox(height: 26),
@@ -746,7 +771,7 @@ class _CallToAction extends StatelessWidget {
             backgroundColor: const Color(0xff11bfc1),
             padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 18),
           ),
-          child: const Text('Sign in to CampusID'),
+          child: const Text('Create your CampusID account'),
         ),
       ],
     ),
