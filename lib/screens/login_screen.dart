@@ -65,7 +65,9 @@ class _LoginScreenState extends State<LoginScreen> {
             constraints: const BoxConstraints(maxWidth: 440),
             child: Card(
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(34),
                 child: Form(
@@ -73,14 +75,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const CircleAvatar(
-                        radius: 32,
-                        backgroundColor: Color(0xffe8edff),
-                        child: Icon(Icons.badge_outlined, size: 34, color: AppColors.primary),
+                      Center(
+                        child: Image.asset(
+                          'assets/images/campusid_logo.png',
+                          width: 76,
+                          height: 76,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                       const SizedBox(height: 20),
                       Text(
-                        'ID Card Manager',
+                        'CampusID',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w800,
@@ -101,7 +106,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           labelText: 'Username',
                           prefixIcon: Icon(Icons.person_outline),
                         ),
-                        validator: (value) => value == null || value.trim().isEmpty
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
                             ? 'Enter your username.'
                             : null,
                       ),
@@ -114,8 +120,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           labelText: 'Password',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
                           ),
                         ),
                         validator: (value) => value == null || value.isEmpty
@@ -128,7 +140,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: FilledButton(
                           onPressed: auth.busy ? null : _submit,
                           child: auth.busy
-                              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
                               : const Text('Sign in'),
                         ),
                       ),
@@ -136,7 +155,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       const Text(
                         'Your permissions and school access are loaded from the server after sign-in.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
                       ),
                     ],
                   ),

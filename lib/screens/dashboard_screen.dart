@@ -25,11 +25,16 @@ class DashboardScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.badge_outlined),
-            SizedBox(width: 10),
-            Text('ID Card Manager'),
+            Image.asset(
+              'assets/images/campusid_logo.png',
+              width: 34,
+              height: 34,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 10),
+            const Text('CampusID'),
           ],
         ),
         actions: [

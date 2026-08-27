@@ -13,7 +13,7 @@ void main() {
       ),
     );
 
-    expect(find.text('ID Card Manager'), findsOneWidget);
+    expect(find.text('CampusID'), findsOneWidget);
     expect(find.text('Username'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);

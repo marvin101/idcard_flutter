@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'screens/card_designer_route_screen.dart';
 import 'screens/dashboard_screen.dart';
-import 'screens/login_screen.dart';
+import 'screens/landing_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -20,6 +20,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => AuthProvider()..initialize(),
       child: MaterialApp(
+        title: 'CampusID',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: const _AuthGate(),
@@ -41,7 +42,7 @@ class _AuthGate extends StatelessWidget {
     if (auth.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (!auth.isAuthenticated) return const LoginScreen();
+    if (!auth.isAuthenticated) return const LandingScreen();
     return const DashboardScreen();
   }
 }
