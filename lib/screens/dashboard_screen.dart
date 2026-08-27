@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/auth_models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/display_scale_provider.dart';
 import '../theme/app_colors.dart';
 import 'academic_sessions_screen.dart';
 import 'classes_sections_screen.dart';
@@ -41,6 +42,33 @@ Set<DashboardModuleKind> dashboardModulesFor({
   };
 }
 
+class DashboardGridLayout {
+  const DashboardGridLayout({
+    required this.compact,
+    required this.columns,
+    required this.mainAxisExtent,
+  });
+
+  final bool compact;
+  final int columns;
+  final double mainAxisExtent;
+}
+
+DashboardGridLayout dashboardGridLayoutFor(double width) {
+  if (width < 600) {
+    return DashboardGridLayout(
+      compact: true,
+      columns: width >= 270 ? 3 : 2,
+      mainAxisExtent: 108,
+    );
+  }
+  return const DashboardGridLayout(
+    compact: false,
+    columns: 0,
+    mainAxisExtent: 155,
+  );
+}
+
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
@@ -69,22 +97,45 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
         actions: [
-          if (auth.isPlatformAdmin)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Center(
-                child: Text(
-                  'PLATFORM ADMIN',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          Consumer<DisplayScaleProvider>(
+            builder: (context, displayScale, _) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Zoom out (${displayScale.percentage}%)',
+                  onPressed: displayScale.canZoomOut
+                      ? displayScale.zoomOut
+                      : null,
+                  iconSize: 25,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 48,
+                    height: 48,
+                  ),
+                  icon: const Icon(Icons.remove_rounded),
                 ),
-              ),
+                IconButton(
+                  tooltip: 'Zoom in (${displayScale.percentage}%)',
+                  onPressed: displayScale.canZoomIn
+                      ? displayScale.zoomIn
+                      : null,
+                  iconSize: 25,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 48,
+                    height: 48,
+                  ),
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ],
             ),
+          ),
           IconButton(
             tooltip: 'Sign out',
             onPressed: () => context.read<AuthProvider>().logout(),
-            icon: const Icon(Icons.logout),
+            iconSize: 28,
+            constraints: const BoxConstraints.tightFor(width: 54, height: 54),
+            icon: const Icon(Icons.logout_rounded),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: LayoutBuilder(
@@ -408,17 +459,31 @@ class _ModuleGrid extends StatelessWidget {
       );
     }
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 360,
-        mainAxisExtent: 155,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: modules.length,
-      itemBuilder: (_, index) => _ModuleCard(module: modules[index]),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final layout = dashboardGridLayoutFor(constraints.maxWidth);
+        final delegate = layout.compact
+            ? SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: layout.columns,
+                mainAxisExtent: layout.mainAxisExtent,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              )
+            : SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 360,
+                mainAxisExtent: layout.mainAxisExtent,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              );
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: delegate,
+          itemCount: modules.length,
+          itemBuilder: (_, index) =>
+              _ModuleCard(module: modules[index], compact: layout.compact),
+        );
+      },
     );
   }
 }
@@ -439,8 +504,9 @@ class _DashboardModule {
 }
 
 class _ModuleCard extends StatelessWidget {
-  const _ModuleCard({required this.module});
+  const _ModuleCard({required this.module, required this.compact});
   final _DashboardModule module;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -454,36 +520,47 @@ class _ModuleCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: module.enabled ? module.onTap : null,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(compact ? 10 : 20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: compact
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
+          crossAxisAlignment: compact
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
           children: [
             Icon(
               module.icon,
               color: module.enabled ? AppColors.primary : AppColors.disabled,
-              size: 30,
+              size: compact ? 28 : 30,
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: compact ? 8 : 12),
             Text(
               module.title,
+              textAlign: compact ? TextAlign.center : TextAlign.start,
+              maxLines: compact ? 2 : 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                fontSize: compact ? 12 : 14,
                 fontWeight: FontWeight.w700,
                 color: module.enabled
                     ? AppColors.textPrimary
                     : AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              module.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                height: 1.35,
+            if (!compact) ...[
+              const SizedBox(height: 4),
+              Text(
+                module.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.35,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

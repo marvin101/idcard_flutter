@@ -58,4 +58,17 @@ void main() {
       isEmpty,
     );
   });
+
+  test('phone widths use a compact app-drawer grid', () {
+    final phone = dashboardGridLayoutFor(360);
+    expect(phone.compact, isTrue);
+    expect(phone.columns, 3);
+    expect(phone.mainAxisExtent, lessThan(120));
+
+    final veryNarrow = dashboardGridLayoutFor(250);
+    expect(veryNarrow.columns, 2);
+
+    final desktop = dashboardGridLayoutFor(900);
+    expect(desktop.compact, isFalse);
+  });
 }
