@@ -157,9 +157,10 @@ class ApiService {
     required String username,
     required String password,
     required String fullName,
+    required String schoolName,
+    required String designation,
     String? email,
     String? mobile,
-    String? designation,
   }) async {
     final response = await _client.post(
       _uri('/users/register'),
@@ -168,9 +169,10 @@ class ApiService {
         'username': username,
         'password': password,
         'full_name': fullName,
+        'school_name': schoolName,
         'email': _nullIfEmpty(email),
         'mobile': _nullIfEmpty(mobile),
-        'designation': _nullIfEmpty(designation),
+        'designation': designation,
       }),
     );
     return _decodeMap(response);

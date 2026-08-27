@@ -10,6 +10,37 @@ import 'cards_screen.dart';
 import 'school_user_assignment_screen.dart';
 import 'student_screen.dart';
 
+enum DashboardModuleKind {
+  users,
+  academicSessions,
+  classesAndSections,
+  students,
+  idCards,
+}
+
+Set<DashboardModuleKind> dashboardModulesFor({
+  required bool isPlatformAdmin,
+  required String? schoolRole,
+  required bool hasSelectedSchool,
+}) {
+  if (!hasSelectedSchool) return const {};
+
+  if (isPlatformAdmin ||
+      schoolRole == 'school_admin' ||
+      schoolRole == 'admin') {
+    return DashboardModuleKind.values.toSet();
+  }
+
+  return switch (schoolRole) {
+    'card_operator' => const {DashboardModuleKind.students},
+    'teacher' || 'staff' => const {
+      DashboardModuleKind.academicSessions,
+      DashboardModuleKind.classesAndSections,
+    },
+    _ => const {},
+  };
+}
+
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
@@ -235,102 +266,147 @@ class _ModuleGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final school = auth.selectedSchool;
-    final canManageUsers = auth.canManageUsers && school != null;
+    final visibleModules = dashboardModulesFor(
+      isPlatformAdmin: auth.isPlatformAdmin,
+      schoolRole: auth.selectedSchoolAccess?.role,
+      hasSelectedSchool: school != null,
+    );
     final modules = <_DashboardModule>[
-      _DashboardModule(
-        'Users',
-        'Manage school assignments and roles.',
-        Icons.people_alt_outlined,
-        canManageUsers,
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SchoolUserAssignmentScreen(
-                schoolUuid: school!.uuid,
-                schoolName: school.name,
-                api: auth.api,
-                canManageElevatedRoles: auth.isPlatformAdmin,
+      if (visibleModules.contains(DashboardModuleKind.users))
+        _DashboardModule(
+          'Users',
+          'Manage school assignments and roles.',
+          Icons.people_alt_outlined,
+          true,
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SchoolUserAssignmentScreen(
+                  schoolUuid: school!.uuid,
+                  schoolName: school.name,
+                  api: auth.api,
+                  canManageElevatedRoles: auth.isPlatformAdmin,
+                ),
               ),
-            ),
-          );
-        },
-      ),
-      _DashboardModule(
-        'Academic Sessions',
-        'Manage sessions for the selected school.',
-        Icons.calendar_month_outlined,
-        school != null,
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => AcademicSessionsScreen(
-                schoolUuid: school!.uuid,
-                schoolName: school.name,
-                api: auth.api,
-                canManage: auth.canManageAcademicSessions,
+            );
+          },
+        ),
+      if (visibleModules.contains(DashboardModuleKind.academicSessions))
+        _DashboardModule(
+          'Academic Sessions',
+          'Manage sessions for the selected school.',
+          Icons.calendar_month_outlined,
+          true,
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AcademicSessionsScreen(
+                  schoolUuid: school!.uuid,
+                  schoolName: school.name,
+                  api: auth.api,
+                  canManage: auth.canManageAcademicSessions,
+                ),
               ),
-            ),
-          );
-        },
-      ),
-      _DashboardModule(
-        'Classes & Sections',
-        'Organize classes and sections.',
-        Icons.account_tree_outlined,
-        school != null,
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ClassesSectionsScreen(
-                schoolUuid: school!.uuid,
-                schoolName: school.name,
-                api: auth.api,
-                canManage: auth.canManageClasses,
+            );
+          },
+        ),
+      if (visibleModules.contains(DashboardModuleKind.classesAndSections))
+        _DashboardModule(
+          'Classes & Sections',
+          'Organize classes and sections.',
+          Icons.account_tree_outlined,
+          true,
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ClassesSectionsScreen(
+                  schoolUuid: school!.uuid,
+                  schoolName: school.name,
+                  api: auth.api,
+                  canManage: auth.canManageClasses,
+                ),
               ),
-            ),
-          );
-        },
-      ),
-      _DashboardModule(
-        'Students',
-        'Student records and ID-card data.',
-        Icons.school_outlined,
-        school != null,
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => StudentsScreen(
-                schoolUuid: school!.uuid,
-                schoolName: school.name,
-                api: auth.api,
-                canEdit: auth.canManageCardData,
-                canDelete: auth.canDeleteStudents,
+            );
+          },
+        ),
+      if (visibleModules.contains(DashboardModuleKind.students))
+        _DashboardModule(
+          'Students',
+          'Student records and ID-card data.',
+          Icons.school_outlined,
+          true,
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => StudentsScreen(
+                  schoolUuid: school!.uuid,
+                  schoolName: school.name,
+                  api: auth.api,
+                  canEdit: auth.canManageCardData,
+                  canDelete: auth.canDeleteStudents,
+                ),
               ),
-            ),
-          );
-        },
-      ),
-      _DashboardModule(
-        'ID Cards',
-        'Prepare and manage ID cards.',
-        Icons.badge_outlined,
-        school != null,
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => CardsScreen(
-                schoolUuid: school!.uuid,
-                schoolName: school.name,
-                api: auth.api,
-                canEdit: auth.canManageCardData,
-                canDesign: auth.canDesignCards,
-                canPrint: auth.canPrintCards,
+            );
+          },
+        ),
+      if (visibleModules.contains(DashboardModuleKind.idCards))
+        _DashboardModule(
+          'ID Cards',
+          'Prepare and manage ID cards.',
+          Icons.badge_outlined,
+          true,
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CardsScreen(
+                  schoolUuid: school!.uuid,
+                  schoolName: school.name,
+                  api: auth.api,
+                  canEdit: auth.canManageCardData,
+                  canDesign: auth.canDesignCards,
+                  canPrint: auth.canPrintCards,
+                ),
               ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        ),
     ];
+
+    if (modules.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xffe4e8f0)),
+        ),
+        child: const Column(
+          children: [
+            Icon(
+              Icons.lock_outline_rounded,
+              color: AppColors.textSecondary,
+              size: 34,
+            ),
+            SizedBox(height: 12),
+            Text(
+              'No modules are available for this school role.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'Contact a School Admin if your assignment needs to change.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
 
     return GridView.builder(
       shrinkWrap: true,

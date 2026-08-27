@@ -34,6 +34,7 @@ void main() {
       username: 'new.user',
       password: 'password123',
       fullName: 'New User',
+      schoolName: 'Anita Intermediate College',
       email: '  ',
       mobile: '9000000000',
       designation: 'Teacher',
@@ -41,6 +42,7 @@ void main() {
 
     expect(requestBody['username'], 'new.user');
     expect(requestBody['full_name'], 'New User');
+    expect(requestBody['school_name'], 'Anita Intermediate College');
     expect(requestBody['email'], isNull);
     expect(requestBody.containsKey('school_uuid'), isFalse);
     expect(requestBody.containsKey('role'), isFalse);

@@ -18,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _mobileController = TextEditingController();
+  final _schoolNameController = TextEditingController();
   final _designationController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -33,6 +34,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _usernameController.dispose();
     _emailController.dispose();
     _mobileController.dispose();
+    _schoolNameController.dispose();
     _designationController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -47,9 +49,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         username: _usernameController.text.trim(),
         password: _passwordController.text,
         fullName: _fullNameController.text.trim(),
+        schoolName: _schoolNameController.text.trim(),
         email: _emailController.text,
         mobile: _mobileController.text,
-        designation: _designationController.text,
+        designation: _designationController.text.trim(),
       );
       if (!mounted) return;
       setState(() {
@@ -140,6 +143,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     usernameController: _usernameController,
                     emailController: _emailController,
                     mobileController: _mobileController,
+                    schoolNameController: _schoolNameController,
                     designationController: _designationController,
                     passwordController: _passwordController,
                     confirmPasswordController: _confirmPasswordController,
@@ -160,6 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   )
                 : _RegistrationSuccess(
                     name: _createdName!,
+                    schoolName: _schoolNameController.text.trim(),
                     onSignIn: () => Navigator.of(context).pop('sign-in'),
                   ),
           ),
@@ -176,6 +181,7 @@ class _RegistrationForm extends StatelessWidget {
     required this.usernameController,
     required this.emailController,
     required this.mobileController,
+    required this.schoolNameController,
     required this.designationController,
     required this.passwordController,
     required this.confirmPasswordController,
@@ -197,6 +203,7 @@ class _RegistrationForm extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController emailController;
   final TextEditingController mobileController;
+  final TextEditingController schoolNameController;
   final TextEditingController designationController;
   final TextEditingController passwordController;
   final TextEditingController confirmPasswordController;
@@ -290,14 +297,26 @@ class _RegistrationForm extends StatelessWidget {
                     ),
                   ),
                   TextFormField(
+                    controller: schoolNameController,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'School name',
+                      prefixIcon: Icon(Icons.school_outlined),
+                      helperText: 'Enter the school’s registered name.',
+                    ),
+                    validator: (value) =>
+                        requiredValidator(value, 'your school name'),
+                  ),
+                  TextFormField(
                     controller: designationController,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      labelText: 'Designation (optional)',
+                      labelText: 'Designation',
                       prefixIcon: Icon(Icons.work_outline),
                     ),
+                    validator: (value) =>
+                        requiredValidator(value, 'your designation'),
                   ),
-                  const SizedBox.shrink(),
                 ];
                 if (!twoColumns) {
                   return Column(
@@ -399,8 +418,13 @@ class _RegistrationForm extends StatelessWidget {
 }
 
 class _RegistrationSuccess extends StatelessWidget {
-  const _RegistrationSuccess({required this.name, required this.onSignIn});
+  const _RegistrationSuccess({
+    required this.name,
+    required this.schoolName,
+    required this.onSignIn,
+  });
   final String name;
+  final String schoolName;
   final VoidCallback onSignIn;
 
   @override
@@ -434,8 +458,8 @@ class _RegistrationSuccess extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Your account has been created successfully. It does not have school access yet.',
+          Text(
+            'Your account has been created and your access request was sent to $schoolName. It does not grant access yet.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Color(0xff526579),
@@ -450,15 +474,18 @@ class _RegistrationSuccess extends StatelessWidget {
               color: const Color(0xfff4f8fb),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, color: Color(0xff087c80)),
-                SizedBox(width: 12),
+                const Icon(Icons.info_outline, color: Color(0xff087c80)),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Ask your school or platform administrator to assign your school and role. CampusID will enforce that assignment when you sign in.',
-                    style: TextStyle(color: Color(0xff526579), height: 1.5),
+                    'A School Admin for $schoolName can now review your name and designation, then assign the appropriate role. CampusID will enforce that decision when you sign in.',
+                    style: const TextStyle(
+                      color: Color(0xff526579),
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ],

@@ -223,7 +223,7 @@ class _HeroCopy extends StatelessWidget {
           runSpacing: 14,
           children: [
             FilledButton.icon(
-              onPressed: onSignIn,
+              onPressed: onGetStarted,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xff11bfc1),
                 padding: const EdgeInsets.symmetric(
@@ -235,7 +235,7 @@ class _HeroCopy extends StatelessWidget {
               label: const Text('Get started'),
             ),
             OutlinedButton.icon(
-              onPressed: onGetStarted,
+              onPressed: onSignIn,
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xff183554),
                 side: const BorderSide(color: Color(0xffb7c9d6)),

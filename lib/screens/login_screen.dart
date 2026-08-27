@@ -30,6 +30,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     try {
       await auth.login(_usernameController.text, _passwordController.text);
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } on ApiException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
