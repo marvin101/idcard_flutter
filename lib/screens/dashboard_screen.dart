@@ -33,7 +33,10 @@ Set<DashboardModuleKind> dashboardModulesFor({
   }
 
   return switch (schoolRole) {
-    'card_operator' => const {DashboardModuleKind.students},
+    'card_operator' => const {
+      DashboardModuleKind.students,
+      DashboardModuleKind.idCards,
+    },
     'teacher' || 'staff' => const {
       DashboardModuleKind.academicSessions,
       DashboardModuleKind.classesAndSections,

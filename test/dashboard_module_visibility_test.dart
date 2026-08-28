@@ -13,14 +13,17 @@ void main() {
     );
   });
 
-  test('card operators see only student entry', () {
+  test('card operators see student entry and ID-card tools', () {
     expect(
       dashboardModulesFor(
         isPlatformAdmin: false,
         schoolRole: 'card_operator',
         hasSelectedSchool: true,
       ),
-      {DashboardModuleKind.students},
+      {
+        DashboardModuleKind.students,
+        DashboardModuleKind.idCards,
+      },
     );
   });
 
