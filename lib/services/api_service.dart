@@ -157,7 +157,7 @@ class ApiService {
     required String username,
     required String password,
     required String fullName,
-    required String schoolName,
+    required String schoolUuid,
     required String designation,
     String? email,
     String? mobile,
@@ -169,13 +169,21 @@ class ApiService {
         'username': username,
         'password': password,
         'full_name': fullName,
-        'school_name': schoolName,
+        'school_uuid': schoolUuid,
         'email': _nullIfEmpty(email),
         'mobile': _nullIfEmpty(mobile),
         'designation': designation,
       }),
     );
     return _decodeMap(response);
+  }
+
+  Future<List<dynamic>> getRegistrationSchools() async {
+    final response = await _client.get(
+      _uri('/users/registration-schools'),
+      headers: _headers,
+    );
+    return _decodeList(response);
   }
 
   String? _nullIfEmpty(String? value) {

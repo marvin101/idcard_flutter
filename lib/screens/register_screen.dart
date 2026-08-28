@@ -3,6 +3,19 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 
+class _RegistrationSchool {
+  const _RegistrationSchool({required this.uuid, required this.name});
+
+  final String uuid;
+  final String name;
+
+  factory _RegistrationSchool.fromJson(Map<String, dynamic> json) =>
+      _RegistrationSchool(
+        uuid: json['uuid'] as String,
+        name: json['school_name'] as String,
+      );
+}
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({required this.api, super.key});
 
@@ -18,7 +31,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _mobileController = TextEditingController();
-  final _schoolNameController = TextEditingController();
   final _designationController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -27,6 +39,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmation = true;
   String? _createdName;
+  List<_RegistrationSchool> _schools = const [];
+  String? _selectedSchoolUuid;
+  bool _loadingSchools = true;
+  String? _schoolLoadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSchools();
+  }
+
+  Future<void> _loadSchools() async {
+    setState(() {
+      _loadingSchools = true;
+      _schoolLoadError = null;
+    });
+    try {
+      final response = await widget.api.getRegistrationSchools();
+      final schools = response
+          .whereType<Map<String, dynamic>>()
+          .map(_RegistrationSchool.fromJson)
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _schools = schools;
+        if (!_schools.any((school) => school.uuid == _selectedSchoolUuid)) {
+          _selectedSchoolUuid = null;
+        }
+        _schoolLoadError = schools.isEmpty
+            ? 'No schools are currently available for registration.'
+            : null;
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _schoolLoadError = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _schoolLoadError = 'Unable to load schools. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingSchools = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -34,7 +88,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _usernameController.dispose();
     _emailController.dispose();
     _mobileController.dispose();
-    _schoolNameController.dispose();
     _designationController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -49,7 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         username: _usernameController.text.trim(),
         password: _passwordController.text,
         fullName: _fullNameController.text.trim(),
-        schoolName: _schoolNameController.text.trim(),
+        schoolUuid: _selectedSchoolUuid!,
         email: _emailController.text,
         mobile: _mobileController.text,
         designation: _designationController.text.trim(),
@@ -143,7 +196,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     usernameController: _usernameController,
                     emailController: _emailController,
                     mobileController: _mobileController,
-                    schoolNameController: _schoolNameController,
+                    schools: _schools,
+                    selectedSchoolUuid: _selectedSchoolUuid,
+                    loadingSchools: _loadingSchools,
+                    schoolLoadError: _schoolLoadError,
                     designationController: _designationController,
                     passwordController: _passwordController,
                     confirmPasswordController: _confirmPasswordController,
@@ -155,6 +211,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onToggleConfirmation: () => setState(
                       () => _obscureConfirmation = !_obscureConfirmation,
                     ),
+                    onSchoolChanged: (value) =>
+                        setState(() => _selectedSchoolUuid = value),
+                    onReloadSchools: _loadSchools,
                     onSubmit: _submit,
                     requiredValidator: _required,
                     usernameValidator: _validateUsername,
@@ -164,7 +223,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   )
                 : _RegistrationSuccess(
                     name: _createdName!,
-                    schoolName: _schoolNameController.text.trim(),
+                    schoolName: _schools
+                        .firstWhere(
+                          (school) => school.uuid == _selectedSchoolUuid,
+                        )
+                        .name,
                     onSignIn: () => Navigator.of(context).pop('sign-in'),
                   ),
           ),
@@ -181,7 +244,10 @@ class _RegistrationForm extends StatelessWidget {
     required this.usernameController,
     required this.emailController,
     required this.mobileController,
-    required this.schoolNameController,
+    required this.schools,
+    required this.selectedSchoolUuid,
+    required this.loadingSchools,
+    required this.schoolLoadError,
     required this.designationController,
     required this.passwordController,
     required this.confirmPasswordController,
@@ -190,6 +256,8 @@ class _RegistrationForm extends StatelessWidget {
     required this.submitting,
     required this.onTogglePassword,
     required this.onToggleConfirmation,
+    required this.onSchoolChanged,
+    required this.onReloadSchools,
     required this.onSubmit,
     required this.requiredValidator,
     required this.usernameValidator,
@@ -203,7 +271,10 @@ class _RegistrationForm extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController emailController;
   final TextEditingController mobileController;
-  final TextEditingController schoolNameController;
+  final List<_RegistrationSchool> schools;
+  final String? selectedSchoolUuid;
+  final bool loadingSchools;
+  final String? schoolLoadError;
   final TextEditingController designationController;
   final TextEditingController passwordController;
   final TextEditingController confirmPasswordController;
@@ -212,6 +283,8 @@ class _RegistrationForm extends StatelessWidget {
   final bool submitting;
   final VoidCallback onTogglePassword;
   final VoidCallback onToggleConfirmation;
+  final ValueChanged<String?> onSchoolChanged;
+  final VoidCallback onReloadSchools;
   final VoidCallback onSubmit;
   final String? Function(String?, String) requiredValidator;
   final String? Function(String?) usernameValidator;
@@ -243,7 +316,7 @@ class _RegistrationForm extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Create your personal account first. A platform or school administrator will assign your school and role separately.',
+              'Select your school to request access. A platform or school administrator will review the request and assign your role.',
               style: TextStyle(
                 color: Color(0xff65778a),
                 fontSize: 15,
@@ -296,16 +369,57 @@ class _RegistrationForm extends StatelessWidget {
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
                   ),
-                  TextFormField(
-                    controller: schoolNameController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'School name',
-                      prefixIcon: Icon(Icons.school_outlined),
-                      helperText: 'Enter the school’s registered name.',
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedSchoolUuid,
+                    isExpanded: true,
+                    items: schools
+                        .map(
+                          (school) => DropdownMenuItem<String>(
+                            value: school.uuid,
+                            child: Text(
+                              school.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: loadingSchools || schools.isEmpty
+                        ? null
+                        : onSchoolChanged,
+                    decoration: InputDecoration(
+                      labelText: 'School',
+                      prefixIcon: const Icon(Icons.school_outlined),
+                      helperText:
+                          schoolLoadError ?? 'Select your registered school.',
+                      helperStyle: schoolLoadError == null
+                          ? null
+                          : const TextStyle(color: AppColors.danger),
+                      suffixIcon: loadingSchools
+                          ? const Padding(
+                              padding: EdgeInsets.all(14),
+                              child: SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : schoolLoadError == null
+                          ? null
+                          : IconButton(
+                              tooltip: 'Reload schools',
+                              onPressed: onReloadSchools,
+                              icon: const Icon(Icons.refresh_rounded),
+                            ),
                     ),
-                    validator: (value) =>
-                        requiredValidator(value, 'your school name'),
+                    validator: (value) {
+                      if (loadingSchools) return 'Wait for schools to load.';
+                      if (schoolLoadError != null) {
+                        return 'Reload the school list.';
+                      }
+                      if (value == null) return 'Select your school.';
+                      return null;
+                    },
                   ),
                   TextFormField(
                     controller: designationController,
