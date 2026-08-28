@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:idcard_flutter/app_routes.dart';
 import 'package:idcard_flutter/providers/auth_provider.dart';
 import 'package:idcard_flutter/screens/landing_screen.dart';
+import 'package:idcard_flutter/screens/login_screen.dart';
+import 'package:idcard_flutter/screens/register_screen.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -14,7 +17,14 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => AuthProvider(),
-        child: const MaterialApp(home: LandingScreen()),
+        child: MaterialApp(
+          routes: {
+            AppRoutes.landing: (_) => const LandingScreen(),
+            AppRoutes.signIn: (_) => const LoginScreen(),
+            AppRoutes.register: (context) =>
+                RegisterScreen(api: context.read<AuthProvider>().api),
+          },
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -38,5 +48,11 @@ void main() {
 
     expect(find.text('Username'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LandingScreen), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
   });
 }

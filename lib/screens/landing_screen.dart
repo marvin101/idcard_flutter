@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../providers/auth_provider.dart';
+import '../app_routes.dart';
 import '../theme/app_colors.dart';
-import 'login_screen.dart';
-import 'register_screen.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -32,17 +29,11 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   void _openSignIn() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen()));
+    Navigator.of(context).pushNamed(AppRoutes.signIn);
   }
 
   Future<void> _openRegistration() async {
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(
-        builder: (_) => RegisterScreen(api: context.read<AuthProvider>().api),
-      ),
-    );
+    final result = await Navigator.of(context).pushNamed(AppRoutes.register);
     if (result == 'sign-in' && mounted) _openSignIn();
   }
 

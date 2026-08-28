@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../app_routes.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
@@ -32,8 +33,10 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await auth.login(_usernameController.text, _passwordController.text);
       TextInput.finishAutofillContext();
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil(AppRoutes.dashboard, (route) => false);
       }
     } on ApiException {
       if (mounted) {

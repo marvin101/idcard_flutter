@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../app_routes.dart';
 import '../models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
@@ -98,7 +99,13 @@ class DashboardScreen extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: 'Sign out',
-            onPressed: () => context.read<AuthProvider>().logout(),
+            onPressed: () async {
+              await context.read<AuthProvider>().logout();
+              if (!context.mounted) return;
+              Navigator.of(
+                context,
+              ).pushNamedAndRemoveUntil(AppRoutes.landing, (route) => false);
+            },
             iconSize: 28,
             constraints: const BoxConstraints.tightFor(width: 54, height: 54),
             icon: const Icon(Icons.logout_rounded),
@@ -535,4 +542,3 @@ class _ModuleCard extends StatelessWidget {
     ),
   );
 }
-

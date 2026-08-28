@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'app_routes.dart';
 import 'providers/auth_provider.dart';
 import 'providers/display_scale_provider.dart';
 import 'screens/card_designer_route_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/landing_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
 
@@ -30,18 +33,44 @@ class MyApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         builder: (context, child) =>
             AppScaleViewport(child: child ?? const SizedBox.shrink()),
-        home: const _AuthGate(),
         routes: {
-          CardDesignerRouteScreen.routeName: (_) =>
-              const CardDesignerRouteScreen(),
+          AppRoutes.landing: (_) => const LandingScreen(),
+          AppRoutes.signIn: (_) => const _AuthRoute(
+            authenticated: DashboardScreen(),
+            unauthenticated: LoginScreen(),
+          ),
+          AppRoutes.register: (context) => _AuthRoute(
+            authenticated: const DashboardScreen(),
+            unauthenticated: RegisterScreen(
+              api: context.read<AuthProvider>().api,
+            ),
+          ),
+          AppRoutes.dashboard: (_) => const _AuthRoute(
+            authenticated: DashboardScreen(),
+            unauthenticated: LoginScreen(),
+          ),
+          CardDesignerRouteScreen.routeName: (_) => const _AuthRoute(
+            authenticated: CardDesignerRouteScreen(),
+            unauthenticated: LoginScreen(),
+          ),
         },
+        onUnknownRoute: (_) => MaterialPageRoute<void>(
+          settings: const RouteSettings(name: AppRoutes.landing),
+          builder: (_) => const LandingScreen(),
+        ),
       ),
     );
   }
 }
 
-class _AuthGate extends StatelessWidget {
-  const _AuthGate();
+class _AuthRoute extends StatelessWidget {
+  const _AuthRoute({
+    required this.authenticated,
+    required this.unauthenticated,
+  });
+
+  final Widget authenticated;
+  final Widget unauthenticated;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +78,6 @@ class _AuthGate extends StatelessWidget {
     if (auth.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (!auth.isAuthenticated) return const LandingScreen();
-    return const DashboardScreen();
+    return auth.isAuthenticated ? authenticated : unauthenticated;
   }
 }
