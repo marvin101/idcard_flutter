@@ -29,4 +29,19 @@ void main() {
     expect(displayScale.scale, 0.75);
     expect(displayScale.canZoomOut, isFalse);
   });
+
+  test('pinch scaling is continuous and remains bounded', () {
+    final displayScale = DisplayScaleProvider();
+
+    displayScale.setScale(1.23);
+    expect(displayScale.scale, 1.23);
+    expect(displayScale.percentage, 123);
+
+    displayScale.setScale(4);
+    expect(displayScale.scale, DisplayScaleProvider.maxScale);
+
+    displayScale.setScale(0.1);
+    expect(displayScale.scale, DisplayScaleProvider.minScale);
+  });
 }
+

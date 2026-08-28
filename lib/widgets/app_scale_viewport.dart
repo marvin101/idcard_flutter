@@ -4,10 +4,17 @@ import 'package:provider/provider.dart';
 
 import '../providers/display_scale_provider.dart';
 
-class AppScaleViewport extends StatelessWidget {
+class AppScaleViewport extends StatefulWidget {
   const AppScaleViewport({required this.child, super.key});
 
   final Widget child;
+
+  @override
+  State<AppScaleViewport> createState() => _AppScaleViewportState();
+}
+
+class _AppScaleViewportState extends State<AppScaleViewport> {
+  double _gestureStartScale = 1.0;
 
   @override
   Widget build(BuildContext context) {
@@ -36,34 +43,46 @@ class AppScaleViewport extends StatelessWidget {
           displayScale.reset,
     };
 
-    return CallbackShortcuts(
-      bindings: shortcuts,
-      child: Focus(
-        autofocus: true,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = displayScale.scale;
-            final logicalSize = Size(
-              constraints.maxWidth / scale,
-              constraints.maxHeight / scale,
-            );
-            final mediaQuery = MediaQuery.of(context);
-            return ClipRect(
-              child: Transform.scale(
-                scale: scale,
-                alignment: Alignment.topLeft,
-                child: SizedBox.fromSize(
-                  size: logicalSize,
-                  child: MediaQuery(
-                    data: mediaQuery.copyWith(size: logicalSize),
-                    child: child,
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerPanZoomStart: (_) {
+        _gestureStartScale = context.read<DisplayScaleProvider>().scale;
+      },
+      onPointerPanZoomUpdate: (event) {
+        context.read<DisplayScaleProvider>().setScale(
+          _gestureStartScale * event.scale,
+        );
+      },
+      child: CallbackShortcuts(
+        bindings: shortcuts,
+        child: Focus(
+          autofocus: true,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = displayScale.scale;
+              final logicalSize = Size(
+                constraints.maxWidth / scale,
+                constraints.maxHeight / scale,
+              );
+              final mediaQuery = MediaQuery.of(context);
+              return ClipRect(
+                child: Transform.scale(
+                  scale: scale,
+                  alignment: Alignment.topLeft,
+                  child: SizedBox.fromSize(
+                    size: logicalSize,
+                    child: MediaQuery(
+                      data: mediaQuery.copyWith(size: logicalSize),
+                      child: widget.child,
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
+
