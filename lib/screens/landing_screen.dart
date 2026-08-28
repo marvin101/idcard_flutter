@@ -41,72 +41,75 @@ class _LandingScreenState extends State<LandingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SelectionArea(
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            SliverAppBar(
-              pinned: true,
-              toolbarHeight: 76,
-              backgroundColor: const Color(0xff102f55),
-              foregroundColor: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              titleSpacing: 0,
-              title: _PageWidth(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 850;
-                    return Row(
-                      children: [
-                        const _BrandMark(light: true),
-                        const Spacer(),
-                        if (!compact) ...[
-                          _NavButton('Home', () => _scrollTo(_homeKey)),
-                          _NavButton('Features', () => _scrollTo(_featuresKey)),
-                          _NavButton(
-                            'How it works',
-                            () => _scrollTo(_featuresKey),
-                          ),
-                          _NavButton('Security', () => _scrollTo(_securityKey)),
-                          _NavButton('FAQ', () => _scrollTo(_faqKey)),
-                          const SizedBox(width: 10),
-                        ],
-                        OutlinedButton(
-                          onPressed: _openSignIn,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Color(0x66ffffff)),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 22,
-                              vertical: 17,
-                            ),
-                          ),
-                          child: const Text('Sign in'),
+      // MaterialApp keeps the landing route beneath direct deep links such as
+      // /register. A page-wide SelectionArea registers its offstage children
+      // before they have layout in optimized Flutter Web builds, producing a
+      // RenderBox-not-laid-out console error. The marketing page does not need
+      // cross-widget selection, so keep it out of the selection registry.
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            toolbarHeight: 76,
+            backgroundColor: const Color(0xff102f55),
+            foregroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            titleSpacing: 0,
+            title: _PageWidth(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 850;
+                  return Row(
+                    children: [
+                      const _BrandMark(light: true),
+                      const Spacer(),
+                      if (!compact) ...[
+                        _NavButton('Home', () => _scrollTo(_homeKey)),
+                        _NavButton('Features', () => _scrollTo(_featuresKey)),
+                        _NavButton(
+                          'How it works',
+                          () => _scrollTo(_featuresKey),
                         ),
+                        _NavButton('Security', () => _scrollTo(_securityKey)),
+                        _NavButton('FAQ', () => _scrollTo(_faqKey)),
+                        const SizedBox(width: 10),
                       ],
-                    );
-                  },
+                      OutlinedButton(
+                        onPressed: _openSignIn,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0x66ffffff)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 22,
+                            vertical: 17,
+                          ),
+                        ),
+                        child: const Text('Sign in'),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                _HeroSection(
+                  key: _homeKey,
+                  onGetStarted: _openRegistration,
+                  onSignIn: _openSignIn,
                 ),
-              ),
+                _FeaturesSection(key: _featuresKey),
+                _SecuritySection(key: _securityKey),
+                _FaqSection(key: _faqKey),
+                _CallToAction(onGetStarted: _openRegistration),
+                const _Footer(),
+              ],
             ),
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  _HeroSection(
-                    key: _homeKey,
-                    onGetStarted: _openRegistration,
-                    onSignIn: _openSignIn,
-                  ),
-                  _FeaturesSection(key: _featuresKey),
-                  _SecuritySection(key: _securityKey),
-                  _FaqSection(key: _faqKey),
-                  _CallToAction(onGetStarted: _openRegistration),
-                  const _Footer(),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
