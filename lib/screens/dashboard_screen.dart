@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../models/auth_models.dart';
 import '../providers/auth_provider.dart';
-import '../providers/display_scale_provider.dart';
 import '../theme/app_colors.dart';
 import 'academic_sessions_screen.dart';
 import 'classes_sections_screen.dart';
@@ -97,37 +96,6 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
         actions: [
-          Consumer<DisplayScaleProvider>(
-            builder: (context, displayScale, _) => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Zoom out (${displayScale.percentage}%)',
-                  onPressed: displayScale.canZoomOut
-                      ? displayScale.zoomOut
-                      : null,
-                  iconSize: 25,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 48,
-                    height: 48,
-                  ),
-                  icon: const Icon(Icons.remove_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Zoom in (${displayScale.percentage}%)',
-                  onPressed: displayScale.canZoomIn
-                      ? displayScale.zoomIn
-                      : null,
-                  iconSize: 25,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 48,
-                    height: 48,
-                  ),
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ],
-            ),
-          ),
           IconButton(
             tooltip: 'Sign out',
             onPressed: () => context.read<AuthProvider>().logout(),
@@ -567,3 +535,4 @@ class _ModuleCard extends StatelessWidget {
     ),
   );
 }
+
