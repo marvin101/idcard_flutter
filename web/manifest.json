@@ -1,12 +1,12 @@
 {
-    "name": "idcard_flutter",
-    "short_name": "idcard_flutter",
+    "name": "CampusID — School ID Card Management",
+    "short_name": "CampusID",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F8FBFF",
+    "theme_color": "#102F55",
+    "description": "Secure school ID-card management, photo workflows, card design, and PDF output.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

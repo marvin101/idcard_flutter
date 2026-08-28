@@ -5,7 +5,9 @@ import 'package:idcard_flutter/screens/login_screen.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('shows the login form', (WidgetTester tester) async {
+  testWidgets('login fields expose password-manager autofill hints', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => AuthProvider(),
@@ -13,9 +15,9 @@ void main() {
       ),
     );
 
-    expect(find.text('CampusID'), findsOneWidget);
-    expect(find.text('Username'), findsOneWidget);
-    expect(find.text('Password'), findsOneWidget);
-    expect(find.text('Sign in'), findsOneWidget);
+    expect(find.byType(AutofillGroup), findsOneWidget);
+    final fields = tester.widgetList<EditableText>(find.byType(EditableText));
+    expect(fields.elementAt(0).autofillHints, contains(AutofillHints.username));
+    expect(fields.elementAt(1).autofillHints, contains(AutofillHints.password));
   });
 }

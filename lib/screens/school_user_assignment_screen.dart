@@ -238,11 +238,16 @@ class _SchoolUserAssignmentScreenState
         foregroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 24,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.badge_outlined),
-            SizedBox(width: 10),
-            Text('ID Card Manager'),
+            Image.asset(
+              'assets/images/campusid_logo.png',
+              width: 34,
+              height: 34,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 10),
+            const Text('CampusID'),
           ],
         ),
         actions: [
@@ -394,7 +399,7 @@ class _SchoolSummary extends StatelessWidget {
           _Metric(value: '$assigned', label: 'Assigned'),
           _Metric(
             value: '${total - assigned}',
-            label: 'Need assignment',
+            label: 'Pending requests',
             color: AppColors.warning,
           ),
         ],
@@ -499,12 +504,12 @@ class _UserDirectory extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'People',
+            'Assigned users and access requests',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           const Text(
-            'Search a user, then assign or update their school role.',
+            'Review requests for this school, then assign or update roles.',
             style: TextStyle(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 20),
@@ -540,14 +545,14 @@ class _UserDirectory extends StatelessWidget {
                   ),
                   ButtonSegment(
                     value: AssignmentFilter.unassigned,
-                    label: Text('Unassigned'),
+                    label: Text('Pending requests'),
                   ),
                 ],
                 selected: {filter},
                 onSelectionChanged: (values) => onFilterChanged(values.first),
                 showSelectedIcon: false,
               );
-              return constraints.maxWidth > 650
+              return constraints.maxWidth > 850
                   ? Row(
                       children: [
                         Expanded(child: search),

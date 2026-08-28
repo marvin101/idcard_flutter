@@ -153,6 +153,36 @@ class ApiService {
     return _decodeMap(response);
   }
 
+  Future<Map<String, dynamic>> register({
+    required String username,
+    required String password,
+    required String fullName,
+    required String schoolName,
+    required String designation,
+    String? email,
+    String? mobile,
+  }) async {
+    final response = await _client.post(
+      _uri('/users/register'),
+      headers: _headers,
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+        'full_name': fullName,
+        'school_name': schoolName,
+        'email': _nullIfEmpty(email),
+        'mobile': _nullIfEmpty(mobile),
+        'designation': designation,
+      }),
+    );
+    return _decodeMap(response);
+  }
+
+  String? _nullIfEmpty(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
   Future<Map<String, dynamic>> getMe() async {
     final response = await _client.get(_uri('/users/me'), headers: _headers);
     return _decodeMap(response);

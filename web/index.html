@@ -18,18 +18,20 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes">
+  <meta name="description" content="CampusID — secure school ID-card management, photo workflows, card design, and PDF output.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="idcard_flutter">
+  <meta name="apple-mobile-web-app-title" content="CampusID">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>idcard_flutter</title>
+  <meta name="theme-color" content="#102f55">
+  <title>CampusID — School ID Card Management</title>
   <link rel="manifest" href="manifest.json">
   <link
   rel="stylesheet"
@@ -39,6 +41,13 @@
 <script
   src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"
 ></script>
+<style>
+  /* Flutter owns single-pointer gestures; the browser retains pinch zoom. */
+  flutter-view,
+  flt-glass-pane {
+    touch-action: pinch-zoom !important;
+  }
+</style>
 </head>
 <body>
   <!--
