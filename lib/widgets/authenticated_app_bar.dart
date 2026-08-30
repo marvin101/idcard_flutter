@@ -169,10 +169,13 @@ class _AuthenticatedNavigationStrip extends StatefulWidget {
 
 class _AuthenticatedNavigationStripState
     extends State<_AuthenticatedNavigationStrip> {
-  static const _scrollStep = 320.0;
+  static const _motionDuration = Duration(milliseconds: 480);
+  static const _motionCurve = Curves.easeInOutCubic;
+  static const _navigationBackground = Color(0xff172442);
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _activeItemKey = GlobalKey();
+  String? _lastRevealedRoute;
   bool _hasOverflow = false;
   bool _canScrollBack = false;
   bool _canScrollForward = false;
@@ -195,8 +198,8 @@ class _AuthenticatedNavigationStripState
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _refreshScrollState();
-      _revealActiveItem();
+      final layoutChanged = _refreshScrollState();
+      if (!layoutChanged) _revealActiveItem();
     });
 
     return Row(
@@ -206,33 +209,53 @@ class _AuthenticatedNavigationStripState
             key: const Key('top-nav-scroll-left'),
             icon: Icons.chevron_left_rounded,
             tooltip: 'Previous modules',
-            onPressed: _canScrollBack ? () => _scrollBy(-_scrollStep) : null,
+            onPressed: _canScrollBack ? () => _scrollBy(-1) : null,
           ),
         Expanded(
-          child: Scrollbar(
-            controller: _scrollController,
-            thumbVisibility: _hasOverflow,
-            scrollbarOrientation: ScrollbarOrientation.bottom,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final item in widget.items) ...[
-                    KeyedSubtree(
-                      key: _isRouteActive(item.route, widget.routeName)
-                          ? _activeItemKey
-                          : null,
-                      child: _NavigationButton(
-                        item: item,
-                        active: _isRouteActive(item.route, widget.routeName),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                ],
+          child: Stack(
+            children: [
+              Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: _hasOverflow,
+                scrollbarOrientation: ScrollbarOrientation.bottom,
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(
+                    parent: ClampingScrollPhysics(),
+                  ),
+                  child: Row(
+                    children: [
+                      for (final item in widget.items) ...[
+                        KeyedSubtree(
+                          key: _isRouteActive(item.route, widget.routeName)
+                              ? _activeItemKey
+                              : null,
+                          child: _NavigationButton(
+                            item: item,
+                            active: _isRouteActive(
+                              item.route,
+                              widget.routeName,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
+              _NavigationEdgeFade(
+                alignment: Alignment.centerLeft,
+                visible: _canScrollBack,
+                colors: const [_navigationBackground, Color(0x00172442)],
+              ),
+              _NavigationEdgeFade(
+                alignment: Alignment.centerRight,
+                visible: _canScrollForward,
+                colors: const [Color(0x00172442), _navigationBackground],
+              ),
+            ],
           ),
         ),
         if (_hasOverflow)
@@ -240,16 +263,16 @@ class _AuthenticatedNavigationStripState
             key: const Key('top-nav-scroll-right'),
             icon: Icons.chevron_right_rounded,
             tooltip: 'More modules',
-            onPressed: _canScrollForward ? () => _scrollBy(_scrollStep) : null,
+            onPressed: _canScrollForward ? () => _scrollBy(1) : null,
           ),
       ],
     );
   }
 
-  void _refreshScrollState() {
-    if (!mounted || !_scrollController.hasClients) return;
+  bool _refreshScrollState() {
+    if (!mounted || !_scrollController.hasClients) return false;
     final position = _scrollController.position;
-    if (!position.hasContentDimensions) return;
+    if (!position.hasContentDimensions) return false;
     final hasOverflow = position.maxScrollExtent > 1;
     final canScrollBack = hasOverflow && position.pixels > 1;
     final canScrollForward =
@@ -257,42 +280,78 @@ class _AuthenticatedNavigationStripState
     if (_hasOverflow == hasOverflow &&
         _canScrollBack == canScrollBack &&
         _canScrollForward == canScrollForward) {
-      return;
+      return false;
     }
     setState(() {
       _hasOverflow = hasOverflow;
       _canScrollBack = canScrollBack;
       _canScrollForward = canScrollForward;
     });
+    return true;
   }
 
   void _revealActiveItem() {
+    if (_lastRevealedRoute == widget.routeName) return;
     if (!_scrollController.hasClients) return;
     if (!_scrollController.position.hasContentDimensions) return;
     final renderObject = _activeItemKey.currentContext?.findRenderObject();
     if (renderObject == null) return;
+    _lastRevealedRoute = widget.routeName;
     _scrollController.position
-        .ensureVisible(renderObject, alignment: 0.5)
+        .ensureVisible(
+          renderObject,
+          alignment: 0.5,
+          duration: _motionDuration,
+          curve: _motionCurve,
+        )
         .then((_) => _refreshScrollState());
   }
 
-  void _scrollBy(double delta) {
+  void _scrollBy(int direction) {
     if (!_scrollController.hasClients ||
         !_scrollController.position.hasContentDimensions) {
       return;
     }
     final position = _scrollController.position;
-    final target = (position.pixels + delta)
+    final distance = (position.viewportDimension * 0.72).clamp(240.0, 520.0);
+    final target = (position.pixels + (distance * direction))
         .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
     _scrollController
-        .animateTo(
-          target,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        )
+        .animateTo(target, duration: _motionDuration, curve: _motionCurve)
         .then((_) => _refreshScrollState());
   }
+}
+
+class _NavigationEdgeFade extends StatelessWidget {
+  const _NavigationEdgeFade({
+    required this.alignment,
+    required this.visible,
+    required this.colors,
+  });
+
+  final Alignment alignment;
+  final bool visible;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: alignment == Alignment.centerLeft ? 0 : null,
+    right: alignment == Alignment.centerRight ? 0 : null,
+    top: 0,
+    bottom: 4,
+    child: IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+        child: Container(
+          width: 34,
+          decoration: BoxDecoration(gradient: LinearGradient(colors: colors)),
+        ),
+      ),
+    ),
+  );
 }
 
 class _NavigationScrollButton extends StatelessWidget {
@@ -308,13 +367,22 @@ class _NavigationScrollButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    onPressed: onPressed,
-    icon: Icon(icon),
-    color: Colors.white,
-    disabledColor: Colors.white38,
-    visualDensity: VisualDensity.compact,
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(end: onPressed == null ? 0 : 1),
+    duration: const Duration(milliseconds: 240),
+    curve: Curves.easeOutCubic,
+    builder: (context, value, child) => Transform.scale(
+      scale: 0.9 + (value * 0.1),
+      child: Opacity(opacity: 0.38 + (value * 0.62), child: child),
+    ),
+    child: IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon),
+      color: Colors.white,
+      disabledColor: Colors.white,
+      visualDensity: VisualDensity.compact,
+    ),
   );
 }
 
@@ -354,12 +422,18 @@ class _NavigationButton extends StatelessWidget {
           },
     icon: Icon(item.icon, size: 18),
     label: Text(item.label),
-    style: TextButton.styleFrom(
-      foregroundColor: active ? AppColors.primary : Colors.white,
-      backgroundColor: active ? Colors.white : Colors.transparent,
-      disabledForegroundColor: AppColors.primary,
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-      shape: const StadiumBorder(),
-    ),
+    style:
+        TextButton.styleFrom(
+          foregroundColor: active ? AppColors.primary : Colors.white,
+          backgroundColor: active ? Colors.white : Colors.transparent,
+          disabledForegroundColor: AppColors.primary,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+          shape: const StadiumBorder(),
+        ).copyWith(
+          animationDuration: const Duration(milliseconds: 300),
+          overlayColor: WidgetStatePropertyAll(
+            Colors.white.withValues(alpha: 0.12),
+          ),
+        ),
   );
 }
