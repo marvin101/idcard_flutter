@@ -107,6 +107,24 @@ class _LoginScreenState extends State<LoginScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(color: AppColors.textSecondary),
                         ),
+                        if (auth.sessionMessage != null) ...[
+                          const SizedBox(height: 18),
+                          Semantics(
+                            liveRegion: true,
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.danger.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                auth.sessionMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.danger),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 30),
                         TextFormField(
                           controller: _usernameController,

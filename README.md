@@ -18,7 +18,7 @@ The current Vercel project/domain is a deployment detail. It does not change thi
 
 ## Current capabilities
 
-- JWT login with persisted sessions
+- JWT login with persisted bearer sessions and centralized expired-session cleanup
 - School selection based on active user assignments
 - Multiple-school assignments
 - Academic session, class, and section management
@@ -94,6 +94,8 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 `API_BASE_URL` is compiled into the application with `--dart-define`. If omitted, it defaults to `http://127.0.0.1:8000`.
 
 Do not place backend credentials, database passwords, Supabase service keys, or JWT secrets in the Flutter application. A web build is public and cannot protect embedded secrets.
+
+The client stores the access token only; it does not persist a refresh token. If an authenticated API request returns `401`, the local token and selected school are cleared and the user is returned to sign-in with a session-expired message. A `403` remains an authorization error and does not sign the user out.
 
 ## Quality checks
 

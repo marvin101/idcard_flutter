@@ -134,8 +134,17 @@ class ApiService {
   final http.Client _client;
   final String baseUrl;
   String? _token;
+  void Function()? _onSessionInvalidated;
+  bool _sessionInvalidationReported = false;
 
-  void setToken(String? token) => _token = token;
+  void setToken(String? token) {
+    _token = token;
+    if (token != null) _sessionInvalidationReported = false;
+  }
+
+  void setSessionInvalidatedCallback(void Function()? callback) {
+    _onSessionInvalidated = callback;
+  }
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
@@ -711,6 +720,13 @@ class ApiService {
   }
 
   ApiException _apiException(http.Response response) {
+    if (response.statusCode == 401 &&
+        _token != null &&
+        !_sessionInvalidationReported) {
+      _sessionInvalidationReported = true;
+      _onSessionInvalidated?.call();
+    }
+
     String message = 'Request failed (${response.statusCode}).';
 
     try {

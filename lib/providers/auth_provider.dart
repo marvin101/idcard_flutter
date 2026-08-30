@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -5,7 +7,14 @@ import '../models/auth_models.dart';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  AuthProvider({ApiService? api}) : _api = api ?? ApiService();
+  AuthProvider({ApiService? api}) : _api = api ?? ApiService() {
+    _api.setSessionInvalidatedCallback(() {
+      unawaited(invalidateSession());
+    });
+  }
+
+  static const sessionExpiredMessage =
+      'Your session has expired. Please sign in again.';
 
   final ApiService _api;
 
@@ -16,6 +25,8 @@ class AuthProvider extends ChangeNotifier {
   bool _loading = true;
   bool _busy = false;
   String? _error;
+  String? _sessionMessage;
+  Future<void>? _sessionInvalidationFuture;
 
   AuthUser? get user => _user;
   List<SchoolSummary> get schools => _schools;
@@ -24,6 +35,7 @@ class AuthProvider extends ChangeNotifier {
   bool get loading => _loading;
   bool get busy => _busy;
   String? get error => _error;
+  String? get sessionMessage => _sessionMessage;
   bool get isAuthenticated => _user != null;
   bool get isPlatformAdmin => _user?.isPlatformAdministrator ?? false;
 
@@ -66,6 +78,12 @@ class AuthProvider extends ChangeNotifier {
 
       _api.setToken(token);
       await _loadCurrentUser();
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await invalidateSession(notify: false);
+      } else {
+        await logout(notify: false);
+      }
     } catch (_) {
       await logout(notify: false);
     } finally {
@@ -77,6 +95,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> login(String username, String password) async {
     _setBusy(true);
     _error = null;
+    _sessionMessage = null;
+    _sessionInvalidationFuture = null;
     try {
       final result = await _api.login(username.trim(), password);
       final token = result['access_token'] as String?;
@@ -162,11 +182,25 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout({bool notify = true}) async {
+    _sessionMessage = null;
+    _sessionInvalidationFuture = null;
+    await _clearSession(notify: notify);
+  }
+
+  Future<void> invalidateSession({bool notify = true}) {
+    return _sessionInvalidationFuture ??= _clearSession(
+      notify: notify,
+      message: sessionExpiredMessage,
+    );
+  }
+
+  Future<void> _clearSession({bool notify = true, String? message}) async {
     _api.setToken(null);
     _user = null;
     _schools = const [];
     _accesses = const [];
     _selectedSchool = null;
+    _sessionMessage = message;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('selected_school_uuid');
