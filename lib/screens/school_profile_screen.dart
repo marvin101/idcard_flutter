@@ -7,6 +7,7 @@ import '../models/school_profile.dart';
 import '../providers/school_profile_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/authenticated_app_bar.dart';
 
 bool canEditSchoolProfile({
   required bool isPlatformAdmin,
@@ -135,11 +136,7 @@ class _SchoolProfileScreenState extends State<SchoolProfileScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xfff5f7fb),
-    appBar: AppBar(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      title: const Text('School Profile'),
-    ),
+    appBar: const AuthenticatedAppBar(title: Text('School Profile')),
     body: _provider.loading && _provider.profile == null
         ? const Center(child: CircularProgressIndicator())
         : _provider.profile == null

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/student_import.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/authenticated_app_bar.dart';
 
 class StudentImportScreen extends StatefulWidget {
   const StudentImportScreen({
@@ -156,9 +157,7 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
+    appBar: AuthenticatedAppBar(
       title: Text('Bulk Student Import — ${widget.schoolName}'),
     ),
     body: Center(

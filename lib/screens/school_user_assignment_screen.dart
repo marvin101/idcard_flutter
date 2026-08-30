@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../services/api_service.dart';
+import '../widgets/authenticated_app_bar.dart';
 
 /// A responsive school-scoped directory for managing user access.
 ///
@@ -233,42 +234,7 @@ class _SchoolUserAssignmentScreenState
 
     return Scaffold(
       backgroundColor: const Color(0xfff6f8fc),
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        titleSpacing: 24,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/campusid_logo.png',
-              width: 34,
-              height: 34,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(width: 10),
-            const Text('CampusID'),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none),
-          ),
-          const Padding(
-            padding: EdgeInsets.only(right: 20),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: Color(0xffdbe5ff),
-              child: Text(
-                'PA',
-                style: TextStyle(color: AppColors.primary, fontSize: 12),
-              ),
-            ),
-          ),
-        ],
-      ),
+      appBar: AuthenticatedAppBar(title: Text('Users — ${widget.schoolName}')),
       body: SafeArea(
         top: false,
         child: LayoutBuilder(

@@ -5,6 +5,7 @@ import '../models/section.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_button.dart';
+import '../widgets/authenticated_app_bar.dart';
 
 class ClassesSectionsScreen extends StatefulWidget {
   const ClassesSectionsScreen({
@@ -312,10 +313,8 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Row(
+      appBar: const AuthenticatedAppBar(
+        title: Row(
           children: [
             Icon(Icons.account_tree_outlined),
             SizedBox(width: 10),

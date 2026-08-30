@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../app_routes.dart';
 import '../models/academic_session.dart';
 import '../models/api_student.dart';
 import '../models/school_class.dart';
@@ -9,12 +10,11 @@ import '../models/section.dart';
 import '../models/card_template.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
-import 'student_form.dart';
+import '../widgets/authenticated_app_bar.dart';
 import '../widgets/id_card_preview.dart';
 import 'package:printing/printing.dart';
 
 import '../services/pdf_service.dart';
-import 'card_designer_screen.dart';
 import 'bulk_pdf_filter_dialog.dart';
 
 class CardsScreen extends StatefulWidget {
@@ -401,15 +401,9 @@ class _CardsScreenState extends State<CardsScreen> {
   // ------------------------------------------------------------
 
   Future<void> _editStudent(ApiStudent student) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => StudentFormScreen(
-          schoolUuid: widget.schoolUuid,
-          api: widget.api,
-          student: student,
-        ),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).pushNamed(AppRoutes.editStudent, arguments: student);
 
     if (mounted) {
       await _loadStudents(reset: true);
@@ -417,15 +411,9 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<void> _openDesigner() async {
-    final saved = await Navigator.of(context).push<CardTemplate>(
-      MaterialPageRoute(
-        builder: (_) => CardDesignerScreen(
-          schoolUuid: widget.schoolUuid,
-          api: widget.api,
-          initialTemplate: _cardTemplate,
-        ),
-      ),
-    );
+    final saved = await Navigator.of(
+      context,
+    ).pushNamed<CardTemplate>(AppRoutes.design);
     if (saved != null && mounted) setState(() => _cardTemplate = saved);
   }
 
@@ -567,9 +555,7 @@ class _CardsScreenState extends State<CardsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xfff5f7fb),
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+      appBar: AuthenticatedAppBar(
         actions: [
           if (widget.canPrint)
             IconButton(

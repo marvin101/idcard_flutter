@@ -4,6 +4,7 @@ import '../models/academic_session.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_button.dart';
+import '../widgets/authenticated_app_bar.dart';
 
 class AcademicSessionsScreen extends StatefulWidget {
   const AcademicSessionsScreen({
@@ -153,10 +154,8 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Row(
+      appBar: const AuthenticatedAppBar(
+        title: Row(
           children: [
             Icon(Icons.calendar_month_outlined),
             SizedBox(width: 10),

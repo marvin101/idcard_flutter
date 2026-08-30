@@ -5,6 +5,7 @@ import '../models/card_template.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/template_card.dart';
+import '../widgets/authenticated_app_bar.dart';
 
 class CardDesignerScreen extends StatefulWidget {
   const CardDesignerScreen({
@@ -103,9 +104,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xfff5f7fb),
-    appBar: AppBar(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
+    appBar: AuthenticatedAppBar(
       title: const Text('Card designer'),
       actions: [
         TextButton.icon(

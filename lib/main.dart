@@ -2,16 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_routes.dart';
+import 'models/api_student.dart';
 import 'providers/auth_provider.dart';
 import 'providers/display_scale_provider.dart';
+import 'screens/academic_sessions_screen.dart';
 import 'screens/card_designer_route_screen.dart';
+import 'screens/cards_screen.dart';
+import 'screens/classes_sections_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/public_information_screens.dart';
 import 'screens/register_screen.dart';
+import 'screens/school_profile_screen.dart';
+import 'screens/school_user_assignment_screen.dart';
+import 'screens/student_fields_screen.dart';
+import 'screens/student_form.dart';
+import 'screens/student_import_screen.dart';
+import 'screens/student_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
+import 'widgets/authenticated_app_bar.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,45 +30,29 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.authProvider, this.initialRoute});
+
+  final AuthProvider? authProvider;
+  final String? initialRoute;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
+        if (authProvider == null)
+          ChangeNotifierProvider(create: (_) => AuthProvider()..initialize())
+        else
+          ChangeNotifierProvider<AuthProvider>.value(value: authProvider!),
         ChangeNotifierProvider(create: (_) => DisplayScaleProvider()),
       ],
       child: MaterialApp(
         title: 'CampusID',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
+        initialRoute: initialRoute,
         builder: (context, child) =>
             AppScaleViewport(child: child ?? const SizedBox.shrink()),
-        routes: {
-          AppRoutes.landing: (_) => const LandingScreen(),
-          AppRoutes.signIn: (_) => const _AuthRoute(
-            authenticated: DashboardScreen(),
-            unauthenticated: LoginScreen(),
-          ),
-          AppRoutes.register: (context) => _AuthRoute(
-            authenticated: const DashboardScreen(),
-            unauthenticated: RegisterScreen(
-              api: context.read<AuthProvider>().api,
-            ),
-          ),
-          AppRoutes.dashboard: (_) => const _AuthRoute(
-            authenticated: DashboardScreen(),
-            unauthenticated: LoginScreen(),
-          ),
-          AppRoutes.privacy: (_) => const PrivacyScreen(),
-          AppRoutes.terms: (_) => const TermsScreen(),
-          AppRoutes.support: (_) => const SupportScreen(),
-          CardDesignerRouteScreen.routeName: (_) => const _AuthRoute(
-            authenticated: CardDesignerRouteScreen(),
-            unauthenticated: LoginScreen(),
-          ),
-        },
+        onGenerateRoute: _generateRoute,
         onUnknownRoute: (_) => MaterialPageRoute<void>(
           settings: const RouteSettings(name: AppRoutes.landing),
           builder: (_) => const LandingScreen(),
@@ -65,15 +60,39 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
+
+  Route<dynamic>? _generateRoute(RouteSettings settings) {
+    final routeName = settings.name;
+    final Widget? page = switch (routeName) {
+      AppRoutes.landing => const LandingScreen(),
+      AppRoutes.privacy => const PrivacyScreen(),
+      AppRoutes.terms => const TermsScreen(),
+      AppRoutes.support => const SupportScreen(),
+      AppRoutes.signIn => const _PublicAuthRoute(
+        unauthenticated: LoginScreen(),
+      ),
+      AppRoutes.register => _RegisterRoute(),
+      _ when AppRoutes.isProtected(routeName) => _AuthenticatedRoute(
+        routeName: routeName!,
+        arguments: settings.arguments,
+      ),
+      _ => null,
+    };
+    if (page == null) return null;
+    return MaterialPageRoute<dynamic>(settings: settings, builder: (_) => page);
+  }
 }
 
-class _AuthRoute extends StatelessWidget {
-  const _AuthRoute({
-    required this.authenticated,
-    required this.unauthenticated,
-  });
+class _RegisterRoute extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => _PublicAuthRoute(
+    unauthenticated: RegisterScreen(api: context.read<AuthProvider>().api),
+  );
+}
 
-  final Widget authenticated;
+class _PublicAuthRoute extends StatelessWidget {
+  const _PublicAuthRoute({required this.unauthenticated});
+
   final Widget unauthenticated;
 
   @override
@@ -82,6 +101,186 @@ class _AuthRoute extends StatelessWidget {
     if (auth.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return auth.isAuthenticated ? authenticated : unauthenticated;
+    if (auth.isAuthenticated) {
+      return const _RouteRedirect(destination: AppRoutes.dashboard);
+    }
+    return unauthenticated;
   }
+}
+
+class _AuthenticatedRoute extends StatelessWidget {
+  const _AuthenticatedRoute({required this.routeName, required this.arguments});
+
+  final String routeName;
+  final Object? arguments;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (auth.loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!auth.isAuthenticated) return const LoginScreen();
+    if (routeName == AppRoutes.dashboard) return const DashboardScreen();
+
+    final school = auth.selectedSchool;
+    if (school == null) {
+      return const _ProtectedRouteMessage(
+        title: 'School required',
+        message: 'Select a school on the Dashboard before opening this module.',
+        icon: Icons.school_outlined,
+      );
+    }
+
+    final modules = dashboardModulesFor(
+      isPlatformAdmin: auth.isPlatformAdmin,
+      schoolRole: auth.selectedSchoolAccess?.role,
+      hasSelectedSchool: true,
+    );
+    bool has(DashboardModuleKind module) => modules.contains(module);
+
+    final page = switch (routeName) {
+      AppRoutes.students when has(DashboardModuleKind.students) =>
+        StudentsScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          canEdit: auth.canManageCardData,
+          canDelete: auth.canDeleteStudents,
+        ),
+      AppRoutes.addStudent
+          when has(DashboardModuleKind.students) && auth.canManageCardData =>
+        StudentFormScreen(schoolUuid: school.uuid, api: auth.api),
+      AppRoutes.editStudent
+          when has(DashboardModuleKind.students) &&
+              auth.canManageCardData &&
+              arguments is ApiStudent =>
+        StudentFormScreen(
+          schoolUuid: school.uuid,
+          api: auth.api,
+          student: arguments as ApiStudent,
+        ),
+      AppRoutes.studentFields when has(DashboardModuleKind.studentFields) =>
+        StudentFieldsScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+        ),
+      AppRoutes.studentImport
+          when has(DashboardModuleKind.students) && auth.canManageCardData =>
+        StudentImportScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+        ),
+      AppRoutes.schoolProfile when has(DashboardModuleKind.schoolProfile) =>
+        SchoolProfileScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          canEdit: auth.canManageSchoolProfile,
+          onSaved: auth.applySchoolProfile,
+        ),
+      AppRoutes.academicSessions
+          when has(DashboardModuleKind.academicSessions) =>
+        AcademicSessionsScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          canManage: auth.canManageAcademicSessions,
+        ),
+      AppRoutes.classesSections
+          when has(DashboardModuleKind.classesAndSections) =>
+        ClassesSectionsScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          canManage: auth.canManageClasses,
+        ),
+      AppRoutes.users when has(DashboardModuleKind.users) =>
+        SchoolUserAssignmentScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          canManageElevatedRoles: auth.isPlatformAdmin,
+        ),
+      AppRoutes.design when auth.canDesignCards =>
+        const CardDesignerRouteScreen(),
+      AppRoutes.cards when has(DashboardModuleKind.idCards) => CardsScreen(
+        schoolUuid: school.uuid,
+        schoolName: school.name,
+        api: auth.api,
+        canEdit: auth.canManageCardData,
+        canDesign: auth.canDesignCards,
+        canPrint: auth.canPrintCards,
+      ),
+      AppRoutes.editStudent => const _ProtectedRouteMessage(
+        title: 'Student unavailable',
+        message: 'Return to Students and choose a student to edit.',
+        icon: Icons.person_search_outlined,
+      ),
+      _ => const _ProtectedRouteMessage(
+        title: 'Access denied',
+        message: 'This module is not available for your current school role.',
+        icon: Icons.lock_outline,
+      ),
+    };
+    return page;
+  }
+}
+
+class _ProtectedRouteMessage extends StatelessWidget {
+  const _ProtectedRouteMessage({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AuthenticatedAppBar(title: Text(title)),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 44),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _RouteRedirect extends StatefulWidget {
+  const _RouteRedirect({required this.destination});
+
+  final String destination;
+
+  @override
+  State<_RouteRedirect> createState() => _RouteRedirectState();
+}
+
+class _RouteRedirectState extends State<_RouteRedirect> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(widget.destination, (route) => false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: CircularProgressIndicator()));
 }

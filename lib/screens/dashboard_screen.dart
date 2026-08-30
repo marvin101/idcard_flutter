@@ -3,53 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../app_routes.dart';
 import '../models/auth_models.dart';
+import '../navigation/authenticated_modules.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
-import 'academic_sessions_screen.dart';
-import 'classes_sections_screen.dart';
-import 'cards_screen.dart';
-import 'school_user_assignment_screen.dart';
-import 'school_profile_screen.dart';
-import 'student_screen.dart';
-import 'student_fields_screen.dart';
+import '../widgets/authenticated_app_bar.dart';
 
-enum DashboardModuleKind {
-  schoolProfile,
-  users,
-  academicSessions,
-  classesAndSections,
-  students,
-  studentFields,
-  idCards,
-}
-
-Set<DashboardModuleKind> dashboardModulesFor({
-  required bool isPlatformAdmin,
-  required String? schoolRole,
-  required bool hasSelectedSchool,
-}) {
-  if (!hasSelectedSchool) return const {};
-
-  if (isPlatformAdmin ||
-      schoolRole == 'school_admin' ||
-      schoolRole == 'admin') {
-    return DashboardModuleKind.values.toSet();
-  }
-
-  return switch (schoolRole) {
-    'card_operator' => const {
-      DashboardModuleKind.schoolProfile,
-      DashboardModuleKind.students,
-      DashboardModuleKind.idCards,
-    },
-    'teacher' || 'staff' => const {
-      DashboardModuleKind.schoolProfile,
-      DashboardModuleKind.academicSessions,
-      DashboardModuleKind.classesAndSections,
-    },
-    _ => const {},
-  };
-}
+export '../navigation/authenticated_modules.dart';
 
 class DashboardGridLayout {
   const DashboardGridLayout({
@@ -78,7 +37,6 @@ DashboardGridLayout dashboardGridLayoutFor(double width) {
   );
 }
 
-
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
@@ -91,38 +49,7 @@ class DashboardScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xfff5f7fb),
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/campusid_logo.png',
-              width: 34,
-              height: 34,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(width: 10),
-            const Text('CampusID'),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Sign out',
-            onPressed: () async {
-              await context.read<AuthProvider>().logout();
-              if (!context.mounted) return;
-              Navigator.of(
-                context,
-              ).pushNamedAndRemoveUntil(AppRoutes.landing, (route) => false);
-            },
-            iconSize: 28,
-            constraints: const BoxConstraints.tightFor(width: 54, height: 54),
-            icon: const Icon(Icons.logout_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
+      appBar: const AuthenticatedAppBar(title: Text('CampusID')),
       body: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
           padding: EdgeInsets.symmetric(
@@ -314,19 +241,7 @@ class _ModuleGrid extends StatelessWidget {
           'View school details, contacts, and branding.',
           Icons.domain_outlined,
           true,
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SchoolProfileScreen(
-                  schoolUuid: school!.uuid,
-                  schoolName: school.name,
-                  api: auth.api,
-                  canEdit: auth.canManageSchoolProfile,
-                  onSaved: auth.applySchoolProfile,
-                ),
-              ),
-            );
-          },
+          () => Navigator.of(context).pushNamed(AppRoutes.schoolProfile),
         ),
       if (visibleModules.contains(DashboardModuleKind.users))
         _DashboardModule(
@@ -334,18 +249,7 @@ class _ModuleGrid extends StatelessWidget {
           'Manage school assignments and roles.',
           Icons.people_alt_outlined,
           true,
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SchoolUserAssignmentScreen(
-                  schoolUuid: school!.uuid,
-                  schoolName: school.name,
-                  api: auth.api,
-                  canManageElevatedRoles: auth.isPlatformAdmin,
-                ),
-              ),
-            );
-          },
+          () => Navigator.of(context).pushNamed(AppRoutes.users),
         ),
       if (visibleModules.contains(DashboardModuleKind.academicSessions))
         _DashboardModule(
@@ -353,18 +257,7 @@ class _ModuleGrid extends StatelessWidget {
           'Manage sessions for the selected school.',
           Icons.calendar_month_outlined,
           true,
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => AcademicSessionsScreen(
-                  schoolUuid: school!.uuid,
-                  schoolName: school.name,
-                  api: auth.api,
-                  canManage: auth.canManageAcademicSessions,
-                ),
-              ),
-            );
-          },
+          () => Navigator.of(context).pushNamed(AppRoutes.academicSessions),
         ),
       if (visibleModules.contains(DashboardModuleKind.classesAndSections))
         _DashboardModule(
@@ -372,18 +265,7 @@ class _ModuleGrid extends StatelessWidget {
           'Organize classes and sections.',
           Icons.account_tree_outlined,
           true,
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ClassesSectionsScreen(
-                  schoolUuid: school!.uuid,
-                  schoolName: school.name,
-                  api: auth.api,
-                  canManage: auth.canManageClasses,
-                ),
-              ),
-            );
-          },
+          () => Navigator.of(context).pushNamed(AppRoutes.classesSections),
         ),
       if (visibleModules.contains(DashboardModuleKind.students))
         _DashboardModule(
@@ -391,19 +273,7 @@ class _ModuleGrid extends StatelessWidget {
           'Student records and ID-card data.',
           Icons.school_outlined,
           true,
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => StudentsScreen(
-                  schoolUuid: school!.uuid,
-                  schoolName: school.name,
-                  api: auth.api,
-                  canEdit: auth.canManageCardData,
-                  canDelete: auth.canDeleteStudents,
-                ),
-              ),
-            );
-          },
+          () => Navigator.of(context).pushNamed(AppRoutes.students),
         ),
       if (visibleModules.contains(DashboardModuleKind.studentFields))
         _DashboardModule(
@@ -411,17 +281,7 @@ class _ModuleGrid extends StatelessWidget {
           'Configure additional fields on student records.',
           Icons.dynamic_form_outlined,
           true,
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => StudentFieldsScreen(
-                  schoolUuid: school!.uuid,
-                  schoolName: school.name,
-                  api: auth.api,
-                ),
-              ),
-            );
-          },
+          () => Navigator.of(context).pushNamed(AppRoutes.studentFields),
         ),
       if (visibleModules.contains(DashboardModuleKind.idCards))
         _DashboardModule(
@@ -429,20 +289,7 @@ class _ModuleGrid extends StatelessWidget {
           'Prepare and manage ID cards.',
           Icons.badge_outlined,
           true,
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => CardsScreen(
-                  schoolUuid: school!.uuid,
-                  schoolName: school.name,
-                  api: auth.api,
-                  canEdit: auth.canManageCardData,
-                  canDesign: auth.canDesignCards,
-                  canPrint: auth.canPrintCards,
-                ),
-              ),
-            );
-          },
+          () => Navigator.of(context).pushNamed(AppRoutes.cards),
         ),
     ];
 

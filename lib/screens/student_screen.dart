@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../app_routes.dart';
 import '../models/api_student.dart';
 import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
-import 'student_form.dart';
-import 'student_import_screen.dart';
+import '../widgets/authenticated_app_bar.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({
@@ -211,15 +211,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Future<void> _editStudent(ApiStudent student) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => StudentFormScreen(
-          schoolUuid: widget.schoolUuid,
-          api: widget.api,
-          student: student,
-        ),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).pushNamed(AppRoutes.editStudent, arguments: student);
 
     if (mounted) {
       await _loadStudents();
@@ -276,9 +270,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xfff5f7fb),
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+      appBar: AuthenticatedAppBar(
         title: Text('Students — ${widget.schoolName}'),
       ),
       body: LayoutBuilder(
@@ -337,15 +329,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
               const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: () async {
-                  final imported = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                      builder: (_) => StudentImportScreen(
-                        schoolUuid: widget.schoolUuid,
-                        schoolName: widget.schoolName,
-                        api: widget.api,
-                      ),
-                    ),
-                  );
+                  final imported = await Navigator.of(
+                    context,
+                  ).pushNamed<bool>(AppRoutes.studentImport);
                   if (imported == true && mounted) await _loadStudents();
                 },
                 icon: const Icon(Icons.upload_file),
@@ -354,14 +340,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => StudentFormScreen(
-                        schoolUuid: widget.schoolUuid,
-                        api: widget.api,
-                      ),
-                    ),
-                  );
+                  await Navigator.of(context).pushNamed(AppRoutes.addStudent);
 
                   if (mounted) {
                     await _loadStudents();

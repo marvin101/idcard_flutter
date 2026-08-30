@@ -6,12 +6,13 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'card_designer_screen.dart';
 import 'login_screen.dart';
+import '../widgets/authenticated_app_bar.dart';
 
-/// Authenticated entry point for the web/app route `/card-designer`.
+/// Authenticated entry point for the web/app route `/design`.
 class CardDesignerRouteScreen extends StatefulWidget {
   const CardDesignerRouteScreen({super.key});
 
-  static const routeName = '/card-designer';
+  static const routeName = '/design';
 
   @override
   State<CardDesignerRouteScreen> createState() =>
@@ -54,6 +55,7 @@ class _CardDesignerRouteScreenState extends State<CardDesignerRouteScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
+            appBar: AuthenticatedAppBar(title: Text('Card designer')),
             body: Center(child: CircularProgressIndicator()),
           );
         }
@@ -90,7 +92,7 @@ class _RouteMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Card designer')),
+    appBar: const AuthenticatedAppBar(title: Text('Card designer')),
     body: Center(
       child: Padding(
         padding: const EdgeInsets.all(24),

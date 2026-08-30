@@ -34,6 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
       await auth.login(_usernameController.text, _passwordController.text);
       TextInput.finishAutofillContext();
       if (mounted) {
+        final currentRoute = ModalRoute.of(context)?.settings.name;
+        if (AppRoutes.isProtected(currentRoute)) return;
         Navigator.of(
           context,
         ).pushNamedAndRemoveUntil(AppRoutes.dashboard, (route) => false);
