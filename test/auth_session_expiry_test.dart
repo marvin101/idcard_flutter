@@ -106,6 +106,7 @@ void main() {
     expect(provider.sessionMessage, AuthProvider.sessionExpiredMessage);
     expect(prefs.getString('access_token'), isNull);
     expect(prefs.getString('selected_school_uuid'), isNull);
+    expect(prefs.getString('last_selected_school_uuid'), 'school-1');
     provider.dispose();
   });
 

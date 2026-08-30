@@ -6,6 +6,7 @@ import '../navigation/authenticated_modules.dart';
 import '../navigation/app_navigation.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import 'authenticated_shell.dart';
 
 class AuthenticatedAppBar extends StatelessWidget
     implements PreferredSizeWidget {
@@ -23,9 +24,8 @@ class AuthenticatedAppBar extends StatelessWidget
 
   @override
   Widget build(BuildContext context) {
-    AuthProvider auth;
     try {
-      auth = context.watch<AuthProvider>();
+      context.read<AuthProvider>();
     } on ProviderNotFoundException {
       return AppBar(
         backgroundColor: AppColors.primary,
@@ -35,70 +35,9 @@ class AuthenticatedAppBar extends StatelessWidget
       );
     }
     final routeName = ModalRoute.of(context)?.settings.name;
-    final modules = dashboardModulesFor(
-      isPlatformAdmin: auth.isPlatformAdmin,
-      schoolRole: auth.selectedSchoolAccess?.role,
-      hasSelectedSchool: auth.selectedSchool != null,
-    );
-
-    final items = <_NavigationItem>[
-      const _NavigationItem(
-        'Dashboard',
-        Icons.dashboard_outlined,
-        AppRoutes.dashboard,
-      ),
-      if (modules.contains(DashboardModuleKind.students))
-        const _NavigationItem(
-          'Students',
-          Icons.people_outline,
-          AppRoutes.students,
-        ),
-      if (modules.contains(DashboardModuleKind.students) &&
-          auth.canManageCardData)
-        const _NavigationItem(
-          'Add Student',
-          Icons.person_add_alt,
-          AppRoutes.addStudent,
-        ),
-      if (modules.contains(DashboardModuleKind.studentFields))
-        const _NavigationItem(
-          'Student Fields',
-          Icons.dynamic_form_outlined,
-          AppRoutes.studentFields,
-        ),
-      if (modules.contains(DashboardModuleKind.schoolProfile))
-        const _NavigationItem(
-          'School Profile',
-          Icons.domain_outlined,
-          AppRoutes.schoolProfile,
-        ),
-      if (modules.contains(DashboardModuleKind.academicSessions))
-        const _NavigationItem(
-          'Academic Sessions',
-          Icons.calendar_month_outlined,
-          AppRoutes.academicSessions,
-        ),
-      if (modules.contains(DashboardModuleKind.classesAndSections))
-        const _NavigationItem(
-          'Classes & Sections',
-          Icons.account_tree_outlined,
-          AppRoutes.classesSections,
-        ),
-      if (modules.contains(DashboardModuleKind.users))
-        const _NavigationItem(
-          'Users',
-          Icons.manage_accounts_outlined,
-          AppRoutes.users,
-        ),
-      if (auth.canDesignCards)
-        const _NavigationItem(
-          'Design',
-          Icons.palette_outlined,
-          AppRoutes.design,
-        ),
-      if (modules.contains(DashboardModuleKind.idCards))
-        const _NavigationItem('Cards', Icons.badge_outlined, AppRoutes.cards),
-    ];
+    final navigation =
+        persistentAuthenticatedNavigationOf(context) ??
+        const AuthenticatedNavigationStrip();
 
     return AppBar(
       automaticallyImplyLeading: false,
@@ -143,32 +82,23 @@ class AuthenticatedAppBar extends StatelessWidget
           width: double.infinity,
           color: const Color(0xff172442),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: _AuthenticatedNavigationStrip(
-            items: items,
-            routeName: routeName,
-          ),
+          child: navigation,
         ),
       ),
     );
   }
 }
 
-class _AuthenticatedNavigationStrip extends StatefulWidget {
-  const _AuthenticatedNavigationStrip({
-    required this.items,
-    required this.routeName,
-  });
-
-  final List<_NavigationItem> items;
-  final String? routeName;
+class AuthenticatedNavigationStrip extends StatefulWidget {
+  const AuthenticatedNavigationStrip({super.key});
 
   @override
-  State<_AuthenticatedNavigationStrip> createState() =>
+  State<AuthenticatedNavigationStrip> createState() =>
       _AuthenticatedNavigationStripState();
 }
 
 class _AuthenticatedNavigationStripState
-    extends State<_AuthenticatedNavigationStrip> {
+    extends State<AuthenticatedNavigationStrip> {
   static const _motionDuration = Duration(milliseconds: 480);
   static const _motionCurve = Curves.easeInOutCubic;
   static const _navigationBackground = Color(0xff172442);
@@ -176,6 +106,11 @@ class _AuthenticatedNavigationStripState
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _activeItemKey = GlobalKey();
   String? _lastRevealedRoute;
+  String? _currentRoute;
+  String? _itemSignature;
+  double? _lastViewportWidth;
+  bool _refreshScheduled = false;
+  bool _revealAfterRefresh = false;
   bool _hasOverflow = false;
   bool _canScrollBack = false;
   bool _canScrollForward = false;
@@ -196,77 +131,108 @@ class _AuthenticatedNavigationStripState
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.select<AuthProvider, _NavigationAuthState>(
+      _NavigationAuthState.from,
+    );
+    final routeName = ModalRoute.of(context)?.settings.name;
+    final items = _navigationItems(authState);
+    final itemSignature = items.map((item) => item.route).join('|');
+    if (_currentRoute != routeName || _itemSignature != itemSignature) {
+      _currentRoute = routeName;
+      _itemSignature = itemSignature;
+      _lastRevealedRoute = null;
+      _scheduleRefresh(revealActive: true);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (_lastViewportWidth != constraints.maxWidth) {
+          _lastViewportWidth = constraints.maxWidth;
+          _scheduleRefresh(revealActive: true);
+        }
+        return Row(
+          children: [
+            if (_hasOverflow)
+              _NavigationScrollButton(
+                key: const Key('top-nav-scroll-left'),
+                icon: Icons.chevron_left_rounded,
+                tooltip: 'Previous modules',
+                onPressed: _canScrollBack ? () => _scrollBy(-1) : null,
+              ),
+            Expanded(
+              child: Stack(
+                children: [
+                  Scrollbar(
+                    controller: _scrollController,
+                    thumbVisibility: _hasOverflow,
+                    scrollbarOrientation: ScrollbarOrientation.bottom,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(
+                        parent: ClampingScrollPhysics(),
+                      ),
+                      child: Row(
+                        children: [
+                          for (final item in items) ...[
+                            KeyedSubtree(
+                              key: _isRouteActive(item.route, routeName)
+                                  ? _activeItemKey
+                                  : null,
+                              child: _NavigationButton(
+                                item: item,
+                                active: _isRouteActive(item.route, routeName),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  _NavigationEdgeFade(
+                    alignment: Alignment.centerLeft,
+                    visible: _canScrollBack,
+                    colors: const [_navigationBackground, Color(0x00172442)],
+                  ),
+                  _NavigationEdgeFade(
+                    alignment: Alignment.centerRight,
+                    visible: _canScrollForward,
+                    colors: const [Color(0x00172442), _navigationBackground],
+                  ),
+                ],
+              ),
+            ),
+            if (_hasOverflow)
+              _NavigationScrollButton(
+                key: const Key('top-nav-scroll-right'),
+                icon: Icons.chevron_right_rounded,
+                tooltip: 'More modules',
+                onPressed: _canScrollForward ? () => _scrollBy(1) : null,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _scheduleRefresh({required bool revealActive}) {
+    _revealAfterRefresh = _revealAfterRefresh || revealActive;
+    if (_refreshScheduled) return;
+    _refreshScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshScheduled = false;
       if (!mounted) return;
       final layoutChanged = _refreshScrollState();
-      if (!layoutChanged) _revealActiveItem();
+      if (_revealAfterRefresh) {
+        _revealAfterRefresh = false;
+        if (layoutChanged) {
+          _scheduleRefresh(revealActive: true);
+        } else {
+          _revealActiveItem();
+        }
+      }
     });
-
-    return Row(
-      children: [
-        if (_hasOverflow)
-          _NavigationScrollButton(
-            key: const Key('top-nav-scroll-left'),
-            icon: Icons.chevron_left_rounded,
-            tooltip: 'Previous modules',
-            onPressed: _canScrollBack ? () => _scrollBy(-1) : null,
-          ),
-        Expanded(
-          child: Stack(
-            children: [
-              Scrollbar(
-                controller: _scrollController,
-                thumbVisibility: _hasOverflow,
-                scrollbarOrientation: ScrollbarOrientation.bottom,
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(
-                    parent: ClampingScrollPhysics(),
-                  ),
-                  child: Row(
-                    children: [
-                      for (final item in widget.items) ...[
-                        KeyedSubtree(
-                          key: _isRouteActive(item.route, widget.routeName)
-                              ? _activeItemKey
-                              : null,
-                          child: _NavigationButton(
-                            item: item,
-                            active: _isRouteActive(
-                              item.route,
-                              widget.routeName,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              _NavigationEdgeFade(
-                alignment: Alignment.centerLeft,
-                visible: _canScrollBack,
-                colors: const [_navigationBackground, Color(0x00172442)],
-              ),
-              _NavigationEdgeFade(
-                alignment: Alignment.centerRight,
-                visible: _canScrollForward,
-                colors: const [Color(0x00172442), _navigationBackground],
-              ),
-            ],
-          ),
-        ),
-        if (_hasOverflow)
-          _NavigationScrollButton(
-            key: const Key('top-nav-scroll-right'),
-            icon: Icons.chevron_right_rounded,
-            tooltip: 'More modules',
-            onPressed: _canScrollForward ? () => _scrollBy(1) : null,
-          ),
-      ],
-    );
   }
 
   bool _refreshScrollState() {
@@ -291,12 +257,12 @@ class _AuthenticatedNavigationStripState
   }
 
   void _revealActiveItem() {
-    if (_lastRevealedRoute == widget.routeName) return;
+    if (_lastRevealedRoute == _currentRoute) return;
     if (!_scrollController.hasClients) return;
     if (!_scrollController.position.hasContentDimensions) return;
     final renderObject = _activeItemKey.currentContext?.findRenderObject();
     if (renderObject == null) return;
-    _lastRevealedRoute = widget.routeName;
+    _lastRevealedRoute = _currentRoute;
     _scrollController.position
         .ensureVisible(
           renderObject,
@@ -321,6 +287,110 @@ class _AuthenticatedNavigationStripState
         .animateTo(target, duration: _motionDuration, curve: _motionCurve)
         .then((_) => _refreshScrollState());
   }
+}
+
+List<_NavigationItem> _navigationItems(_NavigationAuthState auth) {
+  final modules = dashboardModulesFor(
+    isPlatformAdmin: auth.isPlatformAdmin,
+    schoolRole: auth.schoolRole,
+    hasSelectedSchool: auth.hasSelectedSchool,
+  );
+  return [
+    const _NavigationItem(
+      'Dashboard',
+      Icons.dashboard_outlined,
+      AppRoutes.dashboard,
+    ),
+    if (modules.contains(DashboardModuleKind.students))
+      const _NavigationItem(
+        'Students',
+        Icons.people_outline,
+        AppRoutes.students,
+      ),
+    if (modules.contains(DashboardModuleKind.students) &&
+        auth.canManageCardData)
+      const _NavigationItem(
+        'Add Student',
+        Icons.person_add_alt,
+        AppRoutes.addStudent,
+      ),
+    if (modules.contains(DashboardModuleKind.studentFields))
+      const _NavigationItem(
+        'Student Fields',
+        Icons.dynamic_form_outlined,
+        AppRoutes.studentFields,
+      ),
+    if (modules.contains(DashboardModuleKind.schoolProfile))
+      const _NavigationItem(
+        'School Profile',
+        Icons.domain_outlined,
+        AppRoutes.schoolProfile,
+      ),
+    if (modules.contains(DashboardModuleKind.academicSessions))
+      const _NavigationItem(
+        'Academic Sessions',
+        Icons.calendar_month_outlined,
+        AppRoutes.academicSessions,
+      ),
+    if (modules.contains(DashboardModuleKind.classesAndSections))
+      const _NavigationItem(
+        'Classes & Sections',
+        Icons.account_tree_outlined,
+        AppRoutes.classesSections,
+      ),
+    if (modules.contains(DashboardModuleKind.users))
+      const _NavigationItem(
+        'Users',
+        Icons.manage_accounts_outlined,
+        AppRoutes.users,
+      ),
+    if (auth.canDesignCards)
+      const _NavigationItem('Design', Icons.palette_outlined, AppRoutes.design),
+    if (modules.contains(DashboardModuleKind.idCards))
+      const _NavigationItem('Cards', Icons.badge_outlined, AppRoutes.cards),
+  ];
+}
+
+class _NavigationAuthState {
+  const _NavigationAuthState({
+    required this.isPlatformAdmin,
+    required this.schoolRole,
+    required this.hasSelectedSchool,
+    required this.canManageCardData,
+    required this.canDesignCards,
+  });
+
+  factory _NavigationAuthState.from(AuthProvider auth) => _NavigationAuthState(
+    isPlatformAdmin: auth.isPlatformAdmin,
+    schoolRole: auth.selectedSchoolAccess?.role,
+    hasSelectedSchool: auth.selectedSchool != null,
+    canManageCardData: auth.canManageCardData,
+    canDesignCards: auth.canDesignCards,
+  );
+
+  final bool isPlatformAdmin;
+  final String? schoolRole;
+  final bool hasSelectedSchool;
+  final bool canManageCardData;
+  final bool canDesignCards;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _NavigationAuthState &&
+      other.isPlatformAdmin == isPlatformAdmin &&
+      other.schoolRole == schoolRole &&
+      other.hasSelectedSchool == hasSelectedSchool &&
+      other.canManageCardData == canManageCardData &&
+      other.canDesignCards == canDesignCards;
+
+  @override
+  int get hashCode => Object.hash(
+    isPlatformAdmin,
+    schoolRole,
+    hasSelectedSchool,
+    canManageCardData,
+    canDesignCards,
+  );
 }
 
 class _NavigationEdgeFade extends StatelessWidget {

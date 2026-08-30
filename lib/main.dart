@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'app_routes.dart';
 import 'models/api_student.dart';
+import 'models/auth_models.dart';
 import 'navigation/app_navigation.dart';
 import 'navigation/app_router.dart';
 import 'providers/auth_provider.dart';
@@ -25,6 +26,7 @@ import 'screens/student_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
 import 'widgets/authenticated_app_bar.dart';
+import 'widgets/authenticated_shell.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -123,11 +125,13 @@ class _PublicAuthRoute extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    if (auth.loading) {
+    final state = context.select<AuthProvider, (bool, bool)>(
+      (auth) => (auth.loading, auth.isAuthenticated),
+    );
+    if (state.$1) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (auth.isAuthenticated) {
+    if (state.$2) {
       return const _AuthenticatedRootRedirect();
     }
     return unauthenticated;
@@ -142,25 +146,27 @@ class _AuthenticatedRoute extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    if (auth.loading) {
+    final authState = context.select<AuthProvider, _AuthenticatedRouteState>(
+      _AuthenticatedRouteState.from,
+    );
+    if (authState.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (!auth.isAuthenticated) return const LoginScreen();
-    if (routeName == AppRoutes.dashboard) return const DashboardScreen();
-
-    final school = auth.selectedSchool;
-    if (school == null) {
-      return const _ProtectedRouteMessage(
-        title: 'School required',
-        message: 'Select a school on the Dashboard before opening this module.',
-        icon: Icons.school_outlined,
-      );
+    if (!authState.isAuthenticated) return const LoginScreen();
+    if (routeName == AppRoutes.dashboard) {
+      return const AuthenticatedShell(child: DashboardScreen());
     }
 
+    final school = authState.selectedSchool;
+    if (school == null) {
+      return const _AuthenticatedRootRedirect();
+    }
+
+    final auth = context.read<AuthProvider>();
+
     final modules = dashboardModulesFor(
-      isPlatformAdmin: auth.isPlatformAdmin,
-      schoolRole: auth.selectedSchoolAccess?.role,
+      isPlatformAdmin: authState.isPlatformAdmin,
+      schoolRole: authState.schoolRole,
       hasSelectedSchool: true,
     );
     bool has(DashboardModuleKind module) => modules.contains(module);
@@ -251,8 +257,88 @@ class _AuthenticatedRoute extends StatelessWidget {
         icon: Icons.lock_outline,
       ),
     };
-    return page;
+    return AuthenticatedShell(child: page);
   }
+}
+
+class _AuthenticatedRouteState {
+  const _AuthenticatedRouteState({
+    required this.loading,
+    required this.isAuthenticated,
+    required this.selectedSchool,
+    required this.isPlatformAdmin,
+    required this.schoolRole,
+    required this.canManageCardData,
+    required this.canDeleteStudents,
+    required this.canManageSchoolProfile,
+    required this.canManageAcademicSessions,
+    required this.canManageClasses,
+    required this.canDesignCards,
+    required this.canPrintCards,
+  });
+
+  factory _AuthenticatedRouteState.from(AuthProvider auth) =>
+      _AuthenticatedRouteState(
+        loading: auth.loading,
+        isAuthenticated: auth.isAuthenticated,
+        selectedSchool: auth.selectedSchool,
+        isPlatformAdmin: auth.isPlatformAdmin,
+        schoolRole: auth.selectedSchoolAccess?.role,
+        canManageCardData: auth.canManageCardData,
+        canDeleteStudents: auth.canDeleteStudents,
+        canManageSchoolProfile: auth.canManageSchoolProfile,
+        canManageAcademicSessions: auth.canManageAcademicSessions,
+        canManageClasses: auth.canManageClasses,
+        canDesignCards: auth.canDesignCards,
+        canPrintCards: auth.canPrintCards,
+      );
+
+  final bool loading;
+  final bool isAuthenticated;
+  final SchoolSummary? selectedSchool;
+  final bool isPlatformAdmin;
+  final String? schoolRole;
+  final bool canManageCardData;
+  final bool canDeleteStudents;
+  final bool canManageSchoolProfile;
+  final bool canManageAcademicSessions;
+  final bool canManageClasses;
+  final bool canDesignCards;
+  final bool canPrintCards;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _AuthenticatedRouteState &&
+      other.loading == loading &&
+      other.isAuthenticated == isAuthenticated &&
+      other.selectedSchool?.uuid == selectedSchool?.uuid &&
+      other.selectedSchool?.name == selectedSchool?.name &&
+      other.isPlatformAdmin == isPlatformAdmin &&
+      other.schoolRole == schoolRole &&
+      other.canManageCardData == canManageCardData &&
+      other.canDeleteStudents == canDeleteStudents &&
+      other.canManageSchoolProfile == canManageSchoolProfile &&
+      other.canManageAcademicSessions == canManageAcademicSessions &&
+      other.canManageClasses == canManageClasses &&
+      other.canDesignCards == canDesignCards &&
+      other.canPrintCards == canPrintCards;
+
+  @override
+  int get hashCode => Object.hash(
+    loading,
+    isAuthenticated,
+    selectedSchool?.uuid,
+    selectedSchool?.name,
+    isPlatformAdmin,
+    schoolRole,
+    canManageCardData,
+    canDeleteStudents,
+    canManageSchoolProfile,
+    canManageAcademicSessions,
+    canManageClasses,
+    canDesignCards,
+    canPrintCards,
+  );
 }
 
 class _ProtectedRouteMessage extends StatelessWidget {

@@ -16,6 +16,9 @@ class AuthProvider extends ChangeNotifier {
 
   static const sessionExpiredMessage =
       'Your session has expired. Please sign in again.';
+  static const accessTokenPreferenceKey = 'access_token';
+  static const selectedSchoolPreferenceKey = 'selected_school_uuid';
+  static const lastSelectedSchoolPreferenceKey = 'last_selected_school_uuid';
 
   final ApiService _api;
 
@@ -71,7 +74,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token');
+      final token = prefs.getString(accessTokenPreferenceKey);
       if (token == null || token.isEmpty) {
         _loading = false;
         notifyListeners();
@@ -111,7 +114,7 @@ class AuthProvider extends ChangeNotifier {
 
       _api.setToken(token);
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('access_token', token);
+      await prefs.setString(accessTokenPreferenceKey, token);
       await _loadCurrentUser();
     } on ApiException catch (e) {
       _error = e.message;
@@ -125,7 +128,20 @@ class AuthProvider extends ChangeNotifier {
     final userJson = await _api.getMe();
     _user = AuthUser.fromJson(userJson);
 
-    final schoolJson = await _api.getSchools();
+    late final List<dynamic> schoolJson;
+    late final List<dynamic> accessJson;
+    if (_user!.isPlatformAdministrator) {
+      schoolJson = await _api.getSchools();
+      accessJson = const [];
+    } else {
+      final results = await Future.wait<List<dynamic>>([
+        _api.getSchools(),
+        _api.getUserSchools(_user!.uuid),
+      ]);
+      schoolJson = results[0];
+      accessJson = results[1];
+    }
+
     _schools = schoolJson
         .whereType<Map<String, dynamic>>()
         .map(SchoolSummary.fromJson)
@@ -134,7 +150,6 @@ class AuthProvider extends ChangeNotifier {
     if (_user!.isPlatformAdministrator) {
       _accesses = const [];
     } else {
-      final accessJson = await _api.getUserSchools(_user!.uuid);
       _accesses = accessJson
           .whereType<Map<String, dynamic>>()
           .map(SchoolAccess.fromJson)
@@ -147,7 +162,9 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _restoreSchoolSelection() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString('selected_school_uuid');
+    final activeSaved = prefs.getString(selectedSchoolPreferenceKey);
+    final lastSaved = prefs.getString(lastSelectedSchoolPreferenceKey);
+    final saved = activeSaved ?? lastSaved;
 
     SchoolSummary? candidate;
     if (saved != null) {
@@ -170,6 +187,15 @@ class AuthProvider extends ChangeNotifier {
     }
 
     _selectedSchool = candidate;
+    if (candidate == null) {
+      await prefs.remove(selectedSchoolPreferenceKey);
+      if (saved != null) {
+        await prefs.remove(lastSelectedSchoolPreferenceKey);
+      }
+    } else {
+      await prefs.setString(selectedSchoolPreferenceKey, candidate.uuid);
+      await prefs.setString(lastSelectedSchoolPreferenceKey, candidate.uuid);
+    }
   }
 
   Future<void> selectSchool(SchoolSummary school) async {
@@ -179,7 +205,8 @@ class AuthProvider extends ChangeNotifier {
     }
     _selectedSchool = school;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('selected_school_uuid', school.uuid);
+    await prefs.setString(selectedSchoolPreferenceKey, school.uuid);
+    await prefs.setString(lastSelectedSchoolPreferenceKey, school.uuid);
     notifyListeners();
   }
 
@@ -214,6 +241,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearSession({bool notify = true, String? message}) async {
+    final lastSelectedSchoolUuid = _selectedSchool?.uuid;
     _api.setToken(null);
     _user = null;
     _schools = const [];
@@ -221,8 +249,14 @@ class AuthProvider extends ChangeNotifier {
     _selectedSchool = null;
     _sessionMessage = message;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
-    await prefs.remove('selected_school_uuid');
+    if (lastSelectedSchoolUuid != null) {
+      await prefs.setString(
+        lastSelectedSchoolPreferenceKey,
+        lastSelectedSchoolUuid,
+      );
+    }
+    await prefs.remove(accessTokenPreferenceKey);
+    await prefs.remove(selectedSchoolPreferenceKey);
     if (notify) notifyListeners();
   }
 

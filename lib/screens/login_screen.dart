@@ -36,7 +36,10 @@ class _LoginScreenState extends State<LoginScreen> {
       TextInput.finishAutofillContext();
       if (mounted) {
         final currentRoute = ModalRoute.of(context)?.settings.name;
-        if (AppRoutes.isProtected(currentRoute)) return;
+        if (AppRoutes.isProtected(currentRoute) &&
+            auth.selectedSchool != null) {
+          return;
+        }
         AppNavigation.resetToAuthenticatedRoot(context);
       }
     } on ApiException {

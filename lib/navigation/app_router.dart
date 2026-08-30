@@ -56,6 +56,9 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
   final AppRouteWidgetBuilder _routeBuilder;
   final List<_AppRouteEntry> _entries = [];
   int _nextEntryId = 0;
+  static const _authenticatedShellPageKey = ValueKey<String>(
+    'authenticated-shell-page',
+  );
 
   @override
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -115,16 +118,37 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
     if (_entries.isEmpty) {
       _entries.add(_entry(AppRoutes.landing));
     }
+    final current = _entries.last;
     return Navigator(
       key: navigatorKey,
-      pages: [for (final entry in _entries) _pageFor(entry)],
+      pages: AppRoutes.isProtected(current.location)
+          ? [_authenticatedPageFor(current)]
+          : [for (final entry in _entries) _pageFor(entry)],
       onDidRemovePage: (page) {
+        if (page.key == _authenticatedShellPageKey) return;
         final index = _entries.indexWhere((entry) => entry.key == page.key);
         if (index < 0) return;
         final removed = _entries.removeAt(index);
         _complete(removed, null);
         notifyListeners();
       },
+    );
+  }
+
+  Page<dynamic> _authenticatedPageFor(_AppRouteEntry entry) {
+    void onPopInvoked(bool didPop, Object? result) {
+      if (!didPop || _entries.length <= 1) return;
+      final removed = _entries.removeLast();
+      _complete(removed, result);
+      notifyListeners();
+    }
+
+    return MaterialPage<dynamic>(
+      key: _authenticatedShellPageKey,
+      name: entry.location,
+      arguments: entry.arguments,
+      onPopInvoked: onPopInvoked,
+      child: _routeBuilder(entry.location, entry.arguments),
     );
   }
 

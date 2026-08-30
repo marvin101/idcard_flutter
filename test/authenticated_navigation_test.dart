@@ -15,6 +15,7 @@ import 'package:idcard_flutter/navigation/app_router.dart';
 import 'package:idcard_flutter/providers/auth_provider.dart';
 import 'package:idcard_flutter/screens/student_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
+import 'package:idcard_flutter/widgets/authenticated_app_bar.dart';
 
 class _FakeApi extends ApiService {
   @override
@@ -79,14 +80,22 @@ class _FakeApi extends ApiService {
 }
 
 class _FakeAuthProvider extends AuthProvider {
-  _FakeAuthProvider._(this.role, this._authenticated, _FakeApi api)
-    : super(api: api);
+  _FakeAuthProvider._(
+    this.role,
+    this._authenticated,
+    this._hasSelectedSchool,
+    _FakeApi api,
+  ) : super(api: api);
 
-  factory _FakeAuthProvider(String role, {bool authenticated = true}) =>
-      _FakeAuthProvider._(role, authenticated, _FakeApi());
+  factory _FakeAuthProvider(
+    String role, {
+    bool authenticated = true,
+    bool hasSelectedSchool = true,
+  }) => _FakeAuthProvider._(role, authenticated, hasSelectedSchool, _FakeApi());
 
   final String role;
   bool _authenticated;
+  final bool _hasSelectedSchool;
 
   static const school = SchoolSummary(
     uuid: 'school-1',
@@ -121,17 +130,19 @@ class _FakeAuthProvider extends AuthProvider {
   );
 
   @override
-  SchoolSummary get selectedSchool => school;
+  SchoolSummary? get selectedSchool => _hasSelectedSchool ? school : null;
 
   @override
   List<SchoolSummary> get schools => const [school];
 
   @override
-  SchoolAccess get selectedSchoolAccess => SchoolAccess(
-    schoolUuid: school.uuid,
-    schoolName: school.name,
-    role: role,
-  );
+  SchoolAccess? get selectedSchoolAccess => _hasSelectedSchool
+      ? SchoolAccess(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          role: role,
+        )
+      : null;
 }
 
 void main() {
@@ -140,12 +151,17 @@ void main() {
     String initialRoute = AppRoutes.dashboard,
     String role = 'school_admin',
     bool authenticated = true,
+    bool hasSelectedSchool = true,
   }) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-    final auth = _FakeAuthProvider(role, authenticated: authenticated);
+    final auth = _FakeAuthProvider(
+      role,
+      authenticated: authenticated,
+      hasSelectedSchool: hasSelectedSchool,
+    );
     await tester.pumpWidget(
       MyApp(authProvider: auth, initialRoute: initialRoute),
     );
@@ -229,6 +245,32 @@ void main() {
       );
       expect(find.byKey(const Key('top-nav-/dashboard')), findsOneWidget);
     }
+  });
+
+  testWidgets('authenticated shell preserves navigation state across modules', (
+    tester,
+  ) async {
+    await pumpApp(tester, initialRoute: AppRoutes.students);
+    final navigationState = tester.state(
+      find.byType(AuthenticatedNavigationStrip),
+    );
+
+    final cards = find.byKey(const Key('top-nav-/cards'));
+    await tester.ensureVisible(cards);
+    await tester.tap(cards);
+    await tester.pumpAndSettle();
+
+    expect(
+      identical(
+        navigationState,
+        tester.state(find.byType(AuthenticatedNavigationStrip)),
+      ),
+      isTrue,
+    );
+    final active = tester.widget<TextButton>(
+      find.byKey(const Key('top-nav-/cards')),
+    );
+    expect(active.onPressed, isNull);
   });
 
   testWidgets(
@@ -410,6 +452,52 @@ void main() {
         tester.element(find.text('Dashboard').first),
       )?.settings.name,
       AppRoutes.dashboard,
+    );
+  });
+
+  testWidgets('protected login without a restored school goes to Dashboard', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      initialRoute: AppRoutes.cards,
+      authenticated: false,
+      hasSelectedSchool: false,
+    );
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'admin');
+    await tester.enterText(find.byType(TextFormField).at(1), 'password');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('School required'), findsNothing);
+    expect(find.text('Dashboard'), findsWidgets);
+    final router = Router.of<Object>(
+      tester.element(find.text('Dashboard').first),
+    );
+    expect(
+      (router.routerDelegate as AppRouterDelegate).currentLocation,
+      AppRoutes.dashboard,
+    );
+  });
+
+  testWidgets('protected login with a restored school resumes Cards', (
+    tester,
+  ) async {
+    await pumpApp(tester, initialRoute: AppRoutes.cards, authenticated: false);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'admin');
+    await tester.enterText(find.byType(TextFormField).at(1), 'password');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('ID Cards'), findsWidgets);
+    final router = Router.of<Object>(
+      tester.element(find.textContaining('ID Cards').first),
+    );
+    expect(
+      (router.routerDelegate as AppRouterDelegate).currentLocation,
+      AppRoutes.cards,
     );
   });
 
