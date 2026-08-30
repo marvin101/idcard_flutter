@@ -149,87 +149,106 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
   @override
   Widget build(BuildContext context) => MainLayout(
     title: 'Student Fields',
-    child: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _error != null
-        ? Center(child: Text(_error!))
-        : ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text(widget.schoolName, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 24),
-              Text('SYSTEM FIELDS', style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 8),
-              Card(
-                child: Column(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: _loading
+          ? const SizedBox(
+              height: 160,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : _error != null
+          ? SizedBox(height: 160, child: Center(child: Text(_error!)))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.schoolName,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'SYSTEM FIELDS',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Column(
+                    children: [
+                      for (final field in systemStudentFields)
+                        ListTile(
+                          leading: const Icon(Icons.lock_outline),
+                          title: Text(field),
+                          subtitle: const Text(
+                            'System field · typed database column',
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Row(
                   children: [
-                    for (final field in systemStudentFields)
-                      ListTile(
-                        leading: const Icon(Icons.lock_outline),
-                        title: Text(field),
-                        subtitle: const Text('System field · typed database column'),
+                    Expanded(
+                      child: Text(
+                        'CUSTOM FIELDS',
+                        style: Theme.of(context).textTheme.labelLarge,
                       ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _edit,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Field'),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 28),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('CUSTOM FIELDS', style: Theme.of(context).textTheme.labelLarge),
-                  ),
-                  FilledButton.icon(
-                    onPressed: _edit,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Field'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_fields.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('No custom student fields have been configured.'),
-                  ),
-                )
-              else
-                ReorderableListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _fields.length,
-                  onReorderItem: _reorder,
-                  itemBuilder: (context, index) {
-                    final field = _fields[index];
-                    return Card(
-                      key: ValueKey(field.uuid),
-                      child: ListTile(
-                        leading: const Icon(Icons.drag_handle),
-                        title: Text(field.label),
-                        subtitle: Text(
-                          '${field.dataType}${field.isRequired ? ' · Required' : ''}'
-                          '${field.isActive ? '' : ' · Inactive'}',
-                        ),
-                        trailing: Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Switch(
-                              value: field.isActive,
-                              onChanged: (value) => _toggle(field, value),
-                            ),
-                            IconButton(
-                              tooltip: 'Edit field',
-                              onPressed: () => _edit(field),
-                              icon: const Icon(Icons.edit_outlined),
-                            ),
-                          ],
-                        ),
+                const SizedBox(height: 8),
+                if (_fields.isEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'No custom student fields have been configured.',
                       ),
-                    );
-                  },
-                ),
-            ],
-          ),
+                    ),
+                  )
+                else
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _fields.length,
+                    onReorderItem: _reorder,
+                    itemBuilder: (context, index) {
+                      final field = _fields[index];
+                      return Card(
+                        key: ValueKey(field.uuid),
+                        child: ListTile(
+                          leading: const Icon(Icons.drag_handle),
+                          title: Text(field.label),
+                          subtitle: Text(
+                            '${field.dataType}${field.isRequired ? ' · Required' : ''}'
+                            '${field.isActive ? '' : ' · Inactive'}',
+                          ),
+                          trailing: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Switch(
+                                value: field.isActive,
+                                onChanged: (value) => _toggle(field, value),
+                              ),
+                              IconButton(
+                                tooltip: 'Edit field',
+                                onPressed: () => _edit(field),
+                                icon: const Icon(Icons.edit_outlined),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+    ),
   );
 }
 
