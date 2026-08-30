@@ -8,6 +8,7 @@ import 'screens/card_designer_route_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/public_information_screens.dart';
 import 'screens/register_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
@@ -49,6 +50,9 @@ class MyApp extends StatelessWidget {
             authenticated: DashboardScreen(),
             unauthenticated: LoginScreen(),
           ),
+          AppRoutes.privacy: (_) => const PrivacyScreen(),
+          AppRoutes.terms: (_) => const TermsScreen(),
+          AppRoutes.support: (_) => const SupportScreen(),
           CardDesignerRouteScreen.routeName: (_) => const _AuthRoute(
             authenticated: CardDesignerRouteScreen(),
             unauthenticated: LoginScreen(),

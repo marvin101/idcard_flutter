@@ -779,18 +779,75 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     color: const Color(0xff0b2747),
     padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
-    child: const _PageWidth(
-      child: Row(
-        children: [
-          _BrandMark(light: true),
-          Spacer(),
-          Text(
-            'Secure identity for every campus.',
-            style: TextStyle(color: Color(0xffaebdca), fontSize: 13),
-          ),
-        ],
+    child: _PageWidth(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final links = Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            alignment: WrapAlignment.center,
+            children: [
+              _FooterLink(
+                label: 'Privacy',
+                route: AppRoutes.privacy,
+                key: const Key('footer-privacy-link'),
+              ),
+              _FooterLink(
+                label: 'Terms',
+                route: AppRoutes.terms,
+                key: const Key('footer-terms-link'),
+              ),
+              _FooterLink(
+                label: 'Contact & Support',
+                route: AppRoutes.support,
+                key: const Key('footer-support-link'),
+              ),
+            ],
+          );
+          if (constraints.maxWidth < 760) {
+            return Column(
+              children: [
+                const _BrandMark(light: true),
+                const SizedBox(height: 16),
+                links,
+                const SizedBox(height: 12),
+                const Text(
+                  'Secure identity for every campus.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xffaebdca), fontSize: 13),
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              const _BrandMark(light: true),
+              const Spacer(),
+              links,
+              const SizedBox(width: 18),
+              const Text(
+                'Secure identity for every campus.',
+                style: TextStyle(color: Color(0xffaebdca), fontSize: 13),
+              ),
+            ],
+          );
+        },
       ),
     ),
+  );
+}
+
+class _FooterLink extends StatelessWidget {
+  const _FooterLink({super.key, required this.label, required this.route});
+
+  final String label;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: () => Navigator.of(context).pushNamed(route),
+    style: TextButton.styleFrom(foregroundColor: const Color(0xffdce7f0)),
+    child: Text(label),
   );
 }
 
