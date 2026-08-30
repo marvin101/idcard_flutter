@@ -143,32 +143,187 @@ class AuthenticatedAppBar extends StatelessWidget
           width: double.infinity,
           color: const Color(0xff172442),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final item in items) ...[
-                  _NavigationButton(
-                    item: item,
-                    active: _isActive(item.route, routeName),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-              ],
-            ),
+          child: _AuthenticatedNavigationStrip(
+            items: items,
+            routeName: routeName,
           ),
         ),
       ),
     );
   }
+}
 
-  bool _isActive(String itemRoute, String? currentRoute) {
-    if (itemRoute == AppRoutes.addStudent &&
-        currentRoute == AppRoutes.editStudent) {
-      return true;
-    }
-    return itemRoute == currentRoute;
+class _AuthenticatedNavigationStrip extends StatefulWidget {
+  const _AuthenticatedNavigationStrip({
+    required this.items,
+    required this.routeName,
+  });
+
+  final List<_NavigationItem> items;
+  final String? routeName;
+
+  @override
+  State<_AuthenticatedNavigationStrip> createState() =>
+      _AuthenticatedNavigationStripState();
+}
+
+class _AuthenticatedNavigationStripState
+    extends State<_AuthenticatedNavigationStrip> {
+  static const _scrollStep = 320.0;
+
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _activeItemKey = GlobalKey();
+  bool _hasOverflow = false;
+  bool _canScrollBack = false;
+  bool _canScrollForward = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_refreshScrollState);
   }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_refreshScrollState)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _refreshScrollState();
+      _revealActiveItem();
+    });
+
+    return Row(
+      children: [
+        if (_hasOverflow)
+          _NavigationScrollButton(
+            key: const Key('top-nav-scroll-left'),
+            icon: Icons.chevron_left_rounded,
+            tooltip: 'Previous modules',
+            onPressed: _canScrollBack ? () => _scrollBy(-_scrollStep) : null,
+          ),
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: _hasOverflow,
+            scrollbarOrientation: ScrollbarOrientation.bottom,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final item in widget.items) ...[
+                    KeyedSubtree(
+                      key: _isRouteActive(item.route, widget.routeName)
+                          ? _activeItemKey
+                          : null,
+                      child: _NavigationButton(
+                        item: item,
+                        active: _isRouteActive(item.route, widget.routeName),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_hasOverflow)
+          _NavigationScrollButton(
+            key: const Key('top-nav-scroll-right'),
+            icon: Icons.chevron_right_rounded,
+            tooltip: 'More modules',
+            onPressed: _canScrollForward ? () => _scrollBy(_scrollStep) : null,
+          ),
+      ],
+    );
+  }
+
+  void _refreshScrollState() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions) return;
+    final hasOverflow = position.maxScrollExtent > 1;
+    final canScrollBack = hasOverflow && position.pixels > 1;
+    final canScrollForward =
+        hasOverflow && position.pixels < position.maxScrollExtent - 1;
+    if (_hasOverflow == hasOverflow &&
+        _canScrollBack == canScrollBack &&
+        _canScrollForward == canScrollForward) {
+      return;
+    }
+    setState(() {
+      _hasOverflow = hasOverflow;
+      _canScrollBack = canScrollBack;
+      _canScrollForward = canScrollForward;
+    });
+  }
+
+  void _revealActiveItem() {
+    if (!_scrollController.hasClients) return;
+    if (!_scrollController.position.hasContentDimensions) return;
+    final renderObject = _activeItemKey.currentContext?.findRenderObject();
+    if (renderObject == null) return;
+    _scrollController.position
+        .ensureVisible(renderObject, alignment: 0.5)
+        .then((_) => _refreshScrollState());
+  }
+
+  void _scrollBy(double delta) {
+    if (!_scrollController.hasClients ||
+        !_scrollController.position.hasContentDimensions) {
+      return;
+    }
+    final position = _scrollController.position;
+    final target = (position.pixels + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    _scrollController
+        .animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        )
+        .then((_) => _refreshScrollState());
+  }
+}
+
+class _NavigationScrollButton extends StatelessWidget {
+  const _NavigationScrollButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: tooltip,
+    onPressed: onPressed,
+    icon: Icon(icon),
+    color: Colors.white,
+    disabledColor: Colors.white38,
+    visualDensity: VisualDensity.compact,
+  );
+}
+
+bool _isRouteActive(String itemRoute, String? currentRoute) {
+  if (itemRoute == AppRoutes.addStudent &&
+      currentRoute == AppRoutes.editStudent) {
+    return true;
+  }
+  return itemRoute == currentRoute;
 }
 
 class _NavigationItem {

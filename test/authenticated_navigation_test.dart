@@ -231,6 +231,29 @@ void main() {
     }
   });
 
+  testWidgets(
+    'narrow desktop navigation exposes overflow controls and active module',
+    (tester) async {
+      tester.view.physicalSize = const Size(960, 1080);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpApp(tester, initialRoute: AppRoutes.users);
+
+      expect(find.byKey(const Key('top-nav-scroll-left')), findsOneWidget);
+      expect(find.byKey(const Key('top-nav-scroll-right')), findsOneWidget);
+      expect(
+        find.byKey(const Key('top-nav-/users')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('top-nav-/cards')).hitTestable(),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('active module is highlighted and selected school survives', (
     tester,
   ) async {
