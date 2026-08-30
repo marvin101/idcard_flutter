@@ -7,6 +7,7 @@ import '../models/section.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import 'student_form.dart';
+import 'student_import_screen.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({
@@ -333,6 +334,23 @@ class _StudentsScreenState extends State<StudentsScreen> {
               ),
             ),
             if (widget.canEdit) ...[
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final imported = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => StudentImportScreen(
+                        schoolUuid: widget.schoolUuid,
+                        schoolName: widget.schoolName,
+                        api: widget.api,
+                      ),
+                    ),
+                  );
+                  if (imported == true && mounted) await _loadStudents();
+                },
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Bulk Import'),
+              ),
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () async {

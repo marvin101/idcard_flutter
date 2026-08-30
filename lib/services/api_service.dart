@@ -1,6 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -12,6 +13,7 @@ import '../models/section.dart';
 import '../models/card_template.dart';
 import '../models/school_profile.dart';
 import '../models/student_field.dart';
+import '../models/student_import.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -575,6 +577,60 @@ class ApiService {
     );
 
     return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<StudentImportUpload> uploadStudentImport({
+    required String schoolUuid,
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/schools/$schoolUuid/students/imports/upload'),
+    );
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename),
+    );
+    final response = await http.Response.fromStream(
+      await _client.send(request),
+    );
+    return StudentImportUpload.fromJson(_decodeMap(response));
+  }
+
+  Future<StudentImportPreview> previewStudentImport({
+    required String schoolUuid,
+    required String uploadId,
+    required List<StudentImportMapping> mappings,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/students/imports/$uploadId/preview'),
+      headers: _headers,
+      body: jsonEncode({
+        'mappings': mappings.map((item) => item.toJson()).toList(),
+      }),
+    );
+    return StudentImportPreview.fromJson(_decodeMap(response));
+  }
+
+  Future<StudentImportSummary> commitStudentImport({
+    required String schoolUuid,
+    required String uploadId,
+    required List<StudentImportMapping> mappings,
+    required bool confirmed,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/students/imports/$uploadId/commit'),
+      headers: _headers,
+      body: jsonEncode({
+        'mappings': mappings.map((item) => item.toJson()).toList(),
+        'confirmed': confirmed,
+      }),
+    );
+    return StudentImportSummary.fromJson(_decodeMap(response));
   }
 
   Future<ApiStudent> createStudent({
