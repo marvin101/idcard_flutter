@@ -9,10 +9,12 @@ import 'academic_sessions_screen.dart';
 import 'classes_sections_screen.dart';
 import 'cards_screen.dart';
 import 'school_user_assignment_screen.dart';
+import 'school_profile_screen.dart';
 import 'student_screen.dart';
 import 'student_fields_screen.dart';
 
 enum DashboardModuleKind {
+  schoolProfile,
   users,
   academicSessions,
   classesAndSections,
@@ -36,10 +38,12 @@ Set<DashboardModuleKind> dashboardModulesFor({
 
   return switch (schoolRole) {
     'card_operator' => const {
+      DashboardModuleKind.schoolProfile,
       DashboardModuleKind.students,
       DashboardModuleKind.idCards,
     },
     'teacher' || 'staff' => const {
+      DashboardModuleKind.schoolProfile,
       DashboardModuleKind.academicSessions,
       DashboardModuleKind.classesAndSections,
     },
@@ -73,6 +77,7 @@ DashboardGridLayout dashboardGridLayoutFor(double width) {
     mainAxisExtent: 155,
   );
 }
+
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -303,6 +308,26 @@ class _ModuleGrid extends StatelessWidget {
       hasSelectedSchool: school != null,
     );
     final modules = <_DashboardModule>[
+      if (visibleModules.contains(DashboardModuleKind.schoolProfile))
+        _DashboardModule(
+          'School Profile',
+          'View school details, contacts, and branding.',
+          Icons.domain_outlined,
+          true,
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SchoolProfileScreen(
+                  schoolUuid: school!.uuid,
+                  schoolName: school.name,
+                  api: auth.api,
+                  canEdit: auth.canManageSchoolProfile,
+                  onSaved: auth.applySchoolProfile,
+                ),
+              ),
+            );
+          },
+        ),
       if (visibleModules.contains(DashboardModuleKind.users))
         _DashboardModule(
           'Users',
@@ -565,4 +590,3 @@ class _ModuleCard extends StatelessWidget {
     ),
   );
 }
-

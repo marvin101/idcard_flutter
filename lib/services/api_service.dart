@@ -10,6 +10,7 @@ import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../models/card_template.dart';
+import '../models/school_profile.dart';
 import '../models/student_field.dart';
 
 /// Local SQLite service retained for the existing student repository.
@@ -209,6 +210,72 @@ class ApiService {
   Future<List<dynamic>> getSchools() async {
     final response = await _client.get(_uri('/schools'), headers: _headers);
     return _decodeList(response);
+  }
+
+  Future<SchoolProfile> getSchoolProfile(String schoolUuid) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/profile'),
+      headers: _headers,
+    );
+    return SchoolProfile.fromJson(_decodeMap(response));
+  }
+
+  Future<SchoolProfile> updateSchoolProfile(SchoolProfile profile) async {
+    final response = await _client.patch(
+      _uri('/schools/${profile.uuid}/profile'),
+      headers: _headers,
+      body: jsonEncode(profile.toUpdateJson()),
+    );
+    return SchoolProfile.fromJson(_decodeMap(response));
+  }
+
+  Future<SchoolProfile> uploadSchoolLogo({
+    required String schoolUuid,
+    required XFile logo,
+  }) async {
+    final sourceFilename = logo.name.trim();
+    final lowerName = sourceFilename.toLowerCase();
+    final mimeType =
+        logo.mimeType ??
+        switch (lowerName) {
+          String name when name.endsWith('.jpg') || name.endsWith('.jpeg') =>
+            'image/jpeg',
+          String name when name.endsWith('.png') => 'image/png',
+          String name when name.endsWith('.webp') => 'image/webp',
+          _ => null,
+        };
+    if (!{'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType)) {
+      throw const ApiException(0, 'Choose a JPEG, PNG or WebP school logo.');
+    }
+    final filename = sourceFilename.isNotEmpty
+        ? sourceFilename
+        : switch (mimeType) {
+            'image/jpeg' => 'school_logo.jpg',
+            'image/png' => 'school_logo.png',
+            'image/webp' => 'school_logo.webp',
+            _ => 'school_logo',
+          };
+
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/schools/$schoolUuid/logo'),
+    );
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'logo',
+        await logo.readAsBytes(),
+        filename: filename,
+        contentType: MediaType.parse(mimeType!),
+      ),
+    );
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+    return SchoolProfile.fromJson(_decodeMap(response));
   }
 
   Future<List<dynamic>> getUserSchools(String userUuid) async {

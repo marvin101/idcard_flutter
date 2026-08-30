@@ -21,6 +21,7 @@ void main() {
         hasSelectedSchool: true,
       ),
       {
+        DashboardModuleKind.schoolProfile,
         DashboardModuleKind.students,
         DashboardModuleKind.idCards,
       },
@@ -36,6 +37,7 @@ void main() {
           hasSelectedSchool: true,
         ),
         {
+          DashboardModuleKind.schoolProfile,
           DashboardModuleKind.academicSessions,
           DashboardModuleKind.classesAndSections,
         },

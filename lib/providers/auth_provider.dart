@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/auth_models.dart';
+import '../models/school_profile.dart';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -46,6 +47,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get canManageAcademicSessions => canManageUsers;
   bool get canManageClasses => canManageUsers;
+  bool get canManageSchoolProfile => canManageUsers;
   bool get canManageCardData {
     if (canManageUsers) return true;
     return selectedSchoolAccess?.isCardOperator ?? false;
@@ -178,6 +180,23 @@ class AuthProvider extends ChangeNotifier {
     _selectedSchool = school;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selected_school_uuid', school.uuid);
+    notifyListeners();
+  }
+
+  void applySchoolProfile(SchoolProfile profile) {
+    final updated = SchoolSummary(
+      uuid: profile.uuid,
+      code: profile.schoolCode,
+      name: profile.schoolName,
+      isActive: profile.isActive,
+    );
+    _schools = [
+      for (final school in _schools)
+        if (school.uuid == profile.uuid) updated else school,
+    ];
+    if (_selectedSchool?.uuid == profile.uuid) {
+      _selectedSchool = updated;
+    }
     notifyListeners();
   }
 
