@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_routes.dart';
+import '../navigation/app_navigation.dart';
 import '../theme/app_colors.dart';
 
 class LandingScreen extends StatefulWidget {
@@ -29,11 +30,14 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   void _openSignIn() {
-    Navigator.of(context).pushNamed(AppRoutes.signIn);
+    AppNavigation.navigateToPublicRoute<void>(context, AppRoutes.signIn);
   }
 
   Future<void> _openRegistration() async {
-    final result = await Navigator.of(context).pushNamed(AppRoutes.register);
+    final result = await AppNavigation.navigateToPublicRoute<String>(
+      context,
+      AppRoutes.register,
+    );
     if (result == 'sign-in' && mounted) _openSignIn();
   }
 
@@ -845,7 +849,7 @@ class _FooterLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TextButton(
-    onPressed: () => Navigator.of(context).pushNamed(route),
+    onPressed: () => AppNavigation.navigateToPublicRoute<void>(context, route),
     style: TextButton.styleFrom(foregroundColor: const Color(0xffdce7f0)),
     child: Text(label),
   );

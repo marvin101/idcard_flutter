@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_routes.dart';
+import '../navigation/app_navigation.dart';
 import '../config/launch_config.dart';
 
 class PrivacyScreen extends StatelessWidget {
@@ -195,9 +196,11 @@ class PublicInformationPage extends StatelessWidget {
         title: const _PublicBrandMark(),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(
+            onPressed: () => AppNavigation.navigateToPublicRoute<void>(
               context,
-            ).pushNamedAndRemoveUntil(AppRoutes.landing, (route) => false),
+              AppRoutes.landing,
+              replace: true,
+            ),
             style: TextButton.styleFrom(foregroundColor: Colors.white),
             child: const Text('Back to home'),
           ),
@@ -239,21 +242,30 @@ class PublicInformationPage extends StatelessWidget {
                       spacing: 8,
                       children: [
                         TextButton(
-                          onPressed: () => Navigator.of(
-                            context,
-                          ).pushReplacementNamed(AppRoutes.privacy),
+                          onPressed: () =>
+                              AppNavigation.navigateToPublicRoute<void>(
+                                context,
+                                AppRoutes.privacy,
+                                replace: true,
+                              ),
                           child: const Text('Privacy'),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.of(
-                            context,
-                          ).pushReplacementNamed(AppRoutes.terms),
+                          onPressed: () =>
+                              AppNavigation.navigateToPublicRoute<void>(
+                                context,
+                                AppRoutes.terms,
+                                replace: true,
+                              ),
                           child: const Text('Terms'),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.of(
-                            context,
-                          ).pushReplacementNamed(AppRoutes.support),
+                          onPressed: () =>
+                              AppNavigation.navigateToPublicRoute<void>(
+                                context,
+                                AppRoutes.support,
+                                replace: true,
+                              ),
                           child: const Text('Contact & Support'),
                         ),
                       ],

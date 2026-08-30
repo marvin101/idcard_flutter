@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_routes.dart';
+import 'app_router.dart';
 
 abstract final class AppNavigation {
   static const primaryModuleRoutes = <String>{
@@ -27,12 +28,26 @@ abstract final class AppNavigation {
   static bool isNestedWorkflow(String? routeName) =>
       routeName != null && nestedWorkflowRoutes.contains(routeName);
 
+  static bool showsLeadingBack(String? routeName) =>
+      AppRoutes.isProtected(routeName) &&
+      routeName != AppRoutes.dashboard &&
+      routeName != AppRoutes.students;
+
   static void navigateToModule(
     BuildContext context,
     String routeName, {
     Object? arguments,
   }) {
     assert(primaryModuleRoutes.contains(routeName));
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      if (delegate.currentLocation == routeName) return;
+      Router.neglect(
+        context,
+        () => delegate.go(routeName, arguments: arguments),
+      );
+      return;
+    }
     if (ModalRoute.of(context)?.settings.name == routeName) return;
     Navigator.of(context).pushReplacementNamed(routeName, arguments: arguments);
   }
@@ -43,18 +58,91 @@ abstract final class AppNavigation {
     Object? arguments,
   }) {
     assert(nestedWorkflowRoutes.contains(routeName));
-    return Navigator.of(context).pushNamed<T>(routeName, arguments: arguments);
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      return delegate.pushWorkflow<T>(routeName, arguments: arguments);
+    }
+    return Navigator.of(
+      context,
+    ).pushNamed(routeName, arguments: arguments).then((value) => value as T?);
+  }
+
+  static void navigateBack(BuildContext context, String? routeName) {
+    final delegate = _delegate(context);
+    if (isNestedWorkflow(routeName) || (delegate?.canPop ?? false)) {
+      if (delegate != null) {
+        delegate.popCurrent<void>();
+      } else {
+        Navigator.of(context).maybePop();
+      }
+      return;
+    }
+
+    final destination = routeName == AppRoutes.studentFields
+        ? AppRoutes.students
+        : AppRoutes.dashboard;
+    navigateToModule(context, destination);
+  }
+
+  static Future<T?> navigateToPage<T>(
+    BuildContext context,
+    String routeName, {
+    Object? arguments,
+  }) {
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      return delegate.pushPage<T>(routeName, arguments: arguments);
+    }
+    return Navigator.of(
+      context,
+    ).pushNamed(routeName, arguments: arguments).then((value) => value as T?);
   }
 
   static void resetToAuthenticatedRoot(BuildContext context) {
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      Router.neglect(context, () => delegate.go(AppRoutes.dashboard));
+      return;
+    }
     Navigator.of(
       context,
     ).pushNamedAndRemoveUntil(AppRoutes.dashboard, (route) => false);
   }
 
   static void resetToPublicRoot(BuildContext context) {
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      Router.neglect(context, () => delegate.go(AppRoutes.landing));
+      return;
+    }
     Navigator.of(
       context,
     ).pushNamedAndRemoveUntil(AppRoutes.landing, (route) => false);
+  }
+
+  static Future<T?> navigateToPublicRoute<T>(
+    BuildContext context,
+    String routeName, {
+    bool replace = false,
+  }) {
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      if (replace) {
+        Router.neglect(context, () => delegate.go(routeName));
+        return Future<T?>.value();
+      } else {
+        return delegate.pushPage<T>(routeName);
+      }
+    }
+    final result = replace
+        ? Navigator.of(context).pushReplacementNamed(routeName)
+        : Navigator.of(context).pushNamed(routeName);
+    return result.then((value) => value as T?);
+  }
+
+  static AppRouterDelegate? _delegate(BuildContext context) {
+    final router = Router.maybeOf<Object>(context);
+    final delegate = router?.routerDelegate;
+    return delegate is AppRouterDelegate ? delegate : null;
   }
 }

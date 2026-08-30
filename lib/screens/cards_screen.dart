@@ -414,9 +414,10 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<void> _openDesigner() async {
-    final saved = await Navigator.of(
+    final saved = await AppNavigation.navigateToPage<CardTemplate>(
       context,
-    ).pushNamed<CardTemplate>(AppRoutes.design);
+      AppRoutes.design,
+    );
     if (saved != null && mounted) setState(() => _cardTemplate = saved);
   }
 

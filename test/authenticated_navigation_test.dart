@@ -10,6 +10,8 @@ import 'package:idcard_flutter/models/school_class.dart';
 import 'package:idcard_flutter/models/school_profile.dart';
 import 'package:idcard_flutter/models/section.dart';
 import 'package:idcard_flutter/models/student_field.dart';
+import 'package:idcard_flutter/navigation/app_navigation.dart';
+import 'package:idcard_flutter/navigation/app_router.dart';
 import 'package:idcard_flutter/providers/auth_provider.dart';
 import 'package:idcard_flutter/screens/student_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
@@ -268,28 +270,21 @@ void main() {
     expect(active.onPressed, isNull);
   });
 
-  testWidgets('primary module routes never show a leading Back button', (
-    tester,
-  ) async {
+  test('Dashboard and Students are the only arrow-free modules', () {
+    for (final route in [AppRoutes.dashboard, AppRoutes.students]) {
+      expect(AppNavigation.showsLeadingBack(route), isFalse);
+    }
+
     for (final route in [
-      AppRoutes.dashboard,
-      AppRoutes.students,
       AppRoutes.studentFields,
       AppRoutes.schoolProfile,
+      AppRoutes.academicSessions,
+      AppRoutes.classesSections,
+      AppRoutes.users,
       AppRoutes.design,
       AppRoutes.cards,
     ]) {
-      await pumpApp(tester, initialRoute: route);
-      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-      navigator.pushNamed(route);
-      await tester.pumpAndSettle();
-
-      expect(navigator.canPop(), isTrue);
-      expect(
-        find.byType(BackButton),
-        findsNothing,
-        reason: '$route showed a Back button despite being a primary module',
-      );
+      expect(AppNavigation.showsLeadingBack(route), isTrue);
     }
   });
 
@@ -308,7 +303,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(StudentsScreen), findsOneWidget);
 
-    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
     const student = ApiStudent(
       uuid: 'student-1',
       sessionUuid: 'session-1',
@@ -318,13 +312,18 @@ void main() {
       fullName: 'Test Student',
       isActive: true,
     );
-    navigator.pushNamed(AppRoutes.editStudent, arguments: student);
+    final editResult = AppNavigation.navigateToWorkflow<void>(
+      tester.element(find.byType(StudentsScreen)),
+      AppRoutes.editStudent,
+      arguments: student,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Edit student'), findsWidgets);
     expect(find.byType(BackButton), findsOneWidget);
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
+    await editResult;
     expect(find.byType(StudentsScreen), findsOneWidget);
 
     await tester.tap(find.text('Bulk Import'));
@@ -389,5 +388,30 @@ void main() {
       )?.settings.name,
       AppRoutes.dashboard,
     );
+  });
+
+  testWidgets('platform route changes update both URL state and visible page', (
+    tester,
+  ) async {
+    await pumpApp(tester, initialRoute: AppRoutes.dashboard);
+    final router = Router.of<Object>(
+      tester.element(find.text('Dashboard').first),
+    );
+    final delegate = router.routerDelegate as AppRouterDelegate;
+
+    await delegate.setNewRoutePath(const AppRouteState(AppRoutes.students));
+    await tester.pumpAndSettle();
+    expect(find.byType(StudentsScreen), findsOneWidget);
+    expect(delegate.currentConfiguration?.location, AppRoutes.students);
+    expect(
+      ModalRoute.of(tester.element(find.byType(StudentsScreen)))?.settings.name,
+      AppRoutes.students,
+    );
+
+    await delegate.setNewRoutePath(const AppRouteState(AppRoutes.dashboard));
+    await tester.pumpAndSettle();
+    expect(find.text('Dashboard'), findsWidgets);
+    expect(find.byType(StudentsScreen), findsNothing);
+    expect(delegate.currentConfiguration?.location, AppRoutes.dashboard);
   });
 }

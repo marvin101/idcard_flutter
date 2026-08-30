@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'app_routes.dart';
 import 'models/api_student.dart';
-import 'models/card_template.dart';
 import 'navigation/app_navigation.dart';
+import 'navigation/app_router.dart';
 import 'providers/auth_provider.dart';
 import 'providers/display_scale_provider.dart';
 import 'screens/academic_sessions_screen.dart';
@@ -31,42 +31,67 @@ void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key, this.authProvider, this.initialRoute});
 
   final AuthProvider? authProvider;
   final String? initialRoute;
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final AppRouterDelegate _routerDelegate;
+  late final PlatformRouteInformationProvider? _routeInformationProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _routerDelegate = AppRouterDelegate(_buildRouteWidget);
+    _routeInformationProvider = widget.initialRoute == null
+        ? null
+        : PlatformRouteInformationProvider(
+            initialRouteInformation: RouteInformation(
+              uri: Uri.parse(widget.initialRoute!),
+            ),
+          );
+  }
+
+  @override
+  void dispose() {
+    _routeInformationProvider?.dispose();
+    _routerDelegate.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        if (authProvider == null)
+        if (widget.authProvider == null)
           ChangeNotifierProvider(create: (_) => AuthProvider()..initialize())
         else
-          ChangeNotifierProvider<AuthProvider>.value(value: authProvider!),
+          ChangeNotifierProvider<AuthProvider>.value(
+            value: widget.authProvider!,
+          ),
         ChangeNotifierProvider(create: (_) => DisplayScaleProvider()),
       ],
-      child: MaterialApp(
+      child: MaterialApp.router(
         title: 'CampusID',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        initialRoute: initialRoute,
-        onGenerateInitialRoutes: _generateInitialRoutes,
+        routeInformationProvider: _routeInformationProvider,
+        routeInformationParser: const AppRouteInformationParser(),
+        routerDelegate: _routerDelegate,
         builder: (context, child) =>
             AppScaleViewport(child: child ?? const SizedBox.shrink()),
-        onGenerateRoute: _generateRoute,
-        onUnknownRoute: (_) => MaterialPageRoute<void>(
-          settings: const RouteSettings(name: AppRoutes.landing),
-          builder: (_) => const LandingScreen(),
-        ),
       ),
     );
   }
 
-  Route<dynamic>? _generateRoute(RouteSettings settings) {
-    final routeName = settings.name;
-    final Widget? page = switch (routeName) {
+  Widget _buildRouteWidget(String routeName, Object? arguments) {
+    return switch (routeName) {
       AppRoutes.landing => const LandingScreen(),
       AppRoutes.privacy => const PrivacyScreen(),
       AppRoutes.terms => const TermsScreen(),
@@ -76,36 +101,11 @@ class MyApp extends StatelessWidget {
       ),
       AppRoutes.register => _RegisterRoute(),
       _ when AppRoutes.isProtected(routeName) => _AuthenticatedRoute(
-        routeName: routeName!,
-        arguments: settings.arguments,
+        routeName: routeName,
+        arguments: arguments,
       ),
-      _ => null,
+      _ => const LandingScreen(),
     };
-    if (page == null) return null;
-    if (routeName == AppRoutes.studentImport) {
-      return MaterialPageRoute<bool>(settings: settings, builder: (_) => page);
-    }
-    if (routeName == AppRoutes.design) {
-      return MaterialPageRoute<CardTemplate>(
-        settings: settings,
-        builder: (_) => page,
-      );
-    }
-    return MaterialPageRoute<void>(settings: settings, builder: (_) => page);
-  }
-
-  List<Route<dynamic>> _generateInitialRoutes(String initialRouteName) {
-    final route = _generateRoute(RouteSettings(name: initialRouteName));
-    if (route != null) {
-      if (AppNavigation.isNestedWorkflow(initialRouteName)) {
-        return [
-          _generateRoute(const RouteSettings(name: AppRoutes.students))!,
-          route,
-        ];
-      }
-      return [route];
-    }
-    return [_generateRoute(const RouteSettings(name: AppRoutes.landing))!];
   }
 }
 

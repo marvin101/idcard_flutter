@@ -101,7 +101,13 @@ class AuthenticatedAppBar extends StatelessWidget
     ];
 
     return AppBar(
-      automaticallyImplyLeading: AppNavigation.isNestedWorkflow(routeName),
+      automaticallyImplyLeading: false,
+      leading: AppNavigation.showsLeadingBack(routeName)
+          ? BackButton(
+              key: const Key('authenticated-leading-back'),
+              onPressed: () => AppNavigation.navigateBack(context, routeName),
+            )
+          : null,
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       title: Row(
