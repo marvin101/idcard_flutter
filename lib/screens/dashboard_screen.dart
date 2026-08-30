@@ -10,12 +10,14 @@ import 'classes_sections_screen.dart';
 import 'cards_screen.dart';
 import 'school_user_assignment_screen.dart';
 import 'student_screen.dart';
+import 'student_fields_screen.dart';
 
 enum DashboardModuleKind {
   users,
   academicSessions,
   classesAndSections,
   students,
+  studentFields,
   idCards,
 }
 
@@ -373,6 +375,24 @@ class _ModuleGrid extends StatelessWidget {
                   api: auth.api,
                   canEdit: auth.canManageCardData,
                   canDelete: auth.canDeleteStudents,
+                ),
+              ),
+            );
+          },
+        ),
+      if (visibleModules.contains(DashboardModuleKind.studentFields))
+        _DashboardModule(
+          'Student Fields',
+          'Configure additional fields on student records.',
+          Icons.dynamic_form_outlined,
+          true,
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => StudentFieldsScreen(
+                  schoolUuid: school!.uuid,
+                  schoolName: school.name,
+                  api: auth.api,
                 ),
               ),
             );

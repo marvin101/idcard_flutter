@@ -7,6 +7,7 @@ import '../sections/academic_information_section.dart';
 import '../sections/contact_information_section.dart';
 import '../sections/personal_information_section.dart';
 import '../sections/photo_section.dart';
+import '../sections/custom_student_fields_section.dart';
 import '../services/api_service.dart';
 import '../models/api_student.dart';
 
@@ -87,6 +88,9 @@ class _StudentFormView extends StatelessWidget {
 
               const ContactInformationSection(),
               const SizedBox(height: 24),
+
+              const CustomStudentFieldsSection(),
+              if (provider.customFields.isNotEmpty) const SizedBox(height: 24),
 
               const PhotoSection(),
               const SizedBox(height: 24),

@@ -6,6 +6,7 @@ import '../models/school_class.dart';
 import '../models/section.dart';
 import '../services/api_service.dart';
 import '../models/api_student.dart';
+import '../models/student_field.dart';
 
 class ApiStudentFormProvider extends ChangeNotifier {
   ApiStudentFormProvider({
@@ -41,6 +42,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
   final mobileController = TextEditingController();
   final aadhaarController = TextEditingController();
   final addressController = TextEditingController();
+  final Map<String, TextEditingController> customFieldControllers = {};
 
   // ----------------------------------------------------------
   // Lookup data
@@ -49,6 +51,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
   List<AcademicSession> sessions = const [];
   List<SchoolClass> classes = const [];
   List<SchoolSection> sections = const [];
+  List<StudentFieldDefinition> customFields = const [];
 
   String? selectedSessionUuid;
   String? selectedClassUuid;
@@ -129,6 +132,10 @@ class ApiStudentFormProvider extends ChangeNotifier {
     try {
       sessions = await api.getAcademicSessions(schoolUuid);
       classes = await api.getClasses(schoolUuid);
+      customFields = await api.getStudentFields(schoolUuid);
+      for (final field in customFields) {
+        customFieldControllers[field.uuid] = TextEditingController();
+      }
 
       // --------------------------------------------------------
       // Edit mode
@@ -199,6 +206,10 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
     selectedGender = student.gender;
     selectedBloodGroup = student.bloodGroup;
+
+    for (final value in student.customFields) {
+      customFieldControllers[value.fieldUuid]?.text = value.value;
+    }
 
     if (student.dob != null) {
       dobDayController.text = student.dob!.day.toString().padLeft(2, '0');
@@ -341,6 +352,14 @@ class ApiStudentFormProvider extends ChangeNotifier {
     return true;
   }
 
+  List<StudentCustomFieldValue> get serializedCustomFields => [
+    for (final field in customFields)
+      StudentCustomFieldValue(
+        fieldUuid: field.uuid,
+        value: customFieldControllers[field.uuid]?.text.trim() ?? '',
+      ),
+  ];
+
   // ----------------------------------------------------------
   // Save student
   // ----------------------------------------------------------
@@ -377,6 +396,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
           mobile: _nullable(mobileController.text),
           aadhaar: _nullable(aadhaarController.text),
           address: _nullable(addressController.text),
+          customFields: serializedCustomFields,
         );
 
         // ------------------------------------------------------
@@ -417,6 +437,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
           mobile: _nullable(mobileController.text),
           aadhaar: _nullable(aadhaarController.text),
           address: _nullable(addressController.text),
+          customFields: serializedCustomFields,
         );
 
         // ------------------------------------------------------
@@ -477,6 +498,9 @@ class ApiStudentFormProvider extends ChangeNotifier {
     mobileController.dispose();
     aadhaarController.dispose();
     addressController.dispose();
+    for (final controller in customFieldControllers.values) {
+      controller.dispose();
+    }
 
     super.dispose();
   }

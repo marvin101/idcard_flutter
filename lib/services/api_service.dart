@@ -10,6 +10,7 @@ import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../models/card_template.dart';
+import '../models/student_field.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -526,6 +527,7 @@ class ApiService {
     String? mobile,
     String? aadhaar,
     String? address,
+    List<StudentCustomFieldValue> customFields = const [],
   }) async {
     final request = http.MultipartRequest(
       'POST',
@@ -555,6 +557,7 @@ class ApiService {
       'mobile': mobile,
       'aadhaar': aadhaar,
       'address': address,
+      'custom_fields': customFields.map((item) => item.toJson()).toList(),
     };
 
     request.fields['student_data_json'] = jsonEncode(studentData);
@@ -618,6 +621,7 @@ class ApiService {
     String? aadhaar,
     String? address,
     String? photoPath,
+    List<StudentCustomFieldValue>? customFields,
   }) async {
     final response = await _client.put(
       _uri('/schools/$schoolUuid/students/$studentUuid'),
@@ -639,10 +643,99 @@ class ApiService {
         'aadhaar': aadhaar,
         'address': address,
         'photo_path': photoPath,
+        if (customFields != null)
+          'custom_fields': customFields.map((item) => item.toJson()).toList(),
       }),
     );
 
     return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<List<StudentFieldDefinition>> getStudentFields(
+    String schoolUuid, {
+    bool includeInactive = false,
+  }) async {
+    final uri = _uri(
+      '/schools/$schoolUuid/student-fields?include_inactive=$includeInactive',
+    );
+    final response = await _client.get(uri, headers: _headers);
+    return _decodeList(response)
+        .map(
+          (item) => StudentFieldDefinition.fromJson(
+            item as Map<String, dynamic>,
+          ),
+        )
+        .toList();
+  }
+
+  Future<StudentFieldDefinition> createStudentField({
+    required String schoolUuid,
+    required String fieldKey,
+    required String label,
+    required String dataType,
+    required bool isRequired,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/student-fields'),
+      headers: _headers,
+      body: jsonEncode({
+        'field_key': fieldKey,
+        'label': label,
+        'data_type': dataType,
+        'is_required': isRequired,
+      }),
+    );
+    return StudentFieldDefinition.fromJson(_decodeMap(response));
+  }
+
+  Future<StudentFieldDefinition> updateStudentField({
+    required String schoolUuid,
+    required String fieldUuid,
+    String? label,
+    String? dataType,
+    bool? isRequired,
+    bool? isActive,
+    int? displayOrder,
+  }) async {
+    final payload = <String, dynamic>{
+      'label': label,
+      'data_type': dataType,
+      'is_required': isRequired,
+      'is_active': isActive,
+      'display_order': displayOrder,
+    }..removeWhere((_, value) => value == null);
+    final response = await _client.patch(
+      _uri('/schools/$schoolUuid/student-fields/$fieldUuid'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    return StudentFieldDefinition.fromJson(_decodeMap(response));
+  }
+
+  Future<List<StudentFieldDefinition>> reorderStudentFields({
+    required String schoolUuid,
+    required List<StudentFieldDefinition> fields,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/student-fields/reorder'),
+      headers: _headers,
+      body: jsonEncode({
+        'fields': [
+          for (var index = 0; index < fields.length; index++)
+            {
+              'field_uuid': fields[index].uuid,
+              'display_order': index,
+            },
+        ],
+      }),
+    );
+    return _decodeList(response)
+        .map(
+          (item) => StudentFieldDefinition.fromJson(
+            item as Map<String, dynamic>,
+          ),
+        )
+        .toList();
   }
 
   Future<void> deleteStudent({

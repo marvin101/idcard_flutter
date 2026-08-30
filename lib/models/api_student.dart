@@ -1,3 +1,5 @@
+import 'student_field.dart';
+
 class ApiStudent {
   final String uuid;
 
@@ -23,6 +25,7 @@ class ApiStudent {
   final String? photoPath;
 
   final bool isActive;
+  final List<StudentCustomFieldValue> customFields;
 
   const ApiStudent({
     required this.uuid,
@@ -43,6 +46,7 @@ class ApiStudent {
     this.address,
     this.photoPath,
     required this.isActive,
+    this.customFields = const [],
   });
 
   factory ApiStudent.fromJson(Map<String, dynamic> json) {
@@ -67,6 +71,13 @@ class ApiStudent {
       address: json['address'] as String?,
       photoPath: json['photo_path'] as String?,
       isActive: json['is_active'] as bool? ?? true,
+      customFields: (json['custom_fields'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => StudentCustomFieldValue.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(),
     );
   }
 }
