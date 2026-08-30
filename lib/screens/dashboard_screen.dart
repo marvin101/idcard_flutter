@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_routes.dart';
 import '../models/auth_models.dart';
 import '../navigation/authenticated_modules.dart';
+import '../navigation/app_navigation.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
@@ -241,7 +242,8 @@ class _ModuleGrid extends StatelessWidget {
           'View school details, contacts, and branding.',
           Icons.domain_outlined,
           true,
-          () => Navigator.of(context).pushNamed(AppRoutes.schoolProfile),
+          () =>
+              AppNavigation.navigateToModule(context, AppRoutes.schoolProfile),
         ),
       if (visibleModules.contains(DashboardModuleKind.users))
         _DashboardModule(
@@ -249,7 +251,7 @@ class _ModuleGrid extends StatelessWidget {
           'Manage school assignments and roles.',
           Icons.people_alt_outlined,
           true,
-          () => Navigator.of(context).pushNamed(AppRoutes.users),
+          () => AppNavigation.navigateToModule(context, AppRoutes.users),
         ),
       if (visibleModules.contains(DashboardModuleKind.academicSessions))
         _DashboardModule(
@@ -257,7 +259,10 @@ class _ModuleGrid extends StatelessWidget {
           'Manage sessions for the selected school.',
           Icons.calendar_month_outlined,
           true,
-          () => Navigator.of(context).pushNamed(AppRoutes.academicSessions),
+          () => AppNavigation.navigateToModule(
+            context,
+            AppRoutes.academicSessions,
+          ),
         ),
       if (visibleModules.contains(DashboardModuleKind.classesAndSections))
         _DashboardModule(
@@ -265,7 +270,10 @@ class _ModuleGrid extends StatelessWidget {
           'Organize classes and sections.',
           Icons.account_tree_outlined,
           true,
-          () => Navigator.of(context).pushNamed(AppRoutes.classesSections),
+          () => AppNavigation.navigateToModule(
+            context,
+            AppRoutes.classesSections,
+          ),
         ),
       if (visibleModules.contains(DashboardModuleKind.students))
         _DashboardModule(
@@ -273,7 +281,7 @@ class _ModuleGrid extends StatelessWidget {
           'Student records and ID-card data.',
           Icons.school_outlined,
           true,
-          () => Navigator.of(context).pushNamed(AppRoutes.students),
+          () => AppNavigation.navigateToModule(context, AppRoutes.students),
         ),
       if (visibleModules.contains(DashboardModuleKind.studentFields))
         _DashboardModule(
@@ -281,7 +289,8 @@ class _ModuleGrid extends StatelessWidget {
           'Configure additional fields on student records.',
           Icons.dynamic_form_outlined,
           true,
-          () => Navigator.of(context).pushNamed(AppRoutes.studentFields),
+          () =>
+              AppNavigation.navigateToModule(context, AppRoutes.studentFields),
         ),
       if (visibleModules.contains(DashboardModuleKind.idCards))
         _DashboardModule(
@@ -289,7 +298,7 @@ class _ModuleGrid extends StatelessWidget {
           'Prepare and manage ID cards.',
           Icons.badge_outlined,
           true,
-          () => Navigator.of(context).pushNamed(AppRoutes.cards),
+          () => AppNavigation.navigateToModule(context, AppRoutes.cards),
         ),
     ];
 

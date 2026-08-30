@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app_routes.dart';
 import '../navigation/authenticated_modules.dart';
+import '../navigation/app_navigation.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 
@@ -65,13 +66,6 @@ class AuthenticatedAppBar extends StatelessWidget
           Icons.dynamic_form_outlined,
           AppRoutes.studentFields,
         ),
-      if (modules.contains(DashboardModuleKind.students) &&
-          auth.canManageCardData)
-        const _NavigationItem(
-          'Bulk Import',
-          Icons.upload_file_outlined,
-          AppRoutes.studentImport,
-        ),
       if (modules.contains(DashboardModuleKind.schoolProfile))
         const _NavigationItem(
           'School Profile',
@@ -107,7 +101,7 @@ class AuthenticatedAppBar extends StatelessWidget
     ];
 
     return AppBar(
-      automaticallyImplyLeading: Navigator.of(context).canPop(),
+      automaticallyImplyLeading: AppNavigation.isNestedWorkflow(routeName),
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       title: Row(
@@ -130,9 +124,7 @@ class AuthenticatedAppBar extends StatelessWidget
           onPressed: () async {
             await context.read<AuthProvider>().logout();
             if (!context.mounted) return;
-            Navigator.of(
-              context,
-            ).pushNamedAndRemoveUntil(AppRoutes.landing, (route) => false);
+            AppNavigation.resetToPublicRoot(context);
           },
           icon: const Icon(Icons.logout_rounded),
         ),
@@ -192,7 +184,13 @@ class _NavigationButton extends StatelessWidget {
     key: Key('top-nav-${item.route}'),
     onPressed: active
         ? null
-        : () => Navigator.of(context).pushNamed(item.route),
+        : () {
+            if (AppNavigation.isPrimaryModule(item.route)) {
+              AppNavigation.navigateToModule(context, item.route);
+            } else {
+              AppNavigation.navigateToWorkflow<void>(context, item.route);
+            }
+          },
     icon: Icon(item.icon, size: 18),
     label: Text(item.label),
     style: TextButton.styleFrom(

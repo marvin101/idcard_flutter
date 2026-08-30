@@ -5,6 +5,7 @@ import '../models/api_student.dart';
 import '../models/academic_session.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
+import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
@@ -211,9 +212,11 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Future<void> _editStudent(ApiStudent student) async {
-    await Navigator.of(
+    await AppNavigation.navigateToWorkflow<void>(
       context,
-    ).pushNamed(AppRoutes.editStudent, arguments: student);
+      AppRoutes.editStudent,
+      arguments: student,
+    );
 
     if (mounted) {
       await _loadStudents();
@@ -329,9 +332,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
               const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: () async {
-                  final imported = await Navigator.of(
+                  final imported = await AppNavigation.navigateToWorkflow<bool>(
                     context,
-                  ).pushNamed<bool>(AppRoutes.studentImport);
+                    AppRoutes.studentImport,
+                  );
                   if (imported == true && mounted) await _loadStudents();
                 },
                 icon: const Icon(Icons.upload_file),
@@ -340,7 +344,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () async {
-                  await Navigator.of(context).pushNamed(AppRoutes.addStudent);
+                  await AppNavigation.navigateToWorkflow<void>(
+                    context,
+                    AppRoutes.addStudent,
+                  );
 
                   if (mounted) {
                     await _loadStudents();

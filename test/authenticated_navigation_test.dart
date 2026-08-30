@@ -77,12 +77,14 @@ class _FakeApi extends ApiService {
 }
 
 class _FakeAuthProvider extends AuthProvider {
-  _FakeAuthProvider._(this.role, _FakeApi api) : super(api: api);
+  _FakeAuthProvider._(this.role, this._authenticated, _FakeApi api)
+    : super(api: api);
 
-  factory _FakeAuthProvider(String role) =>
-      _FakeAuthProvider._(role, _FakeApi());
+  factory _FakeAuthProvider(String role, {bool authenticated = true}) =>
+      _FakeAuthProvider._(role, authenticated, _FakeApi());
 
   final String role;
+  bool _authenticated;
 
   static const school = SchoolSummary(
     uuid: 'school-1',
@@ -95,7 +97,13 @@ class _FakeAuthProvider extends AuthProvider {
   bool get loading => false;
 
   @override
-  bool get isAuthenticated => true;
+  bool get isAuthenticated => _authenticated;
+
+  @override
+  Future<void> login(String username, String password) async {
+    _authenticated = true;
+    notifyListeners();
+  }
 
   @override
   bool get isPlatformAdmin => role == 'platform_admin';
@@ -129,10 +137,13 @@ void main() {
     WidgetTester tester, {
     String initialRoute = AppRoutes.dashboard,
     String role = 'school_admin',
+    bool authenticated = true,
   }) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
-    final auth = _FakeAuthProvider(role);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    final auth = _FakeAuthProvider(role, authenticated: authenticated);
     await tester.pumpWidget(
       MyApp(authProvider: auth, initialRoute: initialRoute),
     );
@@ -162,7 +173,8 @@ void main() {
       AppRoutes.studentFields,
     );
 
-    await tester.tap(find.byKey(const Key('top-nav-/students/import')));
+    await pumpApp(tester, initialRoute: AppRoutes.students);
+    await tester.tap(find.text('Bulk Import'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Bulk Student Import'), findsWidgets);
     expect(
@@ -254,5 +266,128 @@ void main() {
       find.byKey(const Key('top-nav-/students/fields')),
     );
     expect(active.onPressed, isNull);
+  });
+
+  testWidgets('primary module routes never show a leading Back button', (
+    tester,
+  ) async {
+    for (final route in [
+      AppRoutes.dashboard,
+      AppRoutes.students,
+      AppRoutes.studentFields,
+      AppRoutes.schoolProfile,
+      AppRoutes.design,
+      AppRoutes.cards,
+    ]) {
+      await pumpApp(tester, initialRoute: route);
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator.pushNamed(route);
+      await tester.pumpAndSettle();
+
+      expect(navigator.canPop(), isTrue);
+      expect(
+        find.byType(BackButton),
+        findsNothing,
+        reason: '$route showed a Back button despite being a primary module',
+      );
+    }
+  });
+
+  testWidgets('student workflows show Back and return to Students', (
+    tester,
+  ) async {
+    await pumpApp(tester, initialRoute: AppRoutes.students);
+    final add = find.byKey(const Key('top-nav-/students/add'));
+    await tester.ensureVisible(add);
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+    expect(find.text('Add student'), findsWidgets);
+    expect(find.byType(BackButton), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(StudentsScreen), findsOneWidget);
+
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    const student = ApiStudent(
+      uuid: 'student-1',
+      sessionUuid: 'session-1',
+      classUuid: 'class-1',
+      sectionUuid: 'section-1',
+      admissionNo: 'A-1',
+      fullName: 'Test Student',
+      isActive: true,
+    );
+    navigator.pushNamed(AppRoutes.editStudent, arguments: student);
+    await tester.pumpAndSettle();
+    expect(find.text('Edit student'), findsWidgets);
+    expect(find.byType(BackButton), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(StudentsScreen), findsOneWidget);
+
+    await tester.tap(find.text('Bulk Import'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Bulk Student Import'), findsWidgets);
+    expect(find.byType(BackButton), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(StudentsScreen), findsOneWidget);
+  });
+
+  testWidgets('primary module switching replaces instead of stacking routes', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    expect(navigator.canPop(), isFalse);
+
+    await tester.tap(find.byKey(const Key('top-nav-/students')));
+    await tester.pumpAndSettle();
+    expect(find.byType(StudentsScreen), findsOneWidget);
+    expect(navigator.canPop(), isFalse);
+
+    final cards = find.byKey(const Key('top-nav-/cards'));
+    await tester.ensureVisible(cards);
+    await tester.tap(cards);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('ID Cards'), findsWidgets);
+    expect(navigator.canPop(), isFalse);
+    expect(
+      ModalRoute.of(
+        tester.element(find.textContaining('ID Cards').first),
+      )?.settings.name,
+      AppRoutes.cards,
+    );
+  });
+
+  testWidgets('login makes Dashboard the only authenticated root', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      initialRoute: AppRoutes.landing,
+      authenticated: false,
+    );
+
+    await tester.tap(find.text('Sign in').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'admin');
+    await tester.enterText(find.byType(TextFormField).at(1), 'password');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    expect(find.text('Dashboard'), findsWidgets);
+    expect(find.byType(BackButton), findsNothing);
+    expect(navigator.canPop(), isFalse);
+    expect(
+      ModalRoute.of(
+        tester.element(find.text('Dashboard').first),
+      )?.settings.name,
+      AppRoutes.dashboard,
+    );
   });
 }

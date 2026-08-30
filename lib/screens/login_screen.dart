@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../app_routes.dart';
 import '../providers/auth_provider.dart';
+import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 
@@ -36,9 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         final currentRoute = ModalRoute.of(context)?.settings.name;
         if (AppRoutes.isProtected(currentRoute)) return;
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil(AppRoutes.dashboard, (route) => false);
+        AppNavigation.resetToAuthenticatedRoot(context);
       }
     } on ApiException {
       if (mounted) {

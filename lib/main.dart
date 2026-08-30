@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'app_routes.dart';
 import 'models/api_student.dart';
+import 'models/card_template.dart';
+import 'navigation/app_navigation.dart';
 import 'providers/auth_provider.dart';
 import 'providers/display_scale_provider.dart';
 import 'screens/academic_sessions_screen.dart';
@@ -50,6 +52,7 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         initialRoute: initialRoute,
+        onGenerateInitialRoutes: _generateInitialRoutes,
         builder: (context, child) =>
             AppScaleViewport(child: child ?? const SizedBox.shrink()),
         onGenerateRoute: _generateRoute,
@@ -79,7 +82,30 @@ class MyApp extends StatelessWidget {
       _ => null,
     };
     if (page == null) return null;
-    return MaterialPageRoute<dynamic>(settings: settings, builder: (_) => page);
+    if (routeName == AppRoutes.studentImport) {
+      return MaterialPageRoute<bool>(settings: settings, builder: (_) => page);
+    }
+    if (routeName == AppRoutes.design) {
+      return MaterialPageRoute<CardTemplate>(
+        settings: settings,
+        builder: (_) => page,
+      );
+    }
+    return MaterialPageRoute<void>(settings: settings, builder: (_) => page);
+  }
+
+  List<Route<dynamic>> _generateInitialRoutes(String initialRouteName) {
+    final route = _generateRoute(RouteSettings(name: initialRouteName));
+    if (route != null) {
+      if (AppNavigation.isNestedWorkflow(initialRouteName)) {
+        return [
+          _generateRoute(const RouteSettings(name: AppRoutes.students))!,
+          route,
+        ];
+      }
+      return [route];
+    }
+    return [_generateRoute(const RouteSettings(name: AppRoutes.landing))!];
   }
 }
 
@@ -102,7 +128,7 @@ class _PublicAuthRoute extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (auth.isAuthenticated) {
-      return const _RouteRedirect(destination: AppRoutes.dashboard);
+      return const _AuthenticatedRootRedirect();
     }
     return unauthenticated;
   }
@@ -259,24 +285,22 @@ class _ProtectedRouteMessage extends StatelessWidget {
   );
 }
 
-class _RouteRedirect extends StatefulWidget {
-  const _RouteRedirect({required this.destination});
-
-  final String destination;
+class _AuthenticatedRootRedirect extends StatefulWidget {
+  const _AuthenticatedRootRedirect();
 
   @override
-  State<_RouteRedirect> createState() => _RouteRedirectState();
+  State<_AuthenticatedRootRedirect> createState() =>
+      _AuthenticatedRootRedirectState();
 }
 
-class _RouteRedirectState extends State<_RouteRedirect> {
+class _AuthenticatedRootRedirectState
+    extends State<_AuthenticatedRootRedirect> {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil(widget.destination, (route) => false);
+      AppNavigation.resetToAuthenticatedRoot(context);
     });
   }
 

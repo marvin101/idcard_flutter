@@ -7,6 +7,7 @@ import '../models/academic_session.dart';
 import '../models/api_student.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
+import '../navigation/app_navigation.dart';
 import '../models/card_template.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
@@ -401,9 +402,11 @@ class _CardsScreenState extends State<CardsScreen> {
   // ------------------------------------------------------------
 
   Future<void> _editStudent(ApiStudent student) async {
-    await Navigator.of(
+    await AppNavigation.navigateToWorkflow<void>(
       context,
-    ).pushNamed(AppRoutes.editStudent, arguments: student);
+      AppRoutes.editStudent,
+      arguments: student,
+    );
 
     if (mounted) {
       await _loadStudents(reset: true);
