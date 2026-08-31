@@ -20,6 +20,7 @@ abstract final class AppNavigation {
     AppRoutes.addStudent,
     AppRoutes.editStudent,
     AppRoutes.studentImport,
+    AppRoutes.bulkPhotoImport,
   };
 
   static bool isPrimaryModule(String? routeName) =>
@@ -67,13 +68,17 @@ abstract final class AppNavigation {
     ).pushNamed(routeName, arguments: arguments).then((value) => value as T?);
   }
 
-  static void navigateBack(BuildContext context, String? routeName) {
+  static void navigateBack<T>(
+    BuildContext context,
+    String? routeName, {
+    T? result,
+  }) {
     final delegate = _delegate(context);
     if (isNestedWorkflow(routeName) || (delegate?.canPop ?? false)) {
       if (delegate != null) {
-        delegate.popCurrent<void>();
+        delegate.popCurrent<T>(result);
       } else {
-        Navigator.of(context).maybePop();
+        Navigator.of(context).maybePop(result);
       }
       return;
     }

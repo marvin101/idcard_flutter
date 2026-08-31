@@ -331,6 +331,19 @@ class _StudentsScreenState extends State<StudentsScreen> {
             if (widget.canEdit) ...[
               const SizedBox(width: 12),
               OutlinedButton.icon(
+                key: const Key('bulk-photo-import-action'),
+                onPressed: () async {
+                  final imported = await AppNavigation.navigateToWorkflow<bool>(
+                    context,
+                    AppRoutes.bulkPhotoImport,
+                  );
+                  if (imported == true && mounted) await _loadStudents();
+                },
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: const Text('Bulk Photos'),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
                 onPressed: () async {
                   final imported = await AppNavigation.navigateToWorkflow<bool>(
                     context,

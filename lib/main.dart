@@ -9,6 +9,7 @@ import 'navigation/app_router.dart';
 import 'providers/auth_provider.dart';
 import 'providers/display_scale_provider.dart';
 import 'screens/academic_sessions_screen.dart';
+import 'screens/bulk_photo_import_screen.dart';
 import 'screens/card_designer_route_screen.dart';
 import 'screens/cards_screen.dart';
 import 'screens/classes_sections_screen.dart';
@@ -201,6 +202,13 @@ class _AuthenticatedRoute extends StatelessWidget {
       AppRoutes.studentImport
           when has(DashboardModuleKind.students) && auth.canManageCardData =>
         StudentImportScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+        ),
+      AppRoutes.bulkPhotoImport
+          when has(DashboardModuleKind.students) && auth.canManageCardData =>
+        BulkPhotoImportScreen(
           schoolUuid: school.uuid,
           schoolName: school.name,
           api: auth.api,

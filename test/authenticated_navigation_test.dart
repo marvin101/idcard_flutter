@@ -14,6 +14,8 @@ import 'package:idcard_flutter/navigation/app_navigation.dart';
 import 'package:idcard_flutter/navigation/app_router.dart';
 import 'package:idcard_flutter/providers/auth_provider.dart';
 import 'package:idcard_flutter/screens/student_screen.dart';
+import 'package:idcard_flutter/screens/bulk_photo_import_screen.dart';
+import 'package:idcard_flutter/screens/login_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/widgets/authenticated_app_bar.dart';
 
@@ -233,6 +235,7 @@ void main() {
       AppRoutes.students,
       AppRoutes.studentFields,
       AppRoutes.studentImport,
+      AppRoutes.bulkPhotoImport,
       AppRoutes.schoolProfile,
       AppRoutes.design,
       AppRoutes.cards,
@@ -324,6 +327,40 @@ void main() {
     expect(find.byKey(const Key('top-nav-/design')), findsNothing);
   });
 
+  testWidgets('Bulk Photos action follows canManageCardData', (tester) async {
+    await pumpApp(tester, initialRoute: AppRoutes.students, role: 'teacher');
+    expect(find.byKey(const Key('bulk-photo-import-action')), findsNothing);
+
+    await pumpApp(
+      tester,
+      initialRoute: AppRoutes.students,
+      role: 'card_operator',
+    );
+    expect(find.byKey(const Key('bulk-photo-import-action')), findsOneWidget);
+  });
+
+  testWidgets('bulk photo route is protected by auth and permission', (
+    tester,
+  ) async {
+    expect(AppRoutes.isProtected(AppRoutes.bulkPhotoImport), isTrue);
+
+    await pumpApp(
+      tester,
+      initialRoute: AppRoutes.bulkPhotoImport,
+      authenticated: false,
+    );
+    expect(find.byType(BulkPhotoImportScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
+
+    await pumpApp(
+      tester,
+      initialRoute: AppRoutes.bulkPhotoImport,
+      role: 'teacher',
+    );
+    expect(find.byType(BulkPhotoImportScreen), findsNothing);
+    expect(find.text('Access denied'), findsOneWidget);
+  });
+
   testWidgets('authenticated direct link restores the requested module', (
     tester,
   ) async {
@@ -348,6 +385,7 @@ void main() {
       AppRoutes.users,
       AppRoutes.design,
       AppRoutes.cards,
+      AppRoutes.bulkPhotoImport,
     ]) {
       expect(AppNavigation.showsLeadingBack(route), isTrue);
     }
@@ -395,6 +433,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Bulk Student Import'), findsWidgets);
     expect(find.byType(BackButton), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(StudentsScreen), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('bulk-photo-import-action')));
+    await tester.pumpAndSettle();
+    expect(find.byType(BulkPhotoImportScreen), findsOneWidget);
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(
+      ModalRoute.of(
+        tester.element(find.byType(BulkPhotoImportScreen)),
+      )?.settings.name,
+      AppRoutes.bulkPhotoImport,
+    );
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();

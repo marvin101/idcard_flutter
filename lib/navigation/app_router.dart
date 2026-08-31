@@ -163,7 +163,8 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
     }
 
     final child = _routeBuilder(entry.location, entry.arguments);
-    if (entry.location == AppRoutes.studentImport) {
+    if (entry.location == AppRoutes.studentImport ||
+        entry.location == AppRoutes.bulkPhotoImport) {
       return MaterialPage<bool>(
         key: entry.key,
         name: entry.location,
@@ -209,7 +210,8 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
   bool _isNestedWorkflow(String location) =>
       location == AppRoutes.addStudent ||
       location == AppRoutes.editStudent ||
-      location == AppRoutes.studentImport;
+      location == AppRoutes.studentImport ||
+      location == AppRoutes.bulkPhotoImport;
 
   void _complete(_AppRouteEntry entry, Object? result) {
     final completer = entry.completer;

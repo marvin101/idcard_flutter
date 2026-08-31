@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/api_student.dart';
 import '../models/academic_session.dart';
+import '../models/bulk_photo_import.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../models/card_template.dart';
@@ -631,6 +632,52 @@ class ApiService {
       }),
     );
     return StudentImportSummary.fromJson(_decodeMap(response));
+  }
+
+  Future<BulkPhotoUploadResponse> uploadBulkStudentPhotos({
+    required String schoolUuid,
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/schools/$schoolUuid/student-photos/bulk/upload'),
+    );
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('archive', bytes, filename: filename),
+    );
+    final response = await http.Response.fromStream(await _client.send(request));
+    return BulkPhotoUploadResponse.fromJson(_decodeMap(response));
+  }
+
+  Future<BulkPhotoPreviewResponse> previewBulkStudentPhotos({
+    required String schoolUuid,
+    required String manifestUuid,
+  }) async {
+    final response = await _client.post(
+      _uri(
+        '/schools/$schoolUuid/student-photos/bulk/$manifestUuid/preview',
+      ),
+      headers: _headers,
+    );
+    return BulkPhotoPreviewResponse.fromJson(_decodeMap(response));
+  }
+
+  Future<BulkPhotoCommitResponse> commitBulkStudentPhotos({
+    required String schoolUuid,
+    required String manifestUuid,
+    required bool confirmed,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/student-photos/bulk/$manifestUuid/commit'),
+      headers: _headers,
+      body: jsonEncode({'confirmed': confirmed}),
+    );
+    return BulkPhotoCommitResponse.fromJson(_decodeMap(response));
   }
 
   Future<ApiStudent> createStudent({

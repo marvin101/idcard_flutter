@@ -8,6 +8,7 @@ abstract final class AppRoutes {
   static const editStudent = '/students/edit';
   static const studentFields = '/students/fields';
   static const studentImport = '/students/import';
+  static const bulkPhotoImport = '/students/photos/import';
   static const schoolProfile = '/school-profile';
   static const academicSessions = '/academic-sessions';
   static const classesSections = '/classes-sections';
@@ -25,6 +26,7 @@ abstract final class AppRoutes {
     editStudent,
     studentFields,
     studentImport,
+    bulkPhotoImport,
     schoolProfile,
     academicSessions,
     classesSections,
