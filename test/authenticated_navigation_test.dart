@@ -16,6 +16,7 @@ import 'package:idcard_flutter/providers/auth_provider.dart';
 import 'package:idcard_flutter/screens/student_screen.dart';
 import 'package:idcard_flutter/screens/bulk_photo_import_screen.dart';
 import 'package:idcard_flutter/screens/login_screen.dart';
+import 'package:idcard_flutter/screens/student_import_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/widgets/authenticated_app_bar.dart';
 
@@ -147,6 +148,11 @@ class _FakeAuthProvider extends AuthProvider {
       : null;
 }
 
+String _reportedLocation(BuildContext context) {
+  final uri = Router.of<Object>(context).routeInformationProvider!.value.uri;
+  return uri.fragment.startsWith('/') ? uri.fragment : uri.path;
+}
+
 void main() {
   Future<_FakeAuthProvider> pumpApp(
     WidgetTester tester, {
@@ -179,9 +185,12 @@ void main() {
 
     final context = tester.element(find.byType(StudentsScreen));
     expect(ModalRoute.of(context)?.settings.name, AppRoutes.students);
+    expect(_reportedLocation(context), AppRoutes.students);
   });
 
-  testWidgets('Students routes to fields and bulk import URLs', (tester) async {
+  testWidgets('Students publishes fields and nested import URLs', (
+    tester,
+  ) async {
     await pumpApp(tester, initialRoute: AppRoutes.students);
 
     await tester.tap(find.byKey(const Key('top-nav-/students/fields')));
@@ -190,6 +199,10 @@ void main() {
       ModalRoute.of(
         tester.element(find.text('Student Fields').last),
       )?.settings.name,
+      AppRoutes.studentFields,
+    );
+    expect(
+      _reportedLocation(tester.element(find.text('Student Fields').last)),
       AppRoutes.studentFields,
     );
 
@@ -202,6 +215,30 @@ void main() {
         tester.element(find.textContaining('Bulk Student Import').first),
       )?.settings.name,
       AppRoutes.studentImport,
+    );
+    final studentImportContext = tester.element(
+      find.byType(StudentImportScreen),
+    );
+    expect(_reportedLocation(studentImportContext), AppRoutes.studentImport);
+    expect(
+      (Router.of<Object>(studentImportContext).routerDelegate
+              as AppRouterDelegate)
+          .currentLocation,
+      AppRoutes.studentImport,
+    );
+
+    await pumpApp(tester, initialRoute: AppRoutes.students);
+    await tester.tap(find.byKey(const Key('bulk-photo-import-action')));
+    await tester.pumpAndSettle();
+    final photoImportContext = tester.element(
+      find.byType(BulkPhotoImportScreen),
+    );
+    expect(_reportedLocation(photoImportContext), AppRoutes.bulkPhotoImport);
+    expect(
+      (Router.of<Object>(photoImportContext).routerDelegate
+              as AppRouterDelegate)
+          .currentLocation,
+      AppRoutes.bulkPhotoImport,
     );
   });
 
@@ -339,26 +376,23 @@ void main() {
     expect(find.byKey(const Key('bulk-photo-import-action')), findsOneWidget);
   });
 
-  testWidgets('bulk photo route is protected by auth and permission', (
+  testWidgets('import routes are protected by auth and permission', (
     tester,
   ) async {
+    expect(AppRoutes.isProtected(AppRoutes.studentImport), isTrue);
     expect(AppRoutes.isProtected(AppRoutes.bulkPhotoImport), isTrue);
 
-    await pumpApp(
-      tester,
-      initialRoute: AppRoutes.bulkPhotoImport,
-      authenticated: false,
-    );
-    expect(find.byType(BulkPhotoImportScreen), findsNothing);
-    expect(find.byType(LoginScreen), findsOneWidget);
+    for (final route in [AppRoutes.studentImport, AppRoutes.bulkPhotoImport]) {
+      await pumpApp(tester, initialRoute: route, authenticated: false);
+      expect(find.byType(StudentImportScreen), findsNothing);
+      expect(find.byType(BulkPhotoImportScreen), findsNothing);
+      expect(find.byType(LoginScreen), findsOneWidget);
 
-    await pumpApp(
-      tester,
-      initialRoute: AppRoutes.bulkPhotoImport,
-      role: 'teacher',
-    );
-    expect(find.byType(BulkPhotoImportScreen), findsNothing);
-    expect(find.text('Access denied'), findsOneWidget);
+      await pumpApp(tester, initialRoute: route, role: 'teacher');
+      expect(find.byType(StudentImportScreen), findsNothing);
+      expect(find.byType(BulkPhotoImportScreen), findsNothing);
+      expect(find.text('Access denied'), findsOneWidget);
+    }
   });
 
   testWidgets('authenticated direct link restores the requested module', (
@@ -401,6 +435,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Add student'), findsWidgets);
     expect(find.byType(BackButton), findsOneWidget);
+    expect(
+      _reportedLocation(tester.element(find.text('Add student').first)),
+      AppRoutes.addStudent,
+    );
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
@@ -423,6 +461,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Edit student'), findsWidgets);
     expect(find.byType(BackButton), findsOneWidget);
+    expect(
+      _reportedLocation(tester.element(find.text('Edit student').first)),
+      AppRoutes.editStudent,
+    );
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
@@ -452,6 +494,44 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byType(StudentsScreen), findsOneWidget);
+    expect(
+      _reportedLocation(tester.element(find.byType(StudentsScreen))),
+      AppRoutes.students,
+    );
+  });
+
+  testWidgets('browser back and forward restore nested photo workflow', (
+    tester,
+  ) async {
+    await pumpApp(tester, initialRoute: AppRoutes.students);
+    await tester.tap(find.byKey(const Key('bulk-photo-import-action')));
+    await tester.pumpAndSettle();
+
+    final workflowContext = tester.element(find.byType(BulkPhotoImportScreen));
+    final router = Router.of<Object>(workflowContext);
+    final provider =
+        router.routeInformationProvider as PlatformRouteInformationProvider;
+    expect(_reportedLocation(workflowContext), AppRoutes.bulkPhotoImport);
+
+    await provider.didPushRouteInformation(
+      RouteInformation(uri: Uri.parse(AppRoutes.students)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(StudentsScreen), findsOneWidget);
+    expect(
+      _reportedLocation(tester.element(find.byType(StudentsScreen))),
+      AppRoutes.students,
+    );
+
+    await provider.didPushRouteInformation(
+      RouteInformation(uri: Uri.parse(AppRoutes.bulkPhotoImport)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(BulkPhotoImportScreen), findsOneWidget);
+    expect(
+      _reportedLocation(tester.element(find.byType(BulkPhotoImportScreen))),
+      AppRoutes.bulkPhotoImport,
+    );
   });
 
   testWidgets('primary module switching replaces instead of stacking routes', (

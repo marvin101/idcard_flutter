@@ -213,11 +213,11 @@ void main() {
       bytes: Uint8List.fromList([1, 2, 3]),
     );
 
+    expect(captured.url.path, '/schools/school-1/student-photos/bulk/upload');
     expect(
-      captured.url.path,
-      '/schools/school-1/student-photos/bulk/upload',
+      captured.headers['content-type'],
+      startsWith('multipart/form-data;'),
     );
-    expect(captured.headers['content-type'], startsWith('multipart/form-data;'));
     expect(captured.body, contains('name="archive"'));
     expect(captured.body, contains('filename="photos.zip"'));
   });
@@ -230,7 +230,10 @@ void main() {
     await _chooseArchive(tester);
 
     expect(find.byKey(const Key('bulk-photo-status-ready')), findsOneWidget);
-    expect(find.byKey(const Key('bulk-photo-status-unmatched')), findsOneWidget);
+    expect(
+      find.byKey(const Key('bulk-photo-status-unmatched')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('bulk-photo-status-invalid')), findsOneWidget);
     expect(
       find.byKey(const Key('bulk-photo-status-replacement')),
@@ -275,12 +278,55 @@ void main() {
     expect(api.commitCalls, 1);
     expect(api.confirmed, isTrue);
     expect(find.text('Import completed'), findsOneWidget);
-    expect(
-      find.byKey(const Key('bulk-photo-count-uploaded')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('bulk-photo-count-uploaded')), findsOneWidget);
     expect(find.byKey(const Key('bulk-photo-count-failed')), findsOneWidget);
     expect(find.text('3'), findsWidgets);
+  });
+
+  testWidgets('picker exception is rendered and does not leave screen busy', (
+    tester,
+  ) async {
+    final api = _BulkPhotoApi(preview: _preview());
+    await _pumpScreen(
+      tester,
+      api,
+      pickArchive: () async => throw StateError('picker failed'),
+    );
+
+    await tester.tap(find.byKey(const Key('bulk-photo-choose-archive')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not open the file picker. Please try again.'),
+      findsOneWidget,
+    );
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('bulk-photo-choose-archive')),
+    );
+    expect(button.onPressed, isNotNull);
+  });
+
+  testWidgets('selected ZIP with null bytes renders a readable error', (
+    tester,
+  ) async {
+    final api = _BulkPhotoApi(preview: _preview());
+    await _pumpScreen(
+      tester,
+      api,
+      pickArchive: () async => PlatformFile(name: 'photos.zip', size: 10),
+    );
+
+    await tester.tap(find.byKey(const Key('bulk-photo-choose-archive')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('The selected ZIP could not be read. Please choose it again.'),
+      findsOneWidget,
+    );
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('bulk-photo-choose-archive')),
+    );
+    expect(button.onPressed, isNotNull);
   });
 
   for (final error in const [
@@ -313,7 +359,11 @@ void main() {
   }
 }
 
-Future<void> _pumpScreen(WidgetTester tester, _BulkPhotoApi api) async {
+Future<void> _pumpScreen(
+  WidgetTester tester,
+  _BulkPhotoApi api, {
+  BulkPhotoFilePicker? pickArchive,
+}) async {
   tester.view.physicalSize = const Size(1500, 1000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -324,11 +374,13 @@ Future<void> _pumpScreen(WidgetTester tester, _BulkPhotoApi api) async {
         schoolUuid: 'school-1',
         schoolName: 'Campus School',
         api: api,
-        pickArchive: () async => PlatformFile(
-          name: 'student-photos.zip',
-          size: 3,
-          bytes: Uint8List.fromList([1, 2, 3]),
-        ),
+        pickArchive:
+            pickArchive ??
+            () async => PlatformFile(
+              name: 'student-photos.zip',
+              size: 3,
+              bytes: Uint8List.fromList([1, 2, 3]),
+            ),
       ),
     ),
   );

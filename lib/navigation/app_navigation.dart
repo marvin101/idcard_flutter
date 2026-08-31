@@ -61,7 +61,11 @@ abstract final class AppNavigation {
     assert(nestedWorkflowRoutes.contains(routeName));
     final delegate = _delegate(context);
     if (delegate != null) {
-      return delegate.pushWorkflow<T>(routeName, arguments: arguments);
+      late Future<T?> result;
+      Router.navigate(context, () {
+        result = delegate.pushWorkflow<T>(routeName, arguments: arguments);
+      });
+      return result;
     }
     return Navigator.of(
       context,

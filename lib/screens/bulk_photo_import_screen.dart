@@ -53,28 +53,52 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
   }
 
   Future<void> _pickAndUpload() async {
-    final file = await _pickFile();
-    if (file == null) return;
-    final bytes = file.bytes;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _retry = null;
+    });
+    PlatformFile? file;
+    try {
+      file = await _pickFile();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = 'Could not open the file picker. Please try again.';
+          _retry = _pickAndUpload;
+        });
+      }
+      return;
+    }
+    if (!mounted) return;
+    if (file == null) {
+      setState(() => _busy = false);
+      return;
+    }
+    final selectedFile = file;
+    final bytes = selectedFile.bytes;
     if (bytes == null) {
       setState(() {
+        _busy = false;
         _error = 'The selected ZIP could not be read. Please choose it again.';
         _retry = null;
       });
       return;
     }
-    if (!file.name.toLowerCase().endsWith('.zip')) {
+    if (!selectedFile.name.toLowerCase().endsWith('.zip')) {
       setState(() {
+        _busy = false;
         _error = 'Choose a ZIP archive containing student photos.';
         _retry = null;
       });
       return;
     }
     setState(() {
-      _selectedFilename = file.name;
-      _selectedSize = file.size;
+      _selectedFilename = selectedFile.name;
+      _selectedSize = selectedFile.size;
     });
-    await _uploadArchive(file.name, bytes);
+    await _uploadArchive(selectedFile.name, bytes);
   }
 
   Future<void> _uploadArchive(String filename, Uint8List bytes) async {

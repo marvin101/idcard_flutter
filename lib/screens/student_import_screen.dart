@@ -1,10 +1,14 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../app_routes.dart';
 import '../models/student_import.dart';
+import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
+
+typedef StudentImportFilePicker = Future<PlatformFile?> Function();
 
 class StudentImportScreen extends StatefulWidget {
   const StudentImportScreen({
@@ -12,11 +16,13 @@ class StudentImportScreen extends StatefulWidget {
     required this.schoolUuid,
     required this.schoolName,
     required this.api,
+    this.pickFile,
   });
 
   final String schoolUuid;
   final String schoolName;
   final ApiService api;
+  final StudentImportFilePicker? pickFile;
 
   @override
   State<StudentImportScreen> createState() => _StudentImportScreenState();
@@ -42,22 +48,44 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
   ];
 
   Future<void> _pickAndUpload() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['csv', 'xlsx'],
-      withData: true,
-    );
-    if (result == null) return;
-    final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null) {
-      setState(() => _error = 'The selected file could not be read.');
-      return;
-    }
     setState(() {
       _busy = true;
       _error = null;
     });
+    PlatformFile? file;
+    try {
+      if (widget.pickFile != null) {
+        file = await widget.pickFile!();
+      } else {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: const ['csv', 'xlsx'],
+          withData: true,
+        );
+        file = result?.files.single;
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = 'Could not open the file picker. Please try again.';
+        });
+      }
+      return;
+    }
+    if (!mounted) return;
+    if (file == null) {
+      setState(() => _busy = false);
+      return;
+    }
+    final bytes = file.bytes;
+    if (bytes == null) {
+      setState(() {
+        _busy = false;
+        _error = 'The selected file could not be read.';
+      });
+      return;
+    }
     try {
       final upload = await widget.api.uploadStudentImport(
         schoolUuid: widget.schoolUuid,
@@ -77,6 +105,13 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       });
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not upload the file. Check your connection and try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -118,6 +153,13 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       }
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not generate the preview. Check your connection and try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -146,6 +188,15 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       if (mounted) {
         setState(() {
           _error = error.message;
+          _step = 2;
+          _confirmed = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error =
+              'Could not complete the import. Check your connection and try again.';
           _step = 2;
           _confirmed = false;
         });
@@ -381,7 +432,12 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       ),
       const SizedBox(height: 16),
       FilledButton(
-        onPressed: () => Navigator.of(context).pop(true),
+        key: const Key('student-import-return-to-students'),
+        onPressed: () => AppNavigation.navigateBack(
+          context,
+          AppRoutes.studentImport,
+          result: true,
+        ),
         child: const Text('Return to students'),
       ),
     ],
