@@ -602,6 +602,39 @@ class ApiService {
     return StudentImportUpload.fromJson(_decodeMap(response));
   }
 
+  Future<StudentImportTemplateFile> downloadStudentImportTemplate({
+    required String schoolUuid,
+  }) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/students/imports/template'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _apiException(response);
+    }
+    final disposition = response.headers['content-disposition'] ?? '';
+    final filename = _responseFilename(disposition);
+    return StudentImportTemplateFile(
+      bytes: response.bodyBytes,
+      filename: filename ?? 'student_import_template.xlsx',
+      contentType:
+          response.headers['content-type'] ??
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
+  String? _responseFilename(String contentDisposition) {
+    final encoded = RegExp(
+      r"filename\*=UTF-8''([^;]+)",
+      caseSensitive: false,
+    ).firstMatch(contentDisposition)?.group(1);
+    if (encoded != null) return Uri.decodeComponent(encoded);
+    return RegExp(
+      r'filename="([^"]+)"',
+      caseSensitive: false,
+    ).firstMatch(contentDisposition)?.group(1);
+  }
+
   Future<StudentImportPreview> previewStudentImport({
     required String schoolUuid,
     required String uploadId,

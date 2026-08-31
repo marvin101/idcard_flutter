@@ -1,3 +1,17 @@
+import 'dart:typed_data';
+
+class StudentImportTemplateFile {
+  const StudentImportTemplateFile({
+    required this.bytes,
+    required this.filename,
+    required this.contentType,
+  });
+
+  final Uint8List bytes;
+  final String filename;
+  final String contentType;
+}
+
 class StudentImportMapping {
   const StudentImportMapping({
     required this.sourceColumn,

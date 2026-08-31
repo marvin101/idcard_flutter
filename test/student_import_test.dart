@@ -13,6 +13,23 @@ import 'package:idcard_flutter/services/api_service.dart';
 class _StudentImportApi extends ApiService {
   _StudentImportApi() : super(baseUrl: 'https://example.test');
 
+  String? templateSchoolUuid;
+  Object? templateError;
+
+  @override
+  Future<StudentImportTemplateFile> downloadStudentImportTemplate({
+    required String schoolUuid,
+  }) async {
+    templateSchoolUuid = schoolUuid;
+    if (templateError != null) throw templateError!;
+    return StudentImportTemplateFile(
+      bytes: Uint8List.fromList([80, 75, 3, 4]),
+      filename: 'student_import_template_campus_school.xlsx',
+      contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
   @override
   Future<StudentImportUpload> uploadStudentImport({
     required String schoolUuid,
@@ -145,6 +162,34 @@ void main() {
     expect(preview.canImport, isTrue);
   });
 
+  test('template API returns bytes and response metadata', () async {
+    late http.Request captured;
+    final api = ApiService(
+      baseUrl: 'https://example.test',
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response.bytes(
+          [80, 75, 3, 4],
+          200,
+          headers: {
+            'content-type':
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'content-disposition':
+                'attachment; filename="student_import_template_campus.xlsx"',
+          },
+        );
+      }),
+    );
+
+    final file = await api.downloadStudentImportTemplate(
+      schoolUuid: 'school-1',
+    );
+
+    expect(captured.url.path, '/schools/school-1/students/imports/template');
+    expect(file.filename, 'student_import_template_campus.xlsx');
+    expect(file.bytes, [80, 75, 3, 4]);
+  });
+
   testWidgets('bulk import screen exposes the five-stage flow', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -162,6 +207,59 @@ void main() {
     expect(find.text('Confirm'), findsOneWidget);
     expect(find.text('Summary'), findsOneWidget);
     expect(find.text('Choose file'), findsOneWidget);
+    expect(find.text('Download XLSX Template'), findsOneWidget);
+  });
+
+  testWidgets(
+    'template action downloads for the selected school without navigation',
+    (tester) async {
+      final api = _StudentImportApi();
+      StudentImportTemplateFile? saved;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StudentImportScreen(
+            schoolUuid: 'school-1',
+            schoolName: 'Campus School',
+            api: api,
+            saveTemplate: (file) async => saved = file,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Download XLSX Template'));
+      await tester.pumpAndSettle();
+
+      expect(api.templateSchoolUuid, 'school-1');
+      expect(saved?.filename, 'student_import_template_campus_school.xlsx');
+      expect(find.byType(StudentImportScreen), findsOneWidget);
+      expect(find.text('XLSX template downloaded.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('template API failure renders a user-facing error', (
+    tester,
+  ) async {
+    final api = _StudentImportApi()
+      ..templateError = const ApiException(
+        403,
+        'Template download is not permitted.',
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentImportScreen(
+          schoolUuid: 'school-1',
+          schoolName: 'Campus School',
+          api: api,
+          saveTemplate: (_) async {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Download XLSX Template'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Template download is not permitted.'), findsOneWidget);
+    expect(find.text('Download XLSX Template'), findsOneWidget);
   });
 
   testWidgets('picker exception is rendered and does not leave screen busy', (

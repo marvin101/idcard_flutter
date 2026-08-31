@@ -5,10 +5,13 @@ import '../app_routes.dart';
 import '../models/student_import.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
+import '../services/file_download.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
 
 typedef StudentImportFilePicker = Future<PlatformFile?> Function();
+typedef StudentImportTemplateSaver =
+    Future<void> Function(StudentImportTemplateFile file);
 
 class StudentImportScreen extends StatefulWidget {
   const StudentImportScreen({
@@ -17,12 +20,14 @@ class StudentImportScreen extends StatefulWidget {
     required this.schoolName,
     required this.api,
     this.pickFile,
+    this.saveTemplate,
   });
 
   final String schoolUuid;
   final String schoolName;
   final ApiService api;
   final StudentImportFilePicker? pickFile;
+  final StudentImportTemplateSaver? saveTemplate;
 
   @override
   State<StudentImportScreen> createState() => _StudentImportScreenState();
@@ -31,6 +36,7 @@ class StudentImportScreen extends StatefulWidget {
 class _StudentImportScreenState extends State<StudentImportScreen> {
   int _step = 0;
   bool _busy = false;
+  bool _downloadingTemplate = false;
   bool _confirmed = false;
   String? _error;
   StudentImportUpload? _upload;
@@ -48,10 +54,7 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
   ];
 
   Future<void> _pickAndUpload() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    setState(() => _error = null);
     PlatformFile? file;
     try {
       if (widget.pickFile != null) {
@@ -75,7 +78,6 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
     }
     if (!mounted) return;
     if (file == null) {
-      setState(() => _busy = false);
       return;
     }
     final bytes = file.bytes;
@@ -86,6 +88,7 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       });
       return;
     }
+    setState(() => _busy = true);
     try {
       final upload = await widget.api.uploadStudentImport(
         schoolUuid: widget.schoolUuid,
@@ -114,6 +117,43 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _downloadTemplate() async {
+    setState(() {
+      _downloadingTemplate = true;
+      _error = null;
+    });
+    try {
+      final file = await widget.api.downloadStudentImportTemplate(
+        schoolUuid: widget.schoolUuid,
+      );
+      if (widget.saveTemplate != null) {
+        await widget.saveTemplate!(file);
+      } else {
+        await saveDownloadedFile(
+          bytes: file.bytes,
+          filename: file.filename,
+          contentType: file.contentType,
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('XLSX template downloaded.')),
+        );
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not download the XLSX template. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _downloadingTemplate = false);
     }
   }
 
@@ -274,13 +314,27 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text(
-        'Choose a UTF-8 CSV or XLSX file. The first row must contain unique column headers.',
+        'Download this school’s pre-formatted template, fill it in, then upload the completed XLSX or a UTF-8 CSV.',
       ),
       const SizedBox(height: 12),
-      FilledButton.icon(
-        onPressed: _busy ? null : _pickAndUpload,
-        icon: const Icon(Icons.upload_file),
-        label: Text(_busy ? 'Uploading…' : 'Choose file'),
+      Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            key: const Key('student-import-download-template'),
+            onPressed: _busy || _downloadingTemplate ? null : _downloadTemplate,
+            icon: const Icon(Icons.download),
+            label: Text(
+              _downloadingTemplate ? 'Downloading…' : 'Download XLSX Template',
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: _busy || _downloadingTemplate ? null : _pickAndUpload,
+            icon: const Icon(Icons.upload_file),
+            label: Text(_busy ? 'Uploading…' : 'Choose file'),
+          ),
+        ],
       ),
       if (_upload != null)
         Padding(
