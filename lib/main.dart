@@ -111,7 +111,7 @@ class _MyAppState extends State<MyApp> {
       AppRoutes.register => _RegisterRoute(),
       _ when AppRoutes.isPublicForm(routeName) => PublicStudentFormScreen(
         token: AppRoutes.publicFormToken(routeName)!,
-        api: _publicApi(context),
+        api: ApiService(),
       ),
       _ when AppRoutes.isProtected(routeName) => _AuthenticatedRoute(
         routeName: routeName,
@@ -120,16 +120,12 @@ class _MyAppState extends State<MyApp> {
       _ => const LandingScreen(),
     };
   }
-
-  ApiService _publicApi(BuildContext context) =>
-      context.read<AuthProvider>().api;
 }
 
 class _RegisterRoute extends StatelessWidget {
   @override
-  Widget build(BuildContext context) => _PublicAuthRoute(
-    unauthenticated: RegisterScreen(api: context.read<AuthProvider>().api),
-  );
+  Widget build(BuildContext context) =>
+      _PublicAuthRoute(unauthenticated: RegisterScreen(api: ApiService()));
 }
 
 class _PublicAuthRoute extends StatelessWidget {
