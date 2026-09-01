@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'app_routes.dart';
 import 'models/api_student.dart';
@@ -35,6 +36,7 @@ import 'widgets/authenticated_shell.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
   runApp(const MyApp());
 }
 
