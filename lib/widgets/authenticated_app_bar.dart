@@ -320,6 +320,12 @@ List<_NavigationItem> _navigationItems(_NavigationAuthState auth) {
         Icons.dynamic_form_outlined,
         AppRoutes.studentFields,
       ),
+    if (modules.contains(DashboardModuleKind.publicForms))
+      const _NavigationItem(
+        'Public Forms',
+        Icons.public_outlined,
+        AppRoutes.publicForms,
+      ),
     if (modules.contains(DashboardModuleKind.schoolProfile))
       const _NavigationItem(
         'School Profile',

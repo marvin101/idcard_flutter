@@ -292,6 +292,14 @@ class _ModuleGrid extends StatelessWidget {
           () =>
               AppNavigation.navigateToModule(context, AppRoutes.studentFields),
         ),
+      if (visibleModules.contains(DashboardModuleKind.publicForms))
+        _DashboardModule(
+          'Public Forms',
+          'Collect student details through a secure public link.',
+          Icons.public_outlined,
+          true,
+          () => AppNavigation.navigateToModule(context, AppRoutes.publicForms),
+        ),
       if (visibleModules.contains(DashboardModuleKind.idCards))
         _DashboardModule(
           'ID Cards',

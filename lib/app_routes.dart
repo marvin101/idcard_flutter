@@ -7,6 +7,8 @@ abstract final class AppRoutes {
   static const addStudent = '/students/add';
   static const editStudent = '/students/edit';
   static const studentFields = '/students/fields';
+  static const publicForms = '/public-forms';
+  static const publicFormPrefix = '/public/forms/';
   static const studentImport = '/students/import';
   static const bulkPhotoImport = '/students/photos/import';
   static const studentHistoryPrefix = '/students/';
@@ -27,6 +29,7 @@ abstract final class AppRoutes {
     addStudent,
     editStudent,
     studentFields,
+    publicForms,
     studentImport,
     bulkPhotoImport,
     schoolProfile,
@@ -40,6 +43,16 @@ abstract final class AppRoutes {
   static bool isProtected(String? routeName) =>
       routeName != null &&
       (protectedRoutes.contains(routeName) || isStudentHistory(routeName));
+
+  static String publicForm(String token) =>
+      '$publicFormPrefix${Uri.encodeComponent(token)}';
+  static bool isPublicForm(String? routeName) =>
+      routeName != null &&
+      routeName.startsWith(publicFormPrefix) &&
+      routeName.length > publicFormPrefix.length;
+  static String? publicFormToken(String? routeName) => isPublicForm(routeName)
+      ? Uri.decodeComponent(routeName!.substring(publicFormPrefix.length))
+      : null;
 
   static String studentHistory(String studentUuid) =>
       '$studentHistoryPrefix${Uri.encodeComponent(studentUuid)}$studentHistorySuffix';

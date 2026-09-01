@@ -8,6 +8,7 @@ abstract final class AppNavigation {
     AppRoutes.dashboard,
     AppRoutes.students,
     AppRoutes.studentFields,
+    AppRoutes.publicForms,
     AppRoutes.schoolProfile,
     AppRoutes.academicSessions,
     AppRoutes.classesSections,

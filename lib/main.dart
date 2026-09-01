@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app_routes.dart';
 import 'models/api_student.dart';
 import 'models/auth_models.dart';
+import 'services/api_service.dart';
 import 'navigation/app_navigation.dart';
 import 'navigation/app_router.dart';
 import 'providers/auth_provider.dart';
@@ -24,6 +25,8 @@ import 'screens/student_fields_screen.dart';
 import 'screens/student_form.dart';
 import 'screens/student_import_screen.dart';
 import 'screens/student_history_screen.dart';
+import 'screens/public_form_management_screen.dart';
+import 'screens/public_student_form_screen.dart';
 import 'screens/student_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
@@ -104,6 +107,10 @@ class _MyAppState extends State<MyApp> {
         unauthenticated: LoginScreen(),
       ),
       AppRoutes.register => _RegisterRoute(),
+      _ when AppRoutes.isPublicForm(routeName) => PublicStudentFormScreen(
+        token: AppRoutes.publicFormToken(routeName)!,
+        api: _publicApi(context),
+      ),
       _ when AppRoutes.isProtected(routeName) => _AuthenticatedRoute(
         routeName: routeName,
         arguments: arguments,
@@ -111,6 +118,9 @@ class _MyAppState extends State<MyApp> {
       _ => const LandingScreen(),
     };
   }
+
+  ApiService _publicApi(BuildContext context) =>
+      context.read<AuthProvider>().api;
 }
 
 class _RegisterRoute extends StatelessWidget {
@@ -199,6 +209,12 @@ class _AuthenticatedRoute extends StatelessWidget {
         ),
       AppRoutes.studentFields when has(DashboardModuleKind.studentFields) =>
         StudentFieldsScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+        ),
+      AppRoutes.publicForms when has(DashboardModuleKind.publicForms) =>
+        PublicFormManagementScreen(
           schoolUuid: school.uuid,
           schoolName: school.name,
           api: auth.api,

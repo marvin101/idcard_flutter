@@ -15,6 +15,7 @@ import '../models/card_template.dart';
 import '../models/school_profile.dart';
 import '../models/student_field.dart';
 import '../models/student_import.dart';
+import '../models/public_form.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -138,6 +139,87 @@ class ApiService {
 
   final http.Client _client;
   final String baseUrl;
+
+  Future<PublicFormConfig?> getPublicFormConfig(String schoolUuid) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/public-form'),
+      headers: _headers,
+    );
+    final decoded = _decode(response);
+    return decoded == null
+        ? null
+        : PublicFormConfig.fromJson(decoded as Map<String, dynamic>);
+  }
+
+  Future<PublicFormConfig> savePublicFormConfig({
+    required String schoolUuid,
+    required PublicFormConfig config,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/public-form'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': config.title,
+        'instructions': config.instructions,
+        'is_active': config.isActive,
+        'require_all_fields': config.requireAllFields,
+        'allow_photo': config.allowPhoto,
+        'expires_at': config.expiresAt?.toUtc().toIso8601String(),
+        'selected_system_fields': config.selectedSystemFields,
+        'selected_custom_field_uuids': config.selectedCustomFieldUuids,
+        'success_message': config.successMessage,
+      }),
+    );
+    return PublicFormConfig.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicFormConfig> regeneratePublicFormLink(String schoolUuid) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/public-form/regenerate-link'),
+      headers: _headers,
+    );
+    return PublicFormConfig.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicFormView> getPublicForm(String token) async {
+    final response = await _client.get(
+      _uri('/public/forms/${Uri.encodeComponent(token)}'),
+    );
+    return PublicFormView.fromJson(_decodeMap(response));
+  }
+
+  Future<String> submitPublicForm({
+    required String token,
+    required Map<String, dynamic> studentData,
+    XFile? photo,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/public/forms/${Uri.encodeComponent(token)}/submissions'),
+    );
+    request.fields['student_data_json'] = jsonEncode(studentData);
+    if (photo != null) {
+      final name = photo.name.toLowerCase();
+      final subtype = name.endsWith('.png')
+          ? 'png'
+          : name.endsWith('.webp')
+          ? 'webp'
+          : 'jpeg';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'photo',
+          await photo.readAsBytes(),
+          filename: photo.name,
+          contentType: MediaType('image', subtype),
+        ),
+      );
+    }
+    final response = await http.Response.fromStream(
+      await _client.send(request),
+    );
+    return _decodeMap(response)['message'] as String;
+  }
+
   String? _token;
   void Function()? _onSessionInvalidated;
   bool _sessionInvalidationReported = false;

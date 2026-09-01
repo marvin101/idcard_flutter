@@ -5,6 +5,7 @@ enum DashboardModuleKind {
   classesAndSections,
   students,
   studentFields,
+  publicForms,
   idCards,
 }
 
