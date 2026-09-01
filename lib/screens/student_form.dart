@@ -10,6 +10,7 @@ import '../sections/photo_section.dart';
 import '../sections/custom_student_fields_section.dart';
 import '../services/api_service.dart';
 import '../models/api_student.dart';
+import '../widgets/student_lifecycle_summary.dart';
 
 class StudentFormScreen extends StatelessWidget {
   const StudentFormScreen({
@@ -80,6 +81,10 @@ class _StudentFormView extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
+              if (provider.student != null) ...[
+                StudentLifecycleSummary(student: provider.student!),
+                const SizedBox(height: 24),
+              ],
               const PersonalInformationSection(),
               const SizedBox(height: 24),
 

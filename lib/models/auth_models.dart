@@ -78,3 +78,28 @@ class SchoolAccess {
     role: json['role'] as String,
   );
 }
+
+class LifecyclePermissions {
+  const LifecyclePermissions({
+    required this.canVerify,
+    required this.canViewHistory,
+    required this.canMarkPrinted,
+  });
+
+  final bool canVerify;
+  final bool canViewHistory;
+  final bool canMarkPrinted;
+}
+
+LifecyclePermissions lifecyclePermissionsFor({
+  required bool isPlatformAdmin,
+  required String? schoolRole,
+}) {
+  final isSchoolAdmin = schoolRole == 'school_admin' || schoolRole == 'admin';
+  final isAdministrator = isPlatformAdmin || isSchoolAdmin;
+  return LifecyclePermissions(
+    canVerify: isAdministrator,
+    canViewHistory: isAdministrator,
+    canMarkPrinted: isAdministrator || schoolRole == 'card_operator',
+  );
+}

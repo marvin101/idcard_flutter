@@ -86,6 +86,9 @@ class _CardsScreenState extends State<CardsScreen> {
   bool? _printed;
   final Set<String> _selectedStudentUuids = {};
 
+  StudentLifecycleSelection get _selection =>
+      StudentLifecycleSelection.from(_students, _selectedStudentUuids);
+
   @override
   void initState() {
     super.initState();
@@ -190,6 +193,7 @@ class _CardsScreenState extends State<CardsScreen> {
         _offset = 0;
         _totalStudents = 0;
         _hasMore = true;
+        _selectedStudentUuids.clear();
       });
     }
 
@@ -410,6 +414,31 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<void> _markPrinted(ApiStudent student) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('cards-confirm-mark-printed-dialog'),
+        title: Text(
+          student.isPrinted ? 'Record card reprint?' : 'Mark card printed?',
+        ),
+        content: Text(
+          'This records print #${student.printCount + 1} for ${student.fullName}. '
+          'Printing or downloading a PDF does not update this lifecycle status.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('cards-confirm-mark-printed-action'),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(student.isPrinted ? 'Record Reprint' : 'Mark Printed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     try {
       await widget.api.markStudentPrinted(
         schoolUuid: widget.schoolUuid,
@@ -427,6 +456,45 @@ class _CardsScreenState extends State<CardsScreen> {
 
   Future<void> _runSelectedLifecycle({required bool verify}) async {
     if (_selectedStudentUuids.isEmpty) return;
+    final selection = _selection;
+    if (verify && !selection.canBatchVerify) return;
+    if (!verify && !selection.canBatchMarkPrinted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: Key(
+          verify
+              ? 'cards-confirm-batch-verify-dialog'
+              : 'cards-confirm-batch-print-dialog',
+        ),
+        title: Text(
+          verify
+              ? 'Verify ${selection.selectedCount} students?'
+              : 'Mark ${selection.selectedCount} cards printed?',
+        ),
+        content: Text(
+          verify
+              ? 'All selected Pending and Needs Correction records will become Verified.'
+              : '${selection.reprintCount} selected card(s) are reprints. The batch is all-or-nothing, and PDF export alone does not mark cards printed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: Key(
+              verify
+                  ? 'cards-confirm-batch-verify-action'
+                  : 'cards-confirm-batch-print-action',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(verify ? 'Verify All' : 'Mark All Printed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     try {
       if (verify) {
         await widget.api.batchVerifyStudents(
@@ -613,6 +681,7 @@ class _CardsScreenState extends State<CardsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selection = _selection;
     return Scaffold(
       backgroundColor: const Color(0xfff5f7fb),
       appBar: AuthenticatedAppBar(
@@ -635,14 +704,18 @@ class _CardsScreenState extends State<CardsScreen> {
             IconButton(
               key: const Key('cards-batch-verify'),
               tooltip: 'Verify selected',
-              onPressed: () => _runSelectedLifecycle(verify: true),
+              onPressed: selection.canBatchVerify
+                  ? () => _runSelectedLifecycle(verify: true)
+                  : null,
               icon: const Icon(Icons.verified_outlined),
             ),
           if (widget.canMarkPrinted && _selectedStudentUuids.isNotEmpty)
             IconButton(
               key: const Key('cards-batch-mark-printed'),
               tooltip: 'Mark selected printed',
-              onPressed: () => _runSelectedLifecycle(verify: false),
+              onPressed: selection.canBatchMarkPrinted
+                  ? () => _runSelectedLifecycle(verify: false)
+                  : null,
               icon: const Icon(Icons.done_all),
             ),
           if (widget.canDesign)
@@ -665,6 +738,44 @@ class _CardsScreenState extends State<CardsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildToolbar(),
+
+                    const SizedBox(height: 10),
+
+                    const Card(
+                      key: Key('pdf-lifecycle-explanation'),
+                      elevation: 0,
+                      color: Color(0xffeef5ff),
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Text(
+                          'PDF export is non-destructive and does not mark cards printed. '
+                          'Use Mark Printed only after physical production.',
+                        ),
+                      ),
+                    ),
+
+                    if (widget.canVerify && selection.verifyIneligibleCount > 0)
+                      Text(
+                        '${selection.verifyIneligibleCount} of ${selection.selectedCount} selected '
+                        'record(s) are already verified. Deselect them before batch Verify.',
+                        key: const Key('cards-batch-verify-ineligible-message'),
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+
+                    if (widget.canMarkPrinted &&
+                        selection.printIneligibleCount > 0)
+                      Text(
+                        '${selection.printIneligibleCount} of ${selection.selectedCount} selected '
+                        'record(s) are not verified. Deselect them before Mark Selected Printed.',
+                        key: const Key('cards-batch-print-ineligible-message'),
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
 
                     const SizedBox(height: 14),
 

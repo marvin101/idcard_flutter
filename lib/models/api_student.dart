@@ -156,4 +156,147 @@ class StudentAuditEvent {
         actorName: json['actor_name'] as String?,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
+
+  bool get containsSensitiveField {
+    final parts = (fieldName ?? '')
+        .replaceAll('[', '.')
+        .replaceAll(']', '')
+        .split('.')
+        .map((part) => part.toLowerCase().replaceAll('-', '_'));
+    return parts.any(
+      (part) =>
+          part == 'password' ||
+          part == 'password_hash' ||
+          part == 'token' ||
+          part == 'secret' ||
+          part.contains('password') ||
+          part.contains('secret') ||
+          part.endsWith('_token'),
+    );
+  }
+
+  String get friendlyEventLabel => switch (eventType) {
+    'student_created' => 'Student Created',
+    'student_field_updated' => 'Student Details Updated',
+    'student_photo_added' => 'Photo Added',
+    'student_photo_replaced' => 'Photo Replaced',
+    'student_photo_removed' => 'Photo Removed',
+    'verification_status_changed' => 'Verification Status Changed',
+    'correction_note_changed' => 'Correction Note Changed',
+    'marked_printed' => 'Card Marked Printed',
+    'reprinted' => 'Card Reprint Recorded',
+    'student_deactivated' => 'Student Deactivated',
+    _ => _words(eventType),
+  };
+
+  String? get friendlyFieldLabel {
+    final field = fieldName;
+    if (field == null || field.isEmpty || containsSensitiveField) return null;
+    const labels = {
+      'verification_status': 'Verification status',
+      'correction_note': 'Correction note',
+      'print_count': 'Print count',
+      'full_name': 'Student name',
+      'admission_no': 'Admission number',
+      'roll_no': 'Roll number',
+      'father_name': "Father's name",
+      'mother_name': "Mother's name",
+      'blood_group': 'Blood group',
+      'session_id': 'Academic session',
+      'class_id': 'Class',
+      'section_id': 'Section',
+      'is_active': 'Active status',
+      'photo_path': 'Photo',
+    };
+    if (labels.containsKey(field)) return labels[field];
+    if (field.startsWith('custom_fields.')) {
+      return 'Custom field: ${_words(field.substring('custom_fields.'.length))}';
+    }
+    return _words(field);
+  }
+
+  String get friendlySummary {
+    if (containsSensitiveField) return 'Sensitive change hidden';
+    final label = friendlyFieldLabel;
+    if (label != null) {
+      return '$label: ${_displayValue(oldValue)} → ${_displayValue(newValue)}';
+    }
+    return switch (eventType) {
+      'student_created' => 'Student record created',
+      'student_photo_added' => 'A student photo was added',
+      'student_photo_replaced' => 'The student photo was replaced',
+      'student_photo_removed' => 'The student photo was removed',
+      'student_deactivated' => 'The student record was deactivated',
+      _ => 'Student record event',
+    };
+  }
+
+  static String _displayValue(dynamic value) {
+    if (value == null || value == '') return 'Not set';
+    if (value is bool) return value ? 'Yes' : 'No';
+    if (value is List) return value.map(_displayValue).join(', ');
+    if (value is Map) {
+      return value.entries
+          .map(
+            (entry) =>
+                '${_words('${entry.key}')}: ${_displayValue(entry.value)}',
+          )
+          .join(', ');
+    }
+    final text = '$value';
+    return switch (text) {
+      'pending' => 'Pending',
+      'needs_correction' => 'Needs Correction',
+      'verified' => 'Verified',
+      _ => text,
+    };
+  }
+
+  static String _words(String value) => value
+      .replaceAll('.', ' ')
+      .split('_')
+      .where((word) => word.isNotEmpty)
+      .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+      .join(' ');
+}
+
+class StudentLifecycleSelection {
+  const StudentLifecycleSelection({
+    required this.selectedCount,
+    required this.verifyIneligibleCount,
+    required this.printIneligibleCount,
+    required this.reprintCount,
+  });
+
+  final int selectedCount;
+  final int verifyIneligibleCount;
+  final int printIneligibleCount;
+  final int reprintCount;
+
+  bool get canBatchVerify => selectedCount > 0 && verifyIneligibleCount == 0;
+  bool get canBatchMarkPrinted =>
+      selectedCount > 0 && printIneligibleCount == 0;
+
+  factory StudentLifecycleSelection.from(
+    Iterable<ApiStudent> students,
+    Set<String> selectedUuids,
+  ) {
+    final selected = students
+        .where((student) => selectedUuids.contains(student.uuid))
+        .toList();
+    return StudentLifecycleSelection(
+      selectedCount: selected.length,
+      verifyIneligibleCount: selected
+          .where(
+            (student) =>
+                student.verificationStatus != 'pending' &&
+                student.verificationStatus != 'needs_correction',
+          )
+          .length,
+      printIneligibleCount: selected
+          .where((student) => !student.isVerified)
+          .length,
+      reprintCount: selected.where((student) => student.isPrinted).length,
+    );
+  }
 }

@@ -86,7 +86,11 @@ class IdCardPreview extends StatelessWidget {
                     key: Key('mark-printed-${student.uuid}'),
                     onPressed: onMarkPrinted,
                     icon: const Icon(Icons.done_all, size: 17),
-                    label: Text(student.isPrinted ? 'Reprint' : 'Printed'),
+                    label: Text(
+                      student.isPrinted
+                          ? 'Reprint (${student.printCount})'
+                          : 'Mark Printed',
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
                       side: const BorderSide(color: Color(0xffcbd3df)),

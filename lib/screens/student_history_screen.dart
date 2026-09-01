@@ -37,20 +37,6 @@ class _StudentHistoryScreenState extends State<StudentHistoryScreen> {
     );
   }
 
-  String _title(String value) => value
-      .split('_')
-      .map(
-        (word) => word.isEmpty
-            ? word
-            : '${word[0].toUpperCase()}${word.substring(1)}',
-      )
-      .join(' ');
-
-  String _change(StudentAuditEvent event) {
-    if (event.fieldName == null) return 'Student record event';
-    return '${event.fieldName}: ${event.oldValue ?? '—'} → ${event.newValue ?? '—'}';
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xfff5f7fb),
@@ -76,7 +62,8 @@ class _StudentHistoryScreenState extends State<StudentHistoryScreen> {
             ),
           );
         }
-        final events = snapshot.data ?? const [];
+        final events = [...snapshot.data ?? const <StudentAuditEvent>[]]
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         if (events.isEmpty) {
           return const Center(child: Text('No history recorded yet.'));
         }
@@ -92,11 +79,11 @@ class _StudentHistoryScreenState extends State<StudentHistoryScreen> {
                 leading: const CircleAvatar(
                   child: Icon(Icons.history, size: 18),
                 ),
-                title: Text(_title(event.eventType)),
+                title: Text(event.friendlyEventLabel),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_change(event)),
+                    Text(event.friendlySummary),
                     if (event.note?.isNotEmpty == true)
                       Text('Note: ${event.note}'),
                     Text(

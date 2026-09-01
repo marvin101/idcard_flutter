@@ -54,6 +54,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
   bool? _printed;
   final Set<String> _selectedStudentUuids = {};
 
+  StudentLifecycleSelection get _selection =>
+      StudentLifecycleSelection.from(_students, _selectedStudentUuids);
+
   bool _loadingFilters = true;
   bool _loadingSections = false;
   String? _sectionError;
@@ -312,6 +315,31 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Future<void> _markPrinted(ApiStudent student) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('confirm-mark-printed-dialog'),
+        title: Text(
+          student.isPrinted ? 'Record card reprint?' : 'Mark card printed?',
+        ),
+        content: Text(
+          'This records print #${student.printCount + 1} for ${student.fullName}. '
+          'Downloading a PDF does not mark a card printed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm-mark-printed-action'),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(student.isPrinted ? 'Record Reprint' : 'Mark Printed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     await _runLifecycleAction(
       () => widget.api.markStudentPrinted(
         schoolUuid: widget.schoolUuid,
@@ -346,6 +374,43 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
   Future<void> _runBatch(bool verify) async {
     if (_selectedStudentUuids.isEmpty) return;
+    final selection = _selection;
+    if (verify && !selection.canBatchVerify) return;
+    if (!verify && !selection.canBatchMarkPrinted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: Key(
+          verify ? 'confirm-batch-verify-dialog' : 'confirm-batch-print-dialog',
+        ),
+        title: Text(
+          verify
+              ? 'Verify ${selection.selectedCount} students?'
+              : 'Mark ${selection.selectedCount} cards printed?',
+        ),
+        content: Text(
+          verify
+              ? 'All selected Pending and Needs Correction records will become Verified.'
+              : '${selection.reprintCount} selected card(s) are reprints. This action records production; PDF download alone does not.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: Key(
+              verify
+                  ? 'confirm-batch-verify-action'
+                  : 'confirm-batch-print-action',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(verify ? 'Verify All' : 'Mark All Printed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     try {
       if (verify) {
         await widget.api.batchVerifyStudents(
@@ -403,6 +468,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Widget _buildHeader() {
+    final selection = _selection;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -522,7 +588,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
             if (_selectedStudentUuids.isNotEmpty && widget.canVerify)
               FilledButton.icon(
                 key: const Key('batch-verify-action'),
-                onPressed: () => _runBatch(true),
+                onPressed: selection.canBatchVerify
+                    ? () => _runBatch(true)
+                    : null,
                 icon: const Icon(Icons.verified_outlined),
                 label: Text(
                   'Verify Selected (${_selectedStudentUuids.length})',
@@ -531,12 +599,38 @@ class _StudentsScreenState extends State<StudentsScreen> {
             if (_selectedStudentUuids.isNotEmpty && widget.canMarkPrinted)
               OutlinedButton.icon(
                 key: const Key('batch-mark-printed-action'),
-                onPressed: () => _runBatch(false),
+                onPressed: selection.canBatchMarkPrinted
+                    ? () => _runBatch(false)
+                    : null,
                 icon: const Icon(Icons.print_outlined),
                 label: const Text('Mark Selected Printed'),
               ),
           ],
         ),
+        if (widget.canVerify && selection.verifyIneligibleCount > 0) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${selection.verifyIneligibleCount} of ${selection.selectedCount} selected '
+            'record(s) are already verified. Deselect them before batch Verify.',
+            key: const Key('batch-verify-ineligible-message'),
+            style: const TextStyle(
+              color: AppColors.danger,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        if (widget.canMarkPrinted && selection.printIneligibleCount > 0) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${selection.printIneligibleCount} of ${selection.selectedCount} selected '
+            'record(s) are not verified. Deselect them before Mark Selected Printed.',
+            key: const Key('batch-print-ineligible-message'),
+            style: const TextStyle(
+              color: AppColors.danger,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -761,8 +855,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
             subtitle: Text(
               'Admission: ${student.admissionNo}'
               '${student.rollNo == null ? '' : '  •  Roll: ${student.rollNo}'}'
+              '${student.correctionNote?.isNotEmpty == true ? '\nCorrection note: ${student.correctionNote}' : ''}'
               '${student.verifiedAt == null ? '' : '\nVerified ${student.verifiedByName == null ? '' : 'by ${student.verifiedByName} '}at ${student.verifiedAt!.toLocal()}'}'
-              '${student.printedAt == null ? '' : '\nLast printed: ${student.printedAt!.toLocal()} • Count: ${student.printCount}'}',
+              '${student.printedAt == null ? '' : '\nLast printed ${student.printedByName == null ? '' : 'by ${student.printedByName} '}at ${student.printedAt!.toLocal()} • Count: ${student.printCount}'}',
             ),
             trailing:
                 widget.canEdit ||
@@ -798,9 +893,12 @@ class _StudentsScreenState extends State<StudentsScreen> {
                           child: Text('Delete'),
                         ),
                       if (widget.canVerify)
-                        const PopupMenuItem(
-                          value: 'verify',
-                          child: Text('Verify'),
+                        PopupMenuItem(
+                          value: student.isVerified ? null : 'verify',
+                          enabled: !student.isVerified,
+                          child: Text(
+                            student.isVerified ? 'Already Verified' : 'Verify',
+                          ),
                         ),
                       if (widget.canVerify)
                         const PopupMenuItem(
