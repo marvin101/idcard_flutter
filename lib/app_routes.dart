@@ -9,6 +9,8 @@ abstract final class AppRoutes {
   static const studentFields = '/students/fields';
   static const studentImport = '/students/import';
   static const bulkPhotoImport = '/students/photos/import';
+  static const studentHistoryPrefix = '/students/';
+  static const studentHistorySuffix = '/history';
   static const schoolProfile = '/school-profile';
   static const academicSessions = '/academic-sessions';
   static const classesSections = '/classes-sections';
@@ -36,5 +38,26 @@ abstract final class AppRoutes {
   };
 
   static bool isProtected(String? routeName) =>
-      routeName != null && protectedRoutes.contains(routeName);
+      routeName != null &&
+      (protectedRoutes.contains(routeName) || isStudentHistory(routeName));
+
+  static String studentHistory(String studentUuid) =>
+      '$studentHistoryPrefix${Uri.encodeComponent(studentUuid)}$studentHistorySuffix';
+
+  static bool isStudentHistory(String? routeName) =>
+      routeName != null &&
+      routeName.startsWith(studentHistoryPrefix) &&
+      routeName.endsWith(studentHistorySuffix) &&
+      routeName.length >
+          studentHistoryPrefix.length + studentHistorySuffix.length;
+
+  static String? studentUuidFromHistory(String? routeName) =>
+      isStudentHistory(routeName)
+      ? Uri.decodeComponent(
+          routeName!.substring(
+            studentHistoryPrefix.length,
+            routeName.length - studentHistorySuffix.length,
+          ),
+        )
+      : null;
 }

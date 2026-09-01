@@ -22,6 +22,12 @@ import 'package:idcard_flutter/widgets/authenticated_app_bar.dart';
 
 class _FakeApi extends ApiService {
   @override
+  Future<List<StudentAuditEvent>> getStudentHistory({
+    required String schoolUuid,
+    required String studentUuid,
+  }) async => const [];
+
+  @override
   Future<List<AcademicSession>> getAcademicSessions(String schoolUuid) async =>
       const [];
 
@@ -41,6 +47,8 @@ class _FakeApi extends ApiService {
     String? sessionUuid,
     String? classUuid,
     String? sectionUuid,
+    String? verificationStatus,
+    bool? printed,
   }) async => const [];
 
   @override
@@ -54,6 +62,8 @@ class _FakeApi extends ApiService {
     String? sectionUuid,
     DateTime? createdFrom,
     DateTime? createdTo,
+    String? verificationStatus,
+    bool? printed,
   }) async => ApiStudentPage(
     items: const [],
     total: 0,
@@ -276,6 +286,7 @@ void main() {
       AppRoutes.schoolProfile,
       AppRoutes.design,
       AppRoutes.cards,
+      AppRoutes.studentHistory('student-1'),
     ]) {
       await pumpApp(tester, initialRoute: route);
       expect(

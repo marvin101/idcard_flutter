@@ -16,6 +16,7 @@ class IdCardPreview extends StatelessWidget {
     this.sessionName,
     this.onEdit,
     this.onPrint,
+    this.onMarkPrinted,
   });
 
   final ApiStudent student;
@@ -25,6 +26,7 @@ class IdCardPreview extends StatelessWidget {
   final String? sessionName;
   final VoidCallback? onEdit;
   final VoidCallback? onPrint;
+  final VoidCallback? onMarkPrinted;
 
   String? get _photoUrl {
     final path = student.photoPath?.trim();
@@ -70,6 +72,21 @@ class IdCardPreview extends StatelessWidget {
                     onPressed: onPrint,
                     icon: const Icon(Icons.print_outlined, size: 17),
                     label: const Text('Print'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: Color(0xffcbd3df)),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: Key('mark-printed-${student.uuid}'),
+                    onPressed: onMarkPrinted,
+                    icon: const Icon(Icons.done_all, size: 17),
+                    label: Text(student.isPrinted ? 'Reprint' : 'Printed'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
                       side: const BorderSide(color: Color(0xffcbd3df)),

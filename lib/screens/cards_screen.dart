@@ -13,6 +13,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
 import '../widgets/id_card_preview.dart';
+import '../widgets/student_lifecycle_badge.dart';
 import 'package:printing/printing.dart';
 
 import '../services/pdf_service.dart';
@@ -27,6 +28,8 @@ class CardsScreen extends StatefulWidget {
     required this.canEdit,
     required this.canDesign,
     required this.canPrint,
+    this.canVerify = false,
+    this.canMarkPrinted = false,
   });
 
   final String schoolUuid;
@@ -35,6 +38,8 @@ class CardsScreen extends StatefulWidget {
   final bool canEdit;
   final bool canDesign;
   final bool canPrint;
+  final bool canVerify;
+  final bool canMarkPrinted;
 
   @override
   State<CardsScreen> createState() => _CardsScreenState();
@@ -77,6 +82,9 @@ class _CardsScreenState extends State<CardsScreen> {
   String? _selectedSessionUuid;
   String? _selectedClassUuid;
   String? _selectedSectionUuid;
+  String? _verificationStatus;
+  bool? _printed;
+  final Set<String> _selectedStudentUuids = {};
 
   @override
   void initState() {
@@ -194,6 +202,8 @@ class _CardsScreenState extends State<CardsScreen> {
         sessionUuid: _selectedSessionUuid,
         classUuid: _selectedClassUuid,
         sectionUuid: _selectedSectionUuid,
+        verificationStatus: _verificationStatus,
+        printed: _printed,
       );
 
       if (!mounted || requestVersion != _requestVersion) {
@@ -257,6 +267,8 @@ class _CardsScreenState extends State<CardsScreen> {
         sessionUuid: _selectedSessionUuid,
         classUuid: _selectedClassUuid,
         sectionUuid: _selectedSectionUuid,
+        verificationStatus: _verificationStatus,
+        printed: _printed,
       );
 
       if (!mounted || requestVersion != _requestVersion) {
@@ -397,6 +409,48 @@ class _CardsScreenState extends State<CardsScreen> {
     await _loadStudents(reset: true);
   }
 
+  Future<void> _markPrinted(ApiStudent student) async {
+    try {
+      await widget.api.markStudentPrinted(
+        schoolUuid: widget.schoolUuid,
+        studentUuid: student.uuid,
+      );
+      if (mounted) await _loadStudents(reset: true);
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
+  Future<void> _runSelectedLifecycle({required bool verify}) async {
+    if (_selectedStudentUuids.isEmpty) return;
+    try {
+      if (verify) {
+        await widget.api.batchVerifyStudents(
+          schoolUuid: widget.schoolUuid,
+          studentUuids: _selectedStudentUuids.toList(),
+        );
+      } else {
+        await widget.api.batchMarkStudentsPrinted(
+          schoolUuid: widget.schoolUuid,
+          studentUuids: _selectedStudentUuids.toList(),
+        );
+      }
+      if (!mounted) return;
+      setState(_selectedStudentUuids.clear);
+      await _loadStudents(reset: true);
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
   // ------------------------------------------------------------
   // Edit student
   // ------------------------------------------------------------
@@ -509,6 +563,8 @@ class _CardsScreenState extends State<CardsScreen> {
           sectionUuid: filter.sectionUuid,
           createdFrom: filter.createdFrom,
           createdTo: filter.createdTo,
+          verificationStatus: _verificationStatus,
+          printed: _printed,
         );
         students.addAll(page.items);
         if (!page.hasMore || page.items.isEmpty) break;
@@ -574,6 +630,20 @@ class _CardsScreenState extends State<CardsScreen> {
                       ),
                     )
                   : const Icon(Icons.picture_as_pdf_outlined),
+            ),
+          if (widget.canVerify && _selectedStudentUuids.isNotEmpty)
+            IconButton(
+              key: const Key('cards-batch-verify'),
+              tooltip: 'Verify selected',
+              onPressed: () => _runSelectedLifecycle(verify: true),
+              icon: const Icon(Icons.verified_outlined),
+            ),
+          if (widget.canMarkPrinted && _selectedStudentUuids.isNotEmpty)
+            IconButton(
+              key: const Key('cards-batch-mark-printed'),
+              tooltip: 'Mark selected printed',
+              onPressed: () => _runSelectedLifecycle(verify: false),
+              icon: const Icon(Icons.done_all),
             ),
           if (widget.canDesign)
             IconButton(
@@ -713,6 +783,36 @@ class _CardsScreenState extends State<CardsScreen> {
             onChanged: _selectSection,
             enabled: _selectedClassUuid != null && _sections.isNotEmpty,
           ),
+          _dropdown<String>(
+            label: 'Verification',
+            value: _verificationStatus,
+            items: const [
+              DropdownMenuItem(value: null, child: Text('All Statuses')),
+              DropdownMenuItem(value: 'pending', child: Text('Pending')),
+              DropdownMenuItem(
+                value: 'needs_correction',
+                child: Text('Needs Correction'),
+              ),
+              DropdownMenuItem(value: 'verified', child: Text('Verified')),
+            ],
+            onChanged: (value) {
+              setState(() => _verificationStatus = value);
+              _loadStudents(reset: true);
+            },
+          ),
+          _dropdown<bool>(
+            label: 'Printed',
+            value: _printed,
+            items: const [
+              DropdownMenuItem(value: null, child: Text('All Records')),
+              DropdownMenuItem(value: false, child: Text('Not Printed')),
+              DropdownMenuItem(value: true, child: Text('Printed')),
+            ],
+            onChanged: (value) {
+              setState(() => _printed = value);
+              _loadStudents(reset: true);
+            },
+          ),
         ];
 
         final filterRow = Wrap(spacing: 10, runSpacing: 10, children: filters);
@@ -735,15 +835,26 @@ class _CardsScreenState extends State<CardsScreen> {
           );
         }
 
-        return Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(flex: 2, child: search),
-            const SizedBox(width: 10),
-            Expanded(child: filters[0]),
-            const SizedBox(width: 10),
-            Expanded(child: filters[1]),
-            const SizedBox(width: 10),
-            Expanded(child: filters[2]),
+            Row(
+              children: [
+                Expanded(flex: 2, child: search),
+                const SizedBox(width: 10),
+                Expanded(child: filters[0]),
+                const SizedBox(width: 10),
+                Expanded(child: filters[1]),
+                const SizedBox(width: 10),
+                Expanded(child: filters[2]),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: filters.skip(3).toList(),
+            ),
           ],
         );
       },
@@ -849,16 +960,46 @@ class _CardsScreenState extends State<CardsScreen> {
           }
         }
 
-        return IdCardPreview(
-          student: student,
-          schoolName: widget.schoolName,
-          api: widget.api,
-          template: _cardTemplate,
-          sessionName: session?.name,
-          onEdit: widget.canEdit ? () => _editStudent(student) : null,
-          onPrint: widget.canPrint
-              ? () => _printStudentCard(student, session?.name)
-              : null,
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: IdCardPreview(
+                student: student,
+                schoolName: widget.schoolName,
+                api: widget.api,
+                template: _cardTemplate,
+                sessionName: session?.name,
+                onEdit: widget.canEdit ? () => _editStudent(student) : null,
+                onPrint: widget.canPrint
+                    ? () => _printStudentCard(student, session?.name)
+                    : null,
+                onMarkPrinted: widget.canMarkPrinted && student.isVerified
+                    ? () => _markPrinted(student)
+                    : null,
+              ),
+            ),
+            Positioned(
+              top: 6,
+              left: 6,
+              child: Checkbox(
+                value: _selectedStudentUuids.contains(student.uuid),
+                onChanged: widget.canVerify || widget.canMarkPrinted
+                    ? (value) => setState(() {
+                        if (value == true) {
+                          _selectedStudentUuids.add(student.uuid);
+                        } else {
+                          _selectedStudentUuids.remove(student.uuid);
+                        }
+                      })
+                    : null,
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: StudentLifecycleBadge(status: student.lifecycleStatus),
+            ),
+          ],
         );
       },
     );

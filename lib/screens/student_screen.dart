@@ -9,6 +9,7 @@ import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
+import '../widgets/student_lifecycle_badge.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({
@@ -18,6 +19,9 @@ class StudentsScreen extends StatefulWidget {
     required this.api,
     required this.canEdit,
     required this.canDelete,
+    this.canVerify = false,
+    this.canViewHistory = false,
+    this.canMarkPrinted = false,
   });
 
   final String schoolUuid;
@@ -25,6 +29,9 @@ class StudentsScreen extends StatefulWidget {
   final ApiService api;
   final bool canEdit;
   final bool canDelete;
+  final bool canVerify;
+  final bool canViewHistory;
+  final bool canMarkPrinted;
 
   @override
   State<StudentsScreen> createState() => _StudentsScreenState();
@@ -43,6 +50,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
   String? _selectedSessionUuid;
   String? _selectedClassUuid;
   String? _selectedSectionUuid;
+  String? _verificationStatus;
+  bool? _printed;
+  final Set<String> _selectedStudentUuids = {};
 
   bool _loadingFilters = true;
   bool _loadingSections = false;
@@ -107,12 +117,17 @@ class _StudentsScreenState extends State<StudentsScreen> {
         sessionUuid: _selectedSessionUuid,
         classUuid: _selectedClassUuid,
         sectionUuid: _selectedSectionUuid,
+        verificationStatus: _verificationStatus,
+        printed: _printed,
       );
 
       if (!mounted) return;
 
       setState(() {
         _students = students;
+        _selectedStudentUuids.removeWhere(
+          (uuid) => !students.any((student) => student.uuid == uuid),
+        );
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -267,6 +282,94 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
+  Future<void> _verify(ApiStudent student) async {
+    await _runLifecycleAction(
+      () => widget.api.updateStudentVerification(
+        schoolUuid: widget.schoolUuid,
+        studentUuid: student.uuid,
+        status: 'verified',
+      ),
+      'Student verified',
+    );
+  }
+
+  Future<void> _needsCorrection(ApiStudent student) async {
+    final note = await showDialog<String>(
+      context: context,
+      builder: (context) =>
+          _CorrectionNoteDialog(initialNote: student.correctionNote),
+    );
+    if (note == null || !mounted) return;
+    await _runLifecycleAction(
+      () => widget.api.updateStudentVerification(
+        schoolUuid: widget.schoolUuid,
+        studentUuid: student.uuid,
+        status: 'needs_correction',
+        note: note,
+      ),
+      'Correction requested',
+    );
+  }
+
+  Future<void> _markPrinted(ApiStudent student) async {
+    await _runLifecycleAction(
+      () => widget.api.markStudentPrinted(
+        schoolUuid: widget.schoolUuid,
+        studentUuid: student.uuid,
+      ),
+      student.isPrinted ? 'Reprint recorded' : 'Card marked printed',
+    );
+  }
+
+  Future<void> _runLifecycleAction(
+    Future<ApiStudent> Function() action,
+    String success,
+  ) async {
+    try {
+      await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(success)));
+      await _loadStudents();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _runBatch(bool verify) async {
+    if (_selectedStudentUuids.isEmpty) return;
+    try {
+      if (verify) {
+        await widget.api.batchVerifyStudents(
+          schoolUuid: widget.schoolUuid,
+          studentUuids: _selectedStudentUuids.toList(),
+        );
+      } else {
+        await widget.api.batchMarkStudentsPrinted(
+          schoolUuid: widget.schoolUuid,
+          studentUuids: _selectedStudentUuids.toList(),
+        );
+      }
+      if (!mounted) return;
+      setState(_selectedStudentUuids.clear);
+      await _loadStudents();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final students = _filteredStudents;
@@ -374,6 +477,66 @@ class _StudentsScreenState extends State<StudentsScreen> {
         ),
         const SizedBox(height: 12),
         _buildFilters(),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 210,
+              child: _buildDropdown<String>(
+                label: 'Verification Status',
+                value: _verificationStatus,
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'pending', child: Text('Pending')),
+                  DropdownMenuItem(
+                    value: 'needs_correction',
+                    child: Text('Needs Correction'),
+                  ),
+                  DropdownMenuItem(value: 'verified', child: Text('Verified')),
+                ],
+                onChanged: (value) async {
+                  setState(() => _verificationStatus = value);
+                  await _loadStudents();
+                },
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: _buildDropdown<bool>(
+                label: 'Printed',
+                value: _printed,
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('All Records')),
+                  DropdownMenuItem(value: false, child: Text('Not Printed')),
+                  DropdownMenuItem(value: true, child: Text('Printed')),
+                ],
+                onChanged: (value) async {
+                  setState(() => _printed = value);
+                  await _loadStudents();
+                },
+              ),
+            ),
+            if (_selectedStudentUuids.isNotEmpty && widget.canVerify)
+              FilledButton.icon(
+                key: const Key('batch-verify-action'),
+                onPressed: () => _runBatch(true),
+                icon: const Icon(Icons.verified_outlined),
+                label: Text(
+                  'Verify Selected (${_selectedStudentUuids.length})',
+                ),
+              ),
+            if (_selectedStudentUuids.isNotEmpty && widget.canMarkPrinted)
+              OutlinedButton.icon(
+                key: const Key('batch-mark-printed-action'),
+                onPressed: () => _runBatch(false),
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('Mark Selected Printed'),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -572,28 +735,58 @@ class _StudentsScreenState extends State<StudentsScreen> {
           final student = students[index];
 
           return ListTile(
-            leading: CircleAvatar(
-              child: Text(
-                student.fullName.isEmpty
-                    ? '?'
-                    : student.fullName[0].toUpperCase(),
-              ),
+            leading: Checkbox(
+              value: _selectedStudentUuids.contains(student.uuid),
+              onChanged: widget.canVerify || widget.canMarkPrinted
+                  ? (selected) => setState(() {
+                      if (selected == true) {
+                        _selectedStudentUuids.add(student.uuid);
+                      } else {
+                        _selectedStudentUuids.remove(student.uuid);
+                      }
+                    })
+                  : null,
             ),
-            title: Text(
-              student.fullName,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    student.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                StudentLifecycleBadge(status: student.lifecycleStatus),
+              ],
             ),
             subtitle: Text(
               'Admission: ${student.admissionNo}'
-              '${student.rollNo == null ? '' : '  •  Roll: ${student.rollNo}'}',
+              '${student.rollNo == null ? '' : '  •  Roll: ${student.rollNo}'}'
+              '${student.verifiedAt == null ? '' : '\nVerified ${student.verifiedByName == null ? '' : 'by ${student.verifiedByName} '}at ${student.verifiedAt!.toLocal()}'}'
+              '${student.printedAt == null ? '' : '\nLast printed: ${student.printedAt!.toLocal()} • Count: ${student.printCount}'}',
             ),
-            trailing: widget.canEdit || widget.canDelete
+            trailing:
+                widget.canEdit ||
+                    widget.canDelete ||
+                    widget.canVerify ||
+                    widget.canViewHistory ||
+                    widget.canMarkPrinted
                 ? PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'edit') {
                         _editStudent(student);
                       } else if (value == 'delete') {
                         _deleteStudent(student);
+                      } else if (value == 'verify') {
+                        _verify(student);
+                      } else if (value == 'correction') {
+                        _needsCorrection(student);
+                      } else if (value == 'printed') {
+                        _markPrinted(student);
+                      } else if (value == 'history') {
+                        AppNavigation.navigateToPage<void>(
+                          context,
+                          AppRoutes.studentHistory(student.uuid),
+                        );
                       }
                     },
                     itemBuilder: (_) => [
@@ -603,6 +796,30 @@ class _StudentsScreenState extends State<StudentsScreen> {
                         const PopupMenuItem(
                           value: 'delete',
                           child: Text('Delete'),
+                        ),
+                      if (widget.canVerify)
+                        const PopupMenuItem(
+                          value: 'verify',
+                          child: Text('Verify'),
+                        ),
+                      if (widget.canVerify)
+                        const PopupMenuItem(
+                          value: 'correction',
+                          child: Text('Needs Correction'),
+                        ),
+                      if (widget.canMarkPrinted && student.isVerified)
+                        PopupMenuItem(
+                          value: 'printed',
+                          child: Text(
+                            student.isPrinted
+                                ? 'Record Reprint'
+                                : 'Mark Printed',
+                          ),
+                        ),
+                      if (widget.canViewHistory)
+                        const PopupMenuItem(
+                          value: 'history',
+                          child: Text('History'),
                         ),
                     ],
                   )
@@ -639,4 +856,59 @@ class _ErrorView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CorrectionNoteDialog extends StatefulWidget {
+  const _CorrectionNoteDialog({this.initialNote});
+
+  final String? initialNote;
+
+  @override
+  State<_CorrectionNoteDialog> createState() => _CorrectionNoteDialogState();
+}
+
+class _CorrectionNoteDialogState extends State<_CorrectionNoteDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialNote,
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Needs Correction'),
+    content: TextField(
+      key: const Key('correction-note-field'),
+      controller: _controller,
+      autofocus: true,
+      maxLines: 4,
+      decoration: InputDecoration(
+        labelText: 'Correction note',
+        errorText: _error,
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const Key('save-correction-note'),
+        onPressed: () {
+          final value = _controller.text.trim();
+          if (value.isEmpty) {
+            setState(() => _error = 'Correction note is required');
+            return;
+          }
+          Navigator.pop(context, value);
+        },
+        child: const Text('Save'),
+      ),
+    ],
+  );
 }

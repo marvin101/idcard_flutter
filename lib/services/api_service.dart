@@ -484,6 +484,8 @@ class ApiService {
     String? sessionUuid,
     String? classUuid,
     String? sectionUuid,
+    String? verificationStatus,
+    bool? printed,
   }) async {
     final queryParameters = <String, String>{};
 
@@ -502,6 +504,10 @@ class ApiService {
     if (sectionUuid != null && sectionUuid.isNotEmpty) {
       queryParameters['section_uuid'] = sectionUuid;
     }
+    if (verificationStatus != null && verificationStatus.isNotEmpty) {
+      queryParameters['verification_status'] = verificationStatus;
+    }
+    if (printed != null) queryParameters['printed'] = printed.toString();
 
     final uri = Uri.parse('$baseUrl/schools/$schoolUuid/students').replace(
       queryParameters: queryParameters.isEmpty ? null : queryParameters,
@@ -524,6 +530,8 @@ class ApiService {
     String? sectionUuid,
     DateTime? createdFrom,
     DateTime? createdTo,
+    String? verificationStatus,
+    bool? printed,
   }) async {
     final queryParameters = <String, String>{
       'limit': limit.toString(),
@@ -553,6 +561,10 @@ class ApiService {
     if (createdTo != null) {
       queryParameters['created_to'] = _dateOnly(createdTo);
     }
+    if (verificationStatus != null && verificationStatus.isNotEmpty) {
+      queryParameters['verification_status'] = verificationStatus;
+    }
+    if (printed != null) queryParameters['printed'] = printed.toString();
 
     final uri = Uri.parse(
       '$baseUrl/schools/$schoolUuid/students/paged',
@@ -578,6 +590,78 @@ class ApiService {
     );
 
     return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiStudent> updateStudentVerification({
+    required String schoolUuid,
+    required String studentUuid,
+    required String status,
+    String? note,
+  }) async {
+    final response = await _client.patch(
+      _uri('/schools/$schoolUuid/students/$studentUuid/verification'),
+      headers: _headers,
+      body: jsonEncode({'status': status, 'note': note}),
+    );
+    return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiStudent> markStudentPrinted({
+    required String schoolUuid,
+    required String studentUuid,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/students/$studentUuid/mark-printed'),
+      headers: _headers,
+    );
+    return ApiStudent.fromJson(_decodeMap(response));
+  }
+
+  Future<List<ApiStudent>> batchVerifyStudents({
+    required String schoolUuid,
+    required List<String> studentUuids,
+  }) => _batchLifecycle(
+    schoolUuid: schoolUuid,
+    endpoint: 'batch-verify',
+    studentUuids: studentUuids,
+  );
+
+  Future<List<ApiStudent>> batchMarkStudentsPrinted({
+    required String schoolUuid,
+    required List<String> studentUuids,
+  }) => _batchLifecycle(
+    schoolUuid: schoolUuid,
+    endpoint: 'batch-mark-printed',
+    studentUuids: studentUuids,
+  );
+
+  Future<List<ApiStudent>> _batchLifecycle({
+    required String schoolUuid,
+    required String endpoint,
+    required List<String> studentUuids,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/students/$endpoint'),
+      headers: _headers,
+      body: jsonEncode({'student_uuids': studentUuids}),
+    );
+    final data = _decodeMap(response);
+    return (data['students'] as List<dynamic>? ?? const [])
+        .map((item) => ApiStudent.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<StudentAuditEvent>> getStudentHistory({
+    required String schoolUuid,
+    required String studentUuid,
+  }) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/students/$studentUuid/history'),
+      headers: _headers,
+    );
+    return _decodeList(
+      response,
+    ).map((item) => StudentAuditEvent.fromJson(item)).toList();
   }
 
   Future<StudentImportUpload> uploadStudentImport({
@@ -683,7 +767,9 @@ class ApiService {
     request.files.add(
       http.MultipartFile.fromBytes('archive', bytes, filename: filename),
     );
-    final response = await http.Response.fromStream(await _client.send(request));
+    final response = await http.Response.fromStream(
+      await _client.send(request),
+    );
     return BulkPhotoUploadResponse.fromJson(_decodeMap(response));
   }
 
@@ -692,9 +778,7 @@ class ApiService {
     required String manifestUuid,
   }) async {
     final response = await _client.post(
-      _uri(
-        '/schools/$schoolUuid/student-photos/bulk/$manifestUuid/preview',
-      ),
+      _uri('/schools/$schoolUuid/student-photos/bulk/$manifestUuid/preview'),
       headers: _headers,
     );
     return BulkPhotoPreviewResponse.fromJson(_decodeMap(response));
@@ -864,9 +948,8 @@ class ApiService {
     final response = await _client.get(uri, headers: _headers);
     return _decodeList(response)
         .map(
-          (item) => StudentFieldDefinition.fromJson(
-            item as Map<String, dynamic>,
-          ),
+          (item) =>
+              StudentFieldDefinition.fromJson(item as Map<String, dynamic>),
         )
         .toList();
   }
@@ -925,18 +1008,14 @@ class ApiService {
       body: jsonEncode({
         'fields': [
           for (var index = 0; index < fields.length; index++)
-            {
-              'field_uuid': fields[index].uuid,
-              'display_order': index,
-            },
+            {'field_uuid': fields[index].uuid, 'display_order': index},
         ],
       }),
     );
     return _decodeList(response)
         .map(
-          (item) => StudentFieldDefinition.fromJson(
-            item as Map<String, dynamic>,
-          ),
+          (item) =>
+              StudentFieldDefinition.fromJson(item as Map<String, dynamic>),
         )
         .toList();
   }

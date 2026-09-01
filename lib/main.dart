@@ -23,6 +23,7 @@ import 'screens/school_user_assignment_screen.dart';
 import 'screens/student_fields_screen.dart';
 import 'screens/student_form.dart';
 import 'screens/student_import_screen.dart';
+import 'screens/student_history_screen.dart';
 import 'screens/student_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
@@ -180,6 +181,9 @@ class _AuthenticatedRoute extends StatelessWidget {
           api: auth.api,
           canEdit: auth.canManageCardData,
           canDelete: auth.canDeleteStudents,
+          canVerify: auth.canVerifyStudents,
+          canViewHistory: auth.canViewStudentHistory,
+          canMarkPrinted: auth.canMarkStudentsPrinted,
         ),
       AppRoutes.addStudent
           when has(DashboardModuleKind.students) && auth.canManageCardData =>
@@ -253,7 +257,17 @@ class _AuthenticatedRoute extends StatelessWidget {
         canEdit: auth.canManageCardData,
         canDesign: auth.canDesignCards,
         canPrint: auth.canPrintCards,
+        canVerify: auth.canVerifyStudents,
+        canMarkPrinted: auth.canMarkStudentsPrinted,
       ),
+      _
+          when AppRoutes.isStudentHistory(routeName) &&
+              auth.canViewStudentHistory =>
+        StudentHistoryScreen(
+          schoolUuid: school.uuid,
+          studentUuid: AppRoutes.studentUuidFromHistory(routeName)!,
+          api: auth.api,
+        ),
       AppRoutes.editStudent => const _ProtectedRouteMessage(
         title: 'Student unavailable',
         message: 'Return to Students and choose a student to edit.',

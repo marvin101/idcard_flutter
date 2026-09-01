@@ -27,7 +27,9 @@ abstract final class AppNavigation {
       routeName != null && primaryModuleRoutes.contains(routeName);
 
   static bool isNestedWorkflow(String? routeName) =>
-      routeName != null && nestedWorkflowRoutes.contains(routeName);
+      routeName != null &&
+      (nestedWorkflowRoutes.contains(routeName) ||
+          AppRoutes.isStudentHistory(routeName));
 
   static bool showsLeadingBack(String? routeName) =>
       AppRoutes.isProtected(routeName) &&
