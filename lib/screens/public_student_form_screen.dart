@@ -9,9 +9,11 @@ class PublicStudentFormScreen extends StatefulWidget {
     super.key,
     required this.token,
     required this.api,
+    this.pickPhoto,
   });
   final String token;
   final ApiService api;
+  final Future<XFile?> Function()? pickPhoto;
 
   @override
   State<PublicStudentFormScreen> createState() =>
@@ -130,7 +132,9 @@ class _PublicStudentFormScreenState extends State<PublicStudentFormScreen> {
   }
 
   Future<void> _pickPhoto() async {
-    final photo = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final photo =
+        await (widget.pickPhoto?.call() ??
+            ImagePicker().pickImage(source: ImageSource.gallery));
     if (photo == null) return;
     if (await photo.length() > _form!.maxPhotoSizeBytes) {
       setState(
@@ -155,6 +159,10 @@ class _PublicStudentFormScreenState extends State<PublicStudentFormScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_form!.photoRequired && _photo == null) {
+      setState(() => _error = 'Photo is required.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -293,7 +301,7 @@ class _PublicStudentFormScreenState extends State<PublicStudentFormScreen> {
                             icon: const Icon(Icons.photo_camera_outlined),
                             label: Text(
                               _photo == null
-                                  ? 'Choose student photo'
+                                  ? 'Choose student photo${form.photoRequired ? ' *' : ''}'
                                   : _photo!.name,
                             ),
                           ),

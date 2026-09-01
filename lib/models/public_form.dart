@@ -82,6 +82,7 @@ class PublicFormView {
     this.instructions,
     required this.fields,
     required this.allowPhoto,
+    this.photoRequired = false,
     required this.maxPhotoSizeBytes,
     this.successMessage,
   });
@@ -91,6 +92,7 @@ class PublicFormView {
   final String? instructions;
   final List<PublicFormField> fields;
   final bool allowPhoto;
+  final bool photoRequired;
   final int maxPhotoSizeBytes;
   final String? successMessage;
   factory PublicFormView.fromJson(Map<String, dynamic> json) => PublicFormView(
@@ -102,6 +104,7 @@ class PublicFormView {
         .map((item) => PublicFormField.fromJson(item as Map<String, dynamic>))
         .toList(),
     allowPhoto: json['allow_photo'] == true,
+    photoRequired: json['photo_required'] == true,
     maxPhotoSizeBytes: (json['max_photo_size_bytes'] as num).toInt(),
     successMessage: json['success_message'] as String?,
   );
