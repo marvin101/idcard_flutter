@@ -22,6 +22,7 @@ abstract final class AppNavigation {
     AppRoutes.editStudent,
     AppRoutes.studentImport,
     AppRoutes.bulkPhotoImport,
+    AppRoutes.studentGrid,
   };
 
   static bool isPrimaryModule(String? routeName) =>

@@ -4,6 +4,7 @@ abstract final class AppRoutes {
   static const register = '/register';
   static const dashboard = '/dashboard';
   static const students = '/students';
+  static const studentGrid = '/students/grid';
   static const addStudent = '/students/add';
   static const editStudent = '/students/edit';
   static const studentFields = '/students/fields';
@@ -26,6 +27,7 @@ abstract final class AppRoutes {
   static const protectedRoutes = <String>{
     dashboard,
     students,
+    studentGrid,
     addStudent,
     editStudent,
     studentFields,

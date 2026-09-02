@@ -16,6 +16,7 @@ import '../models/school_profile.dart';
 import '../models/student_field.dart';
 import '../models/student_import.dart';
 import '../models/public_form.dart';
+import '../models/student_grid.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -88,10 +89,15 @@ class SQLiteService {
 }
 
 class ApiException implements Exception {
-  const ApiException(this.statusCode, this.message);
+  const ApiException(
+    this.statusCode,
+    this.message, [
+    this.gridErrors = const [],
+  ]);
 
   final int statusCode;
   final String message;
+  final List<StudentGridCellError> gridErrors;
 
   @override
   String toString() => message;
@@ -657,6 +663,43 @@ class ApiService {
     return ApiStudentPage.fromJson(_decodeMap(response));
   }
 
+  Future<StudentGridPage> getStudentGrid({
+    required String schoolUuid,
+    int limit = 100,
+    int offset = 0,
+    String? search,
+    String? sessionUuid,
+    String? classUuid,
+    String? sectionUuid,
+  }) async {
+    final query = <String, String>{
+      'limit': '$limit',
+      'offset': '$offset',
+      if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
+      if (sessionUuid?.isNotEmpty == true) 'session_uuid': sessionUuid!,
+      if (classUuid?.isNotEmpty == true) 'class_uuid': classUuid!,
+      if (sectionUuid?.isNotEmpty == true) 'section_uuid': sectionUuid!,
+    };
+    final uri = _uri(
+      '/schools/$schoolUuid/students/grid',
+    ).replace(queryParameters: query);
+    return StudentGridPage.fromJson(
+      _decodeMap(await _client.get(uri, headers: _headers)),
+    );
+  }
+
+  Future<StudentGridPatchResult> patchStudentGrid({
+    required String schoolUuid,
+    required List<StudentGridRowPatch> rows,
+  }) async {
+    final response = await _client.patch(
+      _uri('/schools/$schoolUuid/students/grid'),
+      headers: _headers,
+      body: jsonEncode({'rows': rows.map((row) => row.toJson()).toList()}),
+    );
+    return StudentGridPatchResult.fromJson(_decodeMap(response));
+  }
+
   String _dateOnly(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-'
       '${value.month.toString().padLeft(2, '0')}-'
@@ -1185,11 +1228,19 @@ class ApiService {
     }
 
     String message = 'Request failed (${response.statusCode}).';
+    List<StudentGridCellError> gridErrors = const [];
 
     try {
       final body = jsonDecode(response.body);
 
       if (body is Map<String, dynamic>) {
+        final rawErrors = body['errors'];
+        if (rawErrors is List) {
+          gridErrors = rawErrors
+              .whereType<Map<String, dynamic>>()
+              .map(StudentGridCellError.fromJson)
+              .toList();
+        }
         final detail = body['detail'];
 
         // Normal FastAPI HTTPException.
@@ -1227,7 +1278,7 @@ class ApiService {
       // Keep the generic message if the response isn't valid JSON.
     }
 
-    return ApiException(response.statusCode, message);
+    return ApiException(response.statusCode, message, gridErrors);
   }
 
   void dispose() => _client.close();

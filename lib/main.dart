@@ -29,6 +29,7 @@ import 'screens/student_history_screen.dart';
 import 'screens/public_form_management_screen.dart';
 import 'screens/public_student_form_screen.dart';
 import 'screens/student_screen.dart';
+import 'screens/student_grid_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
 import 'widgets/authenticated_app_bar.dart';
@@ -192,6 +193,13 @@ class _AuthenticatedRoute extends StatelessWidget {
           canVerify: auth.canVerifyStudents,
           canViewHistory: auth.canViewStudentHistory,
           canMarkPrinted: auth.canMarkStudentsPrinted,
+        ),
+      AppRoutes.studentGrid
+          when has(DashboardModuleKind.students) && auth.canManageCardData =>
+        StudentGridScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
         ),
       AppRoutes.addStudent
           when has(DashboardModuleKind.students) && auth.canManageCardData =>

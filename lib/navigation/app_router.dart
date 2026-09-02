@@ -213,6 +213,7 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
       location == AppRoutes.editStudent ||
       location == AppRoutes.studentImport ||
       location == AppRoutes.bulkPhotoImport ||
+      location == AppRoutes.studentGrid ||
       AppRoutes.isStudentHistory(location);
 
   void _complete(_AppRouteEntry entry, Object? result) {

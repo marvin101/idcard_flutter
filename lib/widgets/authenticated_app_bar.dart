@@ -14,10 +14,12 @@ class AuthenticatedAppBar extends StatelessWidget
     super.key,
     required this.title,
     this.actions = const [],
+    this.leading,
   });
 
   final Widget title;
   final List<Widget> actions;
+  final Widget? leading;
 
   @override
   Size get preferredSize => const Size.fromHeight(122);
@@ -32,6 +34,7 @@ class AuthenticatedAppBar extends StatelessWidget
         foregroundColor: Colors.white,
         title: title,
         actions: actions,
+        leading: leading,
       );
     }
     final routeName = ModalRoute.of(context)?.settings.name;
@@ -41,12 +44,15 @@ class AuthenticatedAppBar extends StatelessWidget
 
     return AppBar(
       automaticallyImplyLeading: false,
-      leading: AppNavigation.showsLeadingBack(routeName)
-          ? BackButton(
-              key: const Key('authenticated-leading-back'),
-              onPressed: () => AppNavigation.navigateBack(context, routeName),
-            )
-          : null,
+      leading:
+          leading ??
+          (AppNavigation.showsLeadingBack(routeName)
+              ? BackButton(
+                  key: const Key('authenticated-leading-back'),
+                  onPressed: () =>
+                      AppNavigation.navigateBack(context, routeName),
+                )
+              : null),
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       title: Row(

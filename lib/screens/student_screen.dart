@@ -475,6 +475,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
         Row(
           children: [
             Expanded(
+              flex: 2,
               child: TextField(
                 decoration: InputDecoration(
                   hintText: 'Search by name, admission number or roll number',
@@ -499,44 +500,70 @@ class _StudentsScreenState extends State<StudentsScreen> {
             ),
             if (widget.canEdit) ...[
               const SizedBox(width: 12),
-              OutlinedButton.icon(
-                key: const Key('bulk-photo-import-action'),
-                onPressed: () async {
-                  final imported = await AppNavigation.navigateToWorkflow<bool>(
-                    context,
-                    AppRoutes.bulkPhotoImport,
-                  );
-                  if (imported == true && mounted) await _loadStudents();
-                },
-                icon: const Icon(Icons.add_a_photo_outlined),
-                label: const Text('Bulk Photos'),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final imported = await AppNavigation.navigateToWorkflow<bool>(
-                    context,
-                    AppRoutes.studentImport,
-                  );
-                  if (imported == true && mounted) await _loadStudents();
-                },
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Bulk Import'),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: () async {
-                  await AppNavigation.navigateToWorkflow<void>(
-                    context,
-                    AppRoutes.addStudent,
-                  );
-
-                  if (mounted) {
-                    await _loadStudents();
-                  }
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add Student'),
+              Expanded(
+                flex: 3,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      OutlinedButton.icon(
+                        key: const Key('student-grid-action'),
+                        onPressed: () async {
+                          await AppNavigation.navigateToWorkflow<void>(
+                            context,
+                            AppRoutes.studentGrid,
+                          );
+                          if (mounted) await _loadStudents();
+                        },
+                        icon: const Icon(Icons.grid_on_outlined),
+                        label: const Text('Excel Grid'),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        key: const Key('bulk-photo-import-action'),
+                        onPressed: () async {
+                          final imported =
+                              await AppNavigation.navigateToWorkflow<bool>(
+                                context,
+                                AppRoutes.bulkPhotoImport,
+                              );
+                          if (imported == true && mounted) {
+                            await _loadStudents();
+                          }
+                        },
+                        icon: const Icon(Icons.add_a_photo_outlined),
+                        label: const Text('Bulk Photos'),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final imported =
+                              await AppNavigation.navigateToWorkflow<bool>(
+                                context,
+                                AppRoutes.studentImport,
+                              );
+                          if (imported == true && mounted) {
+                            await _loadStudents();
+                          }
+                        },
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Bulk Import'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          await AppNavigation.navigateToWorkflow<void>(
+                            context,
+                            AppRoutes.addStudent,
+                          );
+                          if (mounted) await _loadStudents();
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Student'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ],

@@ -10,10 +10,12 @@ import 'package:idcard_flutter/models/school_class.dart';
 import 'package:idcard_flutter/models/school_profile.dart';
 import 'package:idcard_flutter/models/section.dart';
 import 'package:idcard_flutter/models/student_field.dart';
+import 'package:idcard_flutter/models/student_grid.dart';
 import 'package:idcard_flutter/navigation/app_navigation.dart';
 import 'package:idcard_flutter/navigation/app_router.dart';
 import 'package:idcard_flutter/providers/auth_provider.dart';
 import 'package:idcard_flutter/screens/student_screen.dart';
+import 'package:idcard_flutter/screens/student_grid_screen.dart';
 import 'package:idcard_flutter/screens/bulk_photo_import_screen.dart';
 import 'package:idcard_flutter/screens/login_screen.dart';
 import 'package:idcard_flutter/screens/student_import_screen.dart';
@@ -21,6 +23,27 @@ import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/widgets/authenticated_app_bar.dart';
 
 class _FakeApi extends ApiService {
+  @override
+  Future<StudentGridPage> getStudentGrid({
+    required String schoolUuid,
+    int limit = 100,
+    int offset = 0,
+    String? search,
+    String? sessionUuid,
+    String? classUuid,
+    String? sectionUuid,
+  }) async => StudentGridPage(
+    rows: const [],
+    total: 0,
+    offset: offset,
+    limit: limit,
+    hasMore: false,
+    customFields: const [],
+    sessions: const [],
+    classes: const [],
+    sections: const [],
+  );
+
   @override
   Future<List<StudentAuditEvent>> getStudentHistory({
     required String schoolUuid,
@@ -402,6 +425,23 @@ void main() {
       await pumpApp(tester, initialRoute: route, role: 'teacher');
       expect(find.byType(StudentImportScreen), findsNothing);
       expect(find.byType(BulkPhotoImportScreen), findsNothing);
+      expect(find.text('Access denied'), findsOneWidget);
+    }
+  });
+
+  testWidgets('Excel Grid direct route follows card-data permissions', (
+    tester,
+  ) async {
+    expect(AppRoutes.isProtected(AppRoutes.studentGrid), isTrue);
+
+    for (final role in ['platform_admin', 'school_admin', 'card_operator']) {
+      await pumpApp(tester, initialRoute: AppRoutes.studentGrid, role: role);
+      expect(find.byType(StudentGridScreen), findsOneWidget);
+    }
+
+    for (final role in ['teacher', 'staff']) {
+      await pumpApp(tester, initialRoute: AppRoutes.studentGrid, role: role);
+      expect(find.byType(StudentGridScreen), findsNothing);
       expect(find.text('Access denied'), findsOneWidget);
     }
   });
