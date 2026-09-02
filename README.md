@@ -1,85 +1,140 @@
-# ID-Card Manager — Flutter Frontend
+# CampusID — Flutter Client
 
-Flutter client for managing schools, academic structures, students, photos, ID-card layouts, and printable card PDFs. The web build talks to the FastAPI service; it does not connect directly to PostgreSQL.
+## Current release
+
+**CampusID v0.7.0** is the Excel Grid release. The Flutter package version is `0.7.0+7`, where `+7` is the platform build number.
+
+CampusID remains pre-1.0 while Designer v2, digital identity, advanced print production, and other roadmap modules are still in development.
+
+## Overview
+
+This repository contains the CampusID Flutter client, with Flutter Web deployed to Vercel. It provides the authenticated school-management, student, card-design, and PDF user interface plus the anonymous Public Form route.
+
+The Flutter application never connects directly to PostgreSQL and is not the security boundary. All protected data and authorization decisions flow through the FastAPI backend.
 
 ## Architecture
 
 ```text
-Flutter Web (Vercel)
-        |
-        | HTTPS / JSON + Bearer token
-        v
-FastAPI (Render) -> PostgreSQL + Supabase Storage
+Flutter Web
+   (Vercel)
+       |
+       | HTTPS / JSON + JWT bearer token
+       v
+FastAPI API
+   (Render)
+       |
+       +-------------------------+
+       |                         |
+       v                         v
+Supabase PostgreSQL       Supabase Storage
+schools, users, students,  school logos, student photos,
+forms, templates, audits   and temporary bulk-photo objects
 ```
-
-Source repository: `marvin101/idcard_flutter`
-
-The current Vercel project/domain is a deployment detail. It does not change this repository or the application architecture.
 
 ## Current capabilities
 
-- JWT login with persisted bearer sessions and centralized expired-session cleanup
-- School selection based on active user assignments
-- Multiple-school assignments
-- Academic session, class, and section management
-- Student ID-card entry and updates
-- Student photo selection, cropping, and upload
-- Individual and filtered bulk PDF generation
-- Per-school Card Designer with an explicit `/card-designer` route
-- Platform user and school-assignment management
-- Responsive Flutter UI for web and supported Flutter targets
+- JWT sign-in, persisted bearer session, bootstrap, logout, and centralized session-expiry handling
+- Active school selection and restoration across multi-school assignments
+- School profile and logo viewing/administration
+- Academic session, class, and section workflows
+- Student search, filtering, creation, editing, photos, and administrator deletion
+- Dynamic school-scoped student fields
+- Excel template download, upload, preview, validation feedback, and confirmed student import
+- Bulk student-photo selection, upload, matching preview, progress, and commit
+- Pending / Needs Correction / Verified lifecycle UI, audit history, and individual/batch printed/reprint actions
+- Public Form administration plus a branded anonymous submission route with configured fields and photo policy
+- Excel Grid filters, bounded paging, inline edits, custom fields, academic dropdowns, dirty-state tracking, conflict handling, and structured cell errors
+- Current Card Designer at `/design`
+- Card preview plus individual and filtered/bulk PDF output
+- Platform user and school-assignment administration
+- Clean web paths through `usePathUrlStrategy()` and Vercel SPA rewrites
 
-PDF files are assembled in the Flutter client from data authorized and returned by the backend.
+PDFs are assembled in the Flutter client from data authorized and returned by the backend.
 
 ## Roles and UI access
 
-The Flutter UI reflects the backend permissions, but it is not the security boundary. The FastAPI service must authorize every request.
-
-| Role | Intended frontend access |
+| Role | Current UI access |
 | --- | --- |
-| Platform Admin | All active schools, user administration, assignments, school setup, student/card workflows, and Card Designer |
-| School Admin | Assigned schools; school setup, ordinary user assignments, student/card workflows, printing, and Card Designer |
-| Card Operator | Assigned schools; add students through ID-card entry, update card data, and upload photos |
-| Teacher / Staff | Assigned-school access only; no student/card-data workflow in the current policy |
+| Platform Admin | All active schools, users/assignments, school and academic setup, student/lifecycle/import/grid workflows, Public Forms, Card Designer, cards, and printing |
+| School Admin | Assigned school(s); school and academic setup, ordinary Teacher/Staff assignments, student/lifecycle/import/grid workflows, Public Forms, Card Designer, cards, and printing |
+| Card Operator | Assigned school(s); read-only school profile, students, imports, Excel Grid, cards, photos, and printing |
+| Teacher / Staff | Assigned-school read access to school profile and academic structures; no current student/card workflow |
 
-An inactive, revoked, or unassigned account must not gain access merely because a route or button is reachable.
+Legacy `admin` assignments are treated as School Admin in the permission helpers. Inactive, revoked, pending, or unassigned access must not be treated as active school access.
+
+UI gating is not a security control. FastAPI must authorize every request even if the Flutter route, module, or action is hidden.
+
+## Routing
+
+Flutter calls `usePathUrlStrategy()` at startup, so web URLs use clean paths rather than `/#/` fragments. Static hosting must rewrite unknown application paths to `index.html`; this repository's `vercel.json` supplies that SPA rewrite.
+
+Representative routes:
+
+| Route | Module |
+| --- | --- |
+| `/dashboard` | Authenticated landing/dashboard |
+| `/students` | Student list and lifecycle actions |
+| `/students/grid` | Excel Grid |
+| `/students/add` | Add student |
+| `/students/fields` | Dynamic student-field administration |
+| `/public-forms` | Authenticated Public Form management |
+| `/public/forms/<token>` | Anonymous branded student submission |
+| `/school-profile` | School profile and logo |
+| `/academic-sessions` | Academic sessions |
+| `/classes-sections` | Classes and sections |
+| `/users` | Users, requests, and assignments |
+| `/design` | Current Card Designer |
+| `/cards` | Card preview and PDF workflows |
+
+The `/public/forms/<token>` route is intentionally outside `AuthenticatedShell`. Protected routes are resolved through the authenticated shell and role/module checks.
 
 ## Technology
 
-- Flutter / Dart
-- Provider for application state
-- `http` for the REST API
-- `shared_preferences` for local session persistence
-- `image_picker` and `image` for photo workflows
+- Flutter 3.44+ / Dart 3.12.2+
+- Provider for application and session state
+- `http` and `http_parser` for the FastAPI REST boundary
+- `shared_preferences` for local token and selected-school persistence
+- `file_picker`, `image_picker`, and `image` for import/photo workflows
 - `pdf` and `printing` for card output
-- `sqflite_common_ffi` remains in the project for legacy/local code; production web data flows through FastAPI
+- `flutter_web_plugins` for clean-path web routing
+- `sqflite_common_ffi` and local repository classes retained for legacy/local code; production web data flows through FastAPI
 
 ## Project structure
 
 ```text
 lib/
-  models/       API and authentication models
-  providers/    authentication/session state
-  screens/      login, dashboard, administration, cards, and designer UI
-  sections/     reusable student-form sections
-  services/     API, PDF, image, and legacy database services
-  theme/        application theme
-assets/         images, icons, and card templates
-test/           widget and model tests
-web/            Flutter web host files
+  config/        compile-time/runtime launch configuration
+  data/          legacy/local data implementations
+  layouts/       shared layouts
+  models/        API, authentication, grid, form, and card models
+  navigation/    router, route stack, and module visibility
+  providers/     session, profile, display, and form state
+  repositories/  student data abstractions
+  screens/       application modules and public routes
+  sections/      reusable student-form sections
+  services/      FastAPI client, PDF, and download services
+  theme/         colors, dimensions, typography, and theme
+  utils/         validation, formatting, constants, and text helpers
+  widgets/       shared application widgets and authenticated shell
+assets/          CampusID images
+test/            widget, navigation, state, model, and API-client tests
+web/             Flutter web host files
+vercel.json      Vercel SPA rewrite
+pubspec.yaml     package metadata and dependencies
 ```
 
 ## Prerequisites
 
-- Flutter SDK compatible with Dart `^3.12.2`
-- A running ID-Card Manager backend
+- Flutter SDK 3.44 or newer, with Dart 3.12.2 or newer (matching `pubspec.yaml` and the resolved lockfile)
 - Chrome for local web development
-- Vercel CLI only when deploying the production web build
+- A running CampusID FastAPI backend
+- Vercel CLI only for the local-build production deployment workflow
 
-Check the local toolchain:
+Check the toolchain:
 
 ```powershell
 flutter doctor
+flutter --version
 ```
 
 ## Local setup
@@ -91,40 +146,70 @@ flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
 
-`API_BASE_URL` is compiled into the application with `--dart-define`. If omitted, it defaults to `http://127.0.0.1:8000`.
+Start the backend first and verify `http://127.0.0.1:8000/health`.
 
-Do not place backend credentials, database passwords, Supabase service keys, or JWT secrets in the Flutter application. A web build is public and cannot protect embedded secrets.
+## Environment configuration
 
-The client stores the access token only; it does not persist a refresh token. If an authenticated API request returns `401`, the local token and selected school are cleared and the user is returned to sign-in with a session-expired message. A `403` remains an authorization error and does not sign the user out.
+The API origin is compiled into the app:
 
-## Quality checks
+```powershell
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
+```
 
-Run these before committing Flutter changes:
+If `API_BASE_URL` is omitted, the current default is `http://127.0.0.1:8000`.
+
+Never embed database credentials, Supabase service keys, JWT signing secrets, or other backend secrets in a Dart define or Flutter source. Browser assets and compile-time values are public.
+
+## Session behavior
+
+The client persists the access token and selected/last-selected school; it does not persist a refresh token. An authenticated API response with status `401` triggers centralized invalidation: the active token, user, school list, assignments, and selected school are cleared, and the sign-in UI receives a session-expired message.
+
+A `403` is treated as an authorization error and does not log the user out.
+
+## Testing
+
+The current suite covers application scaling/shell behavior, authentication bootstrap/login/autofill/session expiry/access revocation, navigation and module visibility, registration school selection, school profiles and assignments, dynamic student fields, bulk Excel import, bulk photos, lifecycle/history/print permissions, Public Forms, Card Designer models, and the Excel Grid.
 
 ```powershell
 flutter analyze
 flutter test
 ```
 
-The current tests cover the application shell, authentication models, card-template models, and school user-assignment behavior.
+## Production web build and Vercel deployment
 
-## Production web build and deployment
+The project intentionally uses a local Flutter release build followed by Vercel CLI deployment; do not replace this with `vercel git connect`.
 
-The existing workflow builds locally and deploys the generated static site to Vercel:
+From the repository root:
 
 ```powershell
-cd F:\Paul\Projects\idcard_flutter
 flutter build web --release --dart-define=API_BASE_URL=https://id-card-backend-vcz5.onrender.com
-cd .\build\web
-vercel --prod
+Copy-Item .\vercel.json .\build\web\vercel.json -Force
+vercel .\build\web --prod
 ```
 
-Current production frontend: `https://idcard-flutter-web.vercel.app`
+Copying `vercel.json` into `build/web` ensures the deployed static directory contains the SPA rewrite required by clean-path routing. Keep the root copy as the source-controlled configuration.
 
-After deployment, verify login, school switching, role-specific navigation, student/photo operations, Card Designer authorization, and PDF generation. If a browser appears to run an older bundle, hard-refresh it and confirm the deployed Vercel project/domain.
+Current production alias: `https://idcard-flutter-web.vercel.app`
+
+After deployment, verify direct navigation and browser refresh on protected and public clean paths, then smoke-test sign-in, school switching, role-specific navigation, students/photos, lifecycle, Public Forms, grid saves, Card Designer, and PDFs.
+
+## Versioning
+
+CampusID follows Semantic Versioning: `MAJOR.MINOR.PATCH`. Backend and Flutter currently share one product version. `pubspec.yaml` adds Flutter's platform build number after `+`.
+
+The current Flutter value is `0.7.0+7`: product release `0.7.0`, build number `7`. The 0.6.x milestone represented Public Forms; 0.7.0 is the Excel Grid release. Pre-1.0 minor releases may still introduce substantial product changes.
+
+## Roadmap
+
+- Designer v2
+- QR/barcode and digital identity
+- Advanced print production and Print Basket
+- Teacher and non-teaching staff workflows
+- School collaboration
+- Photo Studio
+- White-label and lanyard workflows
+- AI OCR (deferred)
 
 ## Related service
 
-Backend source: `https://github.com/marvin101/id_card_backend`
-
-For local development, start the backend first and confirm `http://127.0.0.1:8000/health` before launching Flutter.
+FastAPI backend: `https://github.com/marvin101/id_card_backend`
