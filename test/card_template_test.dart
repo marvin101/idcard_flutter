@@ -12,6 +12,52 @@ void main() {
     expect(decoded.schoolTitle, source.schoolTitle);
     expect(decoded.primaryColor, source.primaryColor);
     expect(decoded.maskAadhaar, isTrue);
+    expect(decoded.document.schemaVersion, 2);
+    expect(decoded.toApi()['design']['schema_version'], 2);
+  });
+
+  test('legacy v1 settings normalize deterministically to v2 elements', () {
+    final template = CardTemplate.fromApi({
+      'name': 'Legacy',
+      'design': {
+        'version': 1,
+        'school_title': 'Legacy School',
+        'primary_color': '#123456',
+      },
+    });
+
+    expect(template.schoolTitle, 'Legacy School');
+    expect(template.document.canvas.width, 85.6);
+    expect(template.document.elements, isNotEmpty);
+    expect(template.document.settings['migrated_from_v1'], isTrue);
+    expect(template.toApi()['design']['schema_version'], 2);
+  });
+
+  test('v2 geometry and custom UUID bindings survive serialization', () {
+    final source = CardTemplate(
+      name: 'V2',
+      document: DesignDocument(
+        canvas: const DesignCanvas(),
+        elements: const [
+          DesignElement(
+            id: 'house',
+            type: DesignElementType.customFieldText,
+            x: 4,
+            y: 5,
+            width: 20,
+            height: 4,
+            rotation: 12,
+            data: {'field_uuid': '11111111-1111-1111-1111-111111111111'},
+          ),
+        ],
+      ),
+    );
+    final decoded = CardTemplate.fromApi(source.toApi());
+    expect(decoded.document.elements.single.rotation, 12);
+    expect(
+      decoded.document.elements.single.data['field_uuid'],
+      '11111111-1111-1111-1111-111111111111',
+    );
   });
 
   test('Aadhaar masking keeps only the final four digits visible', () {

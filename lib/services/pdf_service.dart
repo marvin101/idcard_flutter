@@ -1,3 +1,6 @@
+// ignore_for_file: curly_braces_in_flow_control_structures
+
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -8,13 +11,7 @@ import '../models/api_student.dart';
 import '../models/card_template.dart';
 
 class PdfService {
-  // Standard CR80 ID-card size.
-  static const double _cardWidthMm = 85.60;
-  static const double _cardHeightMm = 53.98;
-
-  static double _mm(double value) {
-    return value * PdfPageFormat.mm;
-  }
+  static double _mm(double value) => value * PdfPageFormat.mm;
 
   static Future<Uint8List> generateStudentCard({
     required ApiStudent student,
@@ -22,6 +19,7 @@ class PdfService {
     required CardTemplate template,
     String? sessionName,
     String? photoUrl,
+    String? schoolLogoUrl,
   }) => generateStudentCards(
     cards: [
       PdfCardData(
@@ -32,332 +30,238 @@ class PdfService {
     ],
     schoolName: schoolName,
     template: template,
+    schoolLogoUrl: schoolLogoUrl,
   );
 
   static Future<Uint8List> generateStudentCards({
     required List<PdfCardData> cards,
     required String schoolName,
     required CardTemplate template,
+    String? schoolLogoUrl,
   }) async {
     final pdf = pw.Document();
-    final primary = PdfColor.fromInt(template.primaryColor.toARGB32());
-    final accent = PdfColor.fromInt(template.accentColor.toARGB32());
-    final photoBorder = PdfColor.fromInt(template.photoBorderColor.toARGB32());
-
+    final logo = await _download(schoolLogoUrl);
     for (final card in cards) {
-      final student = card.student;
-      final sessionName = card.sessionName;
-      final photoUrl = card.photoUrl;
-
-      pw.MemoryImage? photo;
-
-      if (photoUrl != null && photoUrl.trim().isNotEmpty) {
-        try {
-          final response = await http.get(Uri.parse(photoUrl));
-
-          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
-            photo = pw.MemoryImage(response.bodyBytes);
-          }
-        } catch (_) {
-          // Continue without the photo if it cannot be downloaded.
-        }
-      }
-
+      final photo = await _download(card.photoUrl);
+      final canvas = template.document.canvas;
       pdf.addPage(
         pw.Page(
-          pageFormat: PdfPageFormat(_mm(_cardWidthMm), _mm(_cardHeightMm)),
+          pageFormat: PdfPageFormat(_mm(canvas.width), _mm(canvas.height)),
           margin: pw.EdgeInsets.zero,
-          build: (context) {
-            return pw.Container(
-              width: _mm(_cardWidthMm),
-              height: _mm(_cardHeightMm),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.white,
-                border: pw.Border.all(color: PdfColors.grey600, width: 0.7),
-              ),
-              child: pw.Padding(
-                padding: pw.EdgeInsets.fromLTRB(
-                  _mm(2.5),
-                  _mm(2),
-                  _mm(2.5),
-                  _mm(1.5),
-                ),
-                child: pw.Column(
-                  children: [
-                    // ---------------------------------------------------------
-                    // SCHOOL NAME
-                    // ---------------------------------------------------------
-                    pw.Text(
-                      template.schoolTitle.trim().isEmpty
-                          ? schoolName.toUpperCase()
-                          : template.schoolTitle.toUpperCase(),
-                      maxLines: 1,
-                      overflow: pw.TextOverflow.clip,
-                      textAlign: pw.TextAlign.center,
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        fontWeight: pw.FontWeight.bold,
-                        color: primary,
-                      ),
-                    ),
-
-                    pw.SizedBox(height: _mm(0.5)),
-
-                    // ---------------------------------------------------------
-                    // CARD TITLE
-                    // ---------------------------------------------------------
-                    pw.Text(
-                      template.schoolSubtitle,
-                      style: pw.TextStyle(
-                        fontSize: 5.5,
-                        fontWeight: pw.FontWeight.bold,
-                        letterSpacing: 0.8,
-                        color: accent,
-                      ),
-                    ),
-
-                    pw.SizedBox(height: _mm(0.8)),
-
-                    // ---------------------------------------------------------
-                    // PHOTO + BASIC INFORMATION
-                    // ---------------------------------------------------------
-                    pw.SizedBox(
-                      height: _mm(20),
-                      child: pw.Row(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          // PHOTO
-                          pw.Container(
-                            width: _mm(16),
-                            height: _mm(20),
-                            decoration: pw.BoxDecoration(
-                              color: PdfColors.grey100,
-                              border: pw.Border.all(
-                                color: photoBorder,
-                                width: 1.2,
-                              ),
-                            ),
-                            child: photo == null
-                                ? pw.Center(
-                                    child: pw.Text(
-                                      'PHOTO',
-                                      style: pw.TextStyle(
-                                        fontSize: 6,
-                                        fontWeight: pw.FontWeight.bold,
-                                        color: PdfColors.grey600,
-                                      ),
-                                    ),
-                                  )
-                                : pw.Image(photo, fit: pw.BoxFit.cover),
-                          ),
-
-                          pw.SizedBox(width: _mm(2)),
-
-                          // BASIC INFORMATION
-                          pw.Expanded(
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                pw.Text(
-                                  student.fullName.trim().isEmpty
-                                      ? 'Student'
-                                      : student.fullName.trim(),
-                                  maxLines: 1,
-                                  overflow: pw.TextOverflow.clip,
-                                  style: pw.TextStyle(
-                                    fontSize: 8.5,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: primary,
-                                  ),
-                                ),
-
-                                pw.SizedBox(height: _mm(0.6)),
-
-                                _field('Adm. No.', student.admissionNo),
-
-                                _field('Roll No.', student.rollNo),
-
-                                _field(
-                                  'Stream',
-                                  template.showStream ? student.stream : null,
-                                ),
-
-                                _field(
-                                  'Blood',
-                                  template.showBloodGroup
-                                      ? student.bloodGroup
-                                      : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    pw.SizedBox(height: _mm(1)),
-
-                    // ---------------------------------------------------------
-                    // DIVIDER
-                    // ---------------------------------------------------------
-                    pw.Container(
-                      height: 0.5,
-                      width: double.infinity,
-                      color: PdfColors.grey400,
-                    ),
-
-                    pw.SizedBox(height: _mm(1)),
-
-                    // ---------------------------------------------------------
-                    // PERSONAL INFORMATION
-                    // ---------------------------------------------------------
-                    pw.SizedBox(
-                      height: _mm(7.5),
-                      child: pw.Row(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Expanded(
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                _field('Father', student.fatherName),
-                                _field('Mother', student.motherName),
-                                _field('DOB', _formatDate(student.dob)),
-                              ],
-                            ),
-                          ),
-
-                          pw.SizedBox(width: _mm(2)),
-
-                          pw.Expanded(
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                _field(
-                                  'Mobile',
-                                  template.showMobile ? student.mobile : null,
-                                ),
-                                _field(
-                                  'Aadhaar',
-                                  template.maskAadhaar
-                                      ? maskAadhaarValue(student.aadhaar)
-                                      : student.aadhaar,
-                                ),
-                                _field(
-                                  'Address',
-                                  template.showAddress ? student.address : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    pw.SizedBox(height: _mm(1)),
-
-                    // ---------------------------------------------------------
-                    // PRINCIPAL SIGNATURE
-                    // ---------------------------------------------------------
-                    pw.Align(
-                      alignment: pw.Alignment.centerRight,
-                      child: pw.Container(
-                        width: _mm(22),
-                        height: _mm(5),
-                        decoration: pw.BoxDecoration(
-                          border: pw.Border.all(
-                            color: PdfColors.grey500,
-                            width: 0.6,
-                          ),
-                        ),
-                        alignment: pw.Alignment.bottomCenter,
-                        padding: pw.EdgeInsets.only(bottom: _mm(0.5)),
-                        child: pw.Text(
-                          "Principal's Signature",
-                          style: pw.TextStyle(
-                            fontSize: 4.5,
-                            color: PdfColors.grey700,
-                            fontWeight: pw.FontWeight.bold,
+          build: (_) => pw.Container(
+            width: _mm(canvas.width),
+            height: _mm(canvas.height),
+            color: _color(canvas.backgroundColor, PdfColors.white),
+            child: pw.Stack(
+              children: [
+                for (final element in ([
+                  ...template.document.elements,
+                ]..sort((a, b) => a.zIndex.compareTo(b.zIndex))))
+                  if (element.visible)
+                    pw.Positioned(
+                      left: _mm(element.x),
+                      top: _mm(element.y),
+                      child: pw.Transform.rotate(
+                        angle: element.rotation * math.pi / 180,
+                        child: pw.SizedBox(
+                          width: _mm(element.width),
+                          height: _mm(element.height),
+                          child: _element(
+                            element,
+                            card,
+                            schoolName,
+                            photo,
+                            logo,
                           ),
                         ),
                       ),
                     ),
-
-                    pw.SizedBox(height: _mm(0.6)),
-
-                    // ---------------------------------------------------------
-                    // SESSION BAR
-                    // ---------------------------------------------------------
-                    pw.Container(
-                      width: double.infinity,
-                      height: _mm(5),
-                      color: primary,
-                      alignment: pw.Alignment.center,
-                      child: pw.Text(
-                        'Session: ${sessionName ?? 'Not specified'}',
-                        maxLines: 1,
-                        overflow: pw.TextOverflow.clip,
-                        style: pw.TextStyle(
-                          fontSize: 5.5,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         ),
       );
     }
-
     return pdf.save();
   }
 
-  static pw.Widget _field(String label, String? value) {
-    final text = value?.trim();
-
-    if (text == null || text.isEmpty) {
-      return pw.SizedBox(height: _mm(2.1));
+  static Future<pw.MemoryImage?> _download(String? url) async {
+    if (url == null || url.trim().isEmpty) return null;
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty)
+        return pw.MemoryImage(response.bodyBytes);
+    } catch (_) {
+      /* Render a placeholder when an asset is unavailable. */
     }
-
-    return pw.Padding(
-      padding: pw.EdgeInsets.only(bottom: _mm(0.35)),
-      child: pw.RichText(
-        maxLines: 1,
-        overflow: pw.TextOverflow.clip,
-        text: pw.TextSpan(
-          style: const pw.TextStyle(fontSize: 5.5, color: PdfColors.grey900),
-          children: [
-            pw.TextSpan(
-              text: '$label: ',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            ),
-            pw.TextSpan(text: text),
-          ],
-        ),
-      ),
-    );
+    return null;
   }
 
-  static String? _formatDate(DateTime? value) {
-    if (value == null) {
-      return null;
+  static pw.Widget _element(
+    DesignElement element,
+    PdfCardData card,
+    String schoolName,
+    pw.MemoryImage? photo,
+    pw.MemoryImage? logo,
+  ) {
+    final style = element.style;
+    switch (element.type) {
+      case DesignElementType.rectangle:
+        return pw.Container(
+          decoration: pw.BoxDecoration(
+            color: _color(style['fill_color'], const PdfColor(0, 0, 0, 0)),
+            border: pw.Border.all(
+              color: _color(style['border_color'], const PdfColor(0, 0, 0, 0)),
+              width: _mm((style['border_width'] as num?)?.toDouble() ?? 0),
+            ),
+            borderRadius: pw.BorderRadius.circular(
+              _mm((style['corner_radius'] as num?)?.toDouble() ?? 0),
+            ),
+          ),
+        );
+      case DesignElementType.line:
+        return pw.Center(
+          child: pw.Container(
+            height: _mm(
+              math.max(.2, (style['border_width'] as num?)?.toDouble() ?? .5),
+            ),
+            color: _color(style['color'], PdfColors.black),
+          ),
+        );
+      case DesignElementType.studentPhoto:
+      case DesignElementType.schoolLogo:
+        final image = element.type == DesignElementType.studentPhoto
+            ? photo
+            : logo;
+        return pw.Container(
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey100,
+            border: pw.Border.all(
+              color: _color(style['border_color'], const PdfColor(0, 0, 0, 0)),
+              width: _mm((style['border_width'] as num?)?.toDouble() ?? 0),
+            ),
+            borderRadius: pw.BorderRadius.circular(
+              _mm((style['corner_radius'] as num?)?.toDouble() ?? 0),
+            ),
+          ),
+          child: image == null
+              ? pw.Center(
+                  child: pw.Text(
+                    element.type == DesignElementType.studentPhoto
+                        ? 'PHOTO'
+                        : 'LOGO',
+                    style: const pw.TextStyle(
+                      fontSize: 6,
+                      color: PdfColors.grey600,
+                    ),
+                  ),
+                )
+              : pw.ClipRRect(
+                  horizontalRadius: _mm(
+                    (style['corner_radius'] as num?)?.toDouble() ?? 0,
+                  ),
+                  verticalRadius: _mm(
+                    (style['corner_radius'] as num?)?.toDouble() ?? 0,
+                  ),
+                  child: pw.Image(
+                    image,
+                    fit: style['fit'] == 'contain'
+                        ? pw.BoxFit.contain
+                        : pw.BoxFit.cover,
+                  ),
+                ),
+        );
+      case DesignElementType.text:
+      case DesignElementType.boundText:
+      case DesignElementType.customFieldText:
+        final text = _resolve(element, card, schoolName);
+        final align = switch (style['alignment']) {
+          'center' => pw.TextAlign.center,
+          'right' => pw.TextAlign.right,
+          _ => pw.TextAlign.left,
+        };
+        return pw.Align(
+          alignment: switch (style['alignment']) {
+            'center' => pw.Alignment.center,
+            'right' => pw.Alignment.centerRight,
+            _ => pw.Alignment.centerLeft,
+          },
+          child: pw.Text(
+            text,
+            maxLines: (style['max_lines'] as num?)?.toInt() ?? 2,
+            overflow: pw.TextOverflow.clip,
+            textAlign: align,
+            style: pw.TextStyle(
+              fontSize: _mm((style['font_size'] as num?)?.toDouble() ?? 3),
+              color: _color(style['color'], PdfColors.black),
+              fontWeight:
+                  ((style['font_weight'] as num?)?.toInt() ?? 400) >= 600
+                  ? pw.FontWeight.bold
+                  : pw.FontWeight.normal,
+            ),
+          ),
+        );
     }
+  }
 
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
+  static String _resolve(
+    DesignElement element,
+    PdfCardData card,
+    String schoolName,
+  ) {
+    final data = element.data;
+    String value;
+    if (element.type == DesignElementType.text)
+      value = data['text'] as String? ?? 'Text';
+    else if (element.type == DesignElementType.customFieldText)
+      value =
+          card.student.customFields
+              .where((field) => field.fieldUuid == data['field_uuid'])
+              .map((field) => field.value)
+              .firstOrNull ??
+          (data['fallback'] as String? ?? '');
+    else
+      value = switch (data['field']) {
+        'full_name' => card.student.fullName,
+        'admission_no' => card.student.admissionNo,
+        'roll_no' => card.student.rollNo ?? '',
+        'stream' => card.student.stream ?? '',
+        'father_name' => card.student.fatherName ?? '',
+        'mother_name' => card.student.motherName ?? '',
+        'dob' => _date(card.student.dob),
+        'gender' => card.student.gender ?? '',
+        'blood_group' => card.student.bloodGroup ?? '',
+        'mobile' => card.student.mobile ?? '',
+        'aadhaar' => card.student.aadhaar ?? '',
+        'address' => card.student.address ?? '',
+        'session' => card.sessionName ?? '',
+        'class' => card.className ?? '',
+        'section' => card.sectionName ?? '',
+        'school_name' => schoolName,
+        _ => '',
+      };
+    if (value.isEmpty) value = data['fallback'] as String? ?? '';
+    return '${data['prefix'] ?? ''}$value${data['suffix'] ?? ''}';
+  }
 
-    return '$day/$month/${value.year}';
+  static String _date(DateTime? value) => value == null
+      ? ''
+      : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  static PdfColor _color(Object? value, PdfColor fallback) {
+    if (value is! String) return fallback;
+    final parsed = int.tryParse(value.replaceFirst('#', ''), radix: 16);
+    return parsed == null ? fallback : PdfColor.fromInt(0xff000000 | parsed);
   }
 }
 
 class PdfCardData {
-  const PdfCardData({required this.student, this.sessionName, this.photoUrl});
-
+  const PdfCardData({
+    required this.student,
+    this.sessionName,
+    this.className,
+    this.sectionName,
+    this.photoUrl,
+  });
   final ApiStudent student;
-  final String? sessionName;
-  final String? photoUrl;
+  final String? sessionName, className, sectionName, photoUrl;
 }

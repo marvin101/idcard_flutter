@@ -1,11 +1,17 @@
+// ignore_for_file: curly_braces_in_flow_control_structures
+
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
+import '../models/student_field.dart';
 import '../services/api_service.dart';
-import '../theme/app_colors.dart';
-import '../widgets/template_card.dart';
 import '../widgets/authenticated_app_bar.dart';
+import '../widgets/design_document_view.dart';
 
 class CardDesignerScreen extends StatefulWidget {
   const CardDesignerScreen({
@@ -14,11 +20,9 @@ class CardDesignerScreen extends StatefulWidget {
     required this.api,
     required this.initialTemplate,
   });
-
   final String schoolUuid;
   final ApiService api;
   final CardTemplate initialTemplate;
-
   @override
   State<CardDesignerScreen> createState() => _CardDesignerScreenState();
 }
@@ -26,9 +30,16 @@ class CardDesignerScreen extends StatefulWidget {
 class _CardDesignerScreenState extends State<CardDesignerScreen> {
   late CardTemplate _template;
   late final TextEditingController _name;
-  late final TextEditingController _schoolTitle;
-  late final TextEditingController _schoolSubtitle;
+  final FocusNode _canvasFocus = FocusNode(debugLabel: 'designer canvas');
+  final List<DesignDocument> _history = [];
+  int _historyIndex = 0;
+  String? _selectedId, _logoUrl;
+  List<StudentFieldDefinition> _customFields = const [];
+  late String _savedDocument;
+  double _zoom = 1;
   bool _saving = false;
+  String _saveState = 'Saved';
+  int _idCounter = 0;
 
   static final _sampleStudent = ApiStudent(
     uuid: 'preview',
@@ -49,260 +60,1005 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     isActive: true,
   );
 
+  DesignDocument get _document => _template.document;
+  DesignElement? get _selected => _document.elements
+      .where((element) => element.id == _selectedId)
+      .firstOrNull;
+  bool get _dirty => jsonEncode(_template.toApi()) != _savedDocument;
+  bool get _canUndo => _historyIndex > 0;
+  bool get _canRedo => _historyIndex + 1 < _history.length;
+
   @override
   void initState() {
     super.initState();
     _template = widget.initialTemplate;
-    _name = TextEditingController(text: _template.name);
-    _schoolTitle = TextEditingController(text: _template.schoolTitle);
-    _schoolSubtitle = TextEditingController(text: _template.schoolSubtitle);
+    _name = TextEditingController(text: _template.name)..addListener(_rename);
+    _history.add(_document);
+    _savedDocument = jsonEncode(_template.toApi());
+    _loadAssets();
+  }
+
+  Future<void> _loadAssets() async {
+    try {
+      final results = await Future.wait<dynamic>([
+        widget.api.getStudentFields(widget.schoolUuid),
+        widget.api.getSchoolProfile(widget.schoolUuid),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _customFields = results[0] as List<StudentFieldDefinition>;
+        _logoUrl = results[1].logoUrl as String?;
+      });
+    } catch (_) {
+      /* The editor remains usable when optional metadata is unavailable. */
+    }
   }
 
   @override
   void dispose() {
+    _name.removeListener(_rename);
     _name.dispose();
-    _schoolTitle.dispose();
-    _schoolSubtitle.dispose();
+    _canvasFocus.dispose();
     super.dispose();
   }
 
-  void _syncText() {
-    _template = _template.copyWith(
-      name: _name.text.trim(),
-      schoolTitle: _schoolTitle.text.trim(),
-      schoolSubtitle: _schoolSubtitle.text.trim(),
+  void _rename() => setState(() {
+    _template = _template.copyWith(name: _name.text);
+    _saveState = 'Unsaved changes';
+  });
+
+  void _commit(DesignDocument next, {String? selectedId}) {
+    if (jsonEncode(next.toJson()) == jsonEncode(_document.toJson())) return;
+    if (_historyIndex + 1 < _history.length)
+      _history.removeRange(_historyIndex + 1, _history.length);
+    _history.add(next);
+    if (_history.length > 80)
+      _history.removeAt(0);
+    else
+      _historyIndex++;
+    setState(() {
+      _template = _template.copyWith(document: next);
+      if (selectedId != null) _selectedId = selectedId;
+      _saveState = 'Unsaved changes';
+    });
+  }
+
+  void _undo() {
+    if (!_canUndo) return;
+    setState(() {
+      _historyIndex--;
+      _template = _template.copyWith(document: _history[_historyIndex]);
+      _saveState = _dirty ? 'Unsaved changes' : 'Saved';
+    });
+  }
+
+  void _redo() {
+    if (!_canRedo) return;
+    setState(() {
+      _historyIndex++;
+      _template = _template.copyWith(document: _history[_historyIndex]);
+      _saveState = 'Unsaved changes';
+    });
+  }
+
+  void _replace(DesignElement replacement) => _commit(
+    _document.copyWith(
+      elements: [
+        for (final element in _document.elements)
+          if (element.id == replacement.id) replacement else element,
+      ],
+    ),
+  );
+
+  void _add(DesignElementType type, {StudentFieldDefinition? customField}) {
+    final id =
+        '${type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
+    final z = _document.elements.fold<int>(
+      0,
+      (value, element) => math.max(value, element.zIndex + 1),
     );
-    setState(() {});
+    final isImage =
+        type == DesignElementType.studentPhoto ||
+        type == DesignElementType.schoolLogo;
+    final element = DesignElement(
+      id: id,
+      type: type,
+      x: (_document.canvas.width - (isImage ? 20 : 30)) / 2,
+      y: (_document.canvas.height - (isImage ? 22 : 6)) / 2,
+      width: isImage ? 20 : 30,
+      height: isImage
+          ? 22
+          : type == DesignElementType.line
+          ? 1
+          : 6,
+      zIndex: z,
+      style: switch (type) {
+        DesignElementType.rectangle => {
+          'fill_color': '#E8EEF8',
+          'border_color': '#242C61',
+          'border_width': 0.5,
+          'corner_radius': 1.0,
+        },
+        DesignElementType.line => {'color': '#242C61', 'border_width': 0.5},
+        DesignElementType.studentPhoto || DesignElementType.schoolLogo => {
+          'fit': type == DesignElementType.schoolLogo ? 'contain' : 'cover',
+          'border_color': '#242C61',
+          'border_width': 0.5,
+          'corner_radius': 1.0,
+        },
+        _ => {
+          'font_size': 3.5,
+          'font_weight': 400,
+          'alignment': 'left',
+          'color': '#111111',
+        },
+      },
+      data: switch (type) {
+        DesignElementType.text => {'text': 'New text'},
+        DesignElementType.boundText => {
+          'field': 'full_name',
+          'fallback': 'Student name',
+        },
+        DesignElementType.customFieldText => {
+          'field_uuid': customField!.uuid,
+          'label': customField.label,
+          'fallback': customField.label,
+        },
+        _ => const {},
+      },
+    );
+    _commit(
+      _document.copyWith(elements: [..._document.elements, element]),
+      selectedId: id,
+    );
+  }
+
+  void _move(String id, double dx, double dy) {
+    final element = _document.elements.firstWhere((item) => item.id == id);
+    if (element.locked) return;
+    var x = (element.x + dx)
+        .clamp(0.0, math.max(0, _document.canvas.width - element.width))
+        .toDouble();
+    var y = (element.y + dy)
+        .clamp(0.0, math.max(0, _document.canvas.height - element.height))
+        .toDouble();
+    if (_document.settings['snap_enabled'] != false) {
+      const tolerance = 0.8;
+      final centerX = (_document.canvas.width - element.width) / 2;
+      final centerY = (_document.canvas.height - element.height) / 2;
+      if ((x - centerX).abs() < tolerance) x = centerX;
+      if ((y - centerY).abs() < tolerance) y = centerY;
+      final grid = (_document.settings['grid_size'] as num?)?.toDouble() ?? 2;
+      if (grid > 0) {
+        x = ((x / grid).round() * grid).toDouble();
+        y = ((y / grid).round() * grid).toDouble();
+      }
+    }
+    _replace(element.copyWith(x: x, y: y));
+  }
+
+  void _resize(String id, double dw, double dh) {
+    final element = _document.elements.firstWhere((item) => item.id == id);
+    if (element.locked) return;
+    final ratio = element.width / element.height;
+    var width = (element.width + dw).clamp(
+      2.0,
+      _document.canvas.width - element.x,
+    );
+    var height = (element.height + dh).clamp(
+      1.0,
+      _document.canvas.height - element.y,
+    );
+    if (element.type == DesignElementType.studentPhoto ||
+        element.type == DesignElementType.schoolLogo)
+      height = (width / ratio).clamp(1.0, _document.canvas.height - element.y);
+    _replace(element.copyWith(width: width, height: height));
+  }
+
+  void _remove() {
+    final selected = _selected;
+    if (selected == null || selected.locked) return;
+    _commit(
+      _document.copyWith(
+        elements: _document.elements.where((e) => e.id != selected.id).toList(),
+      ),
+    );
+    setState(() => _selectedId = null);
+  }
+
+  void _duplicate() {
+    final selected = _selected;
+    if (selected == null) return;
+    final id =
+        '${selected.type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
+    final copy = selected.copyWith(
+      id: id,
+      x: math.min(selected.x + 2, _document.canvas.width - selected.width),
+      y: math.min(selected.y + 2, _document.canvas.height - selected.height),
+      zIndex: _topZ(),
+    );
+    _commit(
+      _document.copyWith(elements: [..._document.elements, copy]),
+      selectedId: id,
+    );
+  }
+
+  int _topZ() =>
+      _document.elements.fold<int>(0, (v, e) => math.max(v, e.zIndex + 1));
+
+  void _layer(String operation) {
+    final selected = _selected;
+    if (selected == null) return;
+    final ordered = [..._document.elements]
+      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+    var index = ordered.indexWhere((e) => e.id == selected.id);
+    final target = switch (operation) {
+      'front' => ordered.length - 1,
+      'back' => 0,
+      'forward' => math.min(index + 1, ordered.length - 1),
+      _ => math.max(index - 1, 0),
+    };
+    ordered.removeAt(index);
+    ordered.insert(target, selected);
+    _commit(
+      _document.copyWith(
+        elements: [
+          for (var i = 0; i < ordered.length; i++)
+            ordered[i].copyWith(zIndex: i),
+        ],
+      ),
+    );
+  }
+
+  void _align(String where) {
+    final e = _selected;
+    if (e == null || e.locked) return;
+    _replace(
+      e.copyWith(
+        x: switch (where) {
+          'left' => 0,
+          'hcenter' => (_document.canvas.width - e.width) / 2,
+          'right' => _document.canvas.width - e.width,
+          _ => e.x,
+        },
+        y: switch (where) {
+          'top' => 0,
+          'vcenter' => (_document.canvas.height - e.height) / 2,
+          'bottom' => _document.canvas.height - e.height,
+          _ => e.y,
+        },
+      ),
+    );
+  }
+
+  void _key(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+    final control =
+        HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed;
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+    if (control && event.logicalKey == LogicalKeyboardKey.keyZ) {
+      shift ? _redo() : _undo();
+      return;
+    }
+    if (control && event.logicalKey == LogicalKeyboardKey.keyY) {
+      _redo();
+      return;
+    }
+    if (control && event.logicalKey == LogicalKeyboardKey.keyD) {
+      _duplicate();
+      return;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      setState(() => _selectedId = null);
+      return;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.delete ||
+        event.logicalKey == LogicalKeyboardKey.backspace) {
+      _remove();
+      return;
+    }
+    final step = shift ? 5.0 : 0.5;
+    final selectedId = _selectedId;
+    if (selectedId == null) return;
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft)
+      _move(selectedId, -step, 0);
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight)
+      _move(selectedId, step, 0);
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp)
+      _move(selectedId, 0, -step);
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown)
+      _move(selectedId, 0, step);
   }
 
   Future<void> _save() async {
-    _syncText();
-    if (_template.name.isEmpty || _template.schoolTitle.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Template and school names are required.'),
-        ),
-      );
-      return;
-    }
-    setState(() => _saving = true);
+    if (!_dirty || _saving || _name.text.trim().isEmpty) return;
+    setState(() {
+      _saving = true;
+      _saveState = 'Saving…';
+      _template = _template.copyWith(name: _name.text.trim());
+    });
     try {
       final saved = await widget.api.saveCardTemplate(
         widget.schoolUuid,
         _template,
       );
-      if (mounted) Navigator.of(context).pop(saved);
-    } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Unable to save template: $e')));
+      setState(() {
+        _template = saved;
+        _savedDocument = jsonEncode(saved.toApi());
+        _name.text = saved.name;
+        _saving = false;
+        _saveState = 'Saved';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _saveState = 'Save failed';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to save template: $error')),
+      );
+    }
+  }
+
+  Future<void> _reset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset card design?'),
+        content: const Text(
+          'This replaces the current canvas with the default template. You can still use Undo before saving.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      _commit(CardTemplate.uploadedDesign.document);
+      setState(() => _selectedId = null);
     }
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xfff5f7fb),
-    appBar: AuthenticatedAppBar(
-      title: const Text('Card designer'),
-      actions: [
-        TextButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.save_outlined),
-          label: const Text('Save'),
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
-        ),
-      ],
-    ),
-    body: LayoutBuilder(
-      builder: (context, constraints) {
-        final controls = _controls();
-        final preview = _preview();
-        return constraints.maxWidth >= 900
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(width: 390, child: controls),
-                  Expanded(child: preview),
-                ],
-              )
-            : ListView(
-                children: [
-                  SizedBox(height: 380, child: preview),
-                  controls,
-                ],
-              );
-      },
-    ),
-  );
-
-  Widget _preview() => Container(
-    color: const Color(0xffe7ebf1),
-    padding: const EdgeInsets.all(32),
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: TemplateCard(
-          student: _sampleStudent,
-          template: _template,
-          sessionName: '2026-2028',
-        ),
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_dirty,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop && _dirty)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Save or undo your changes before leaving.'),
+          ),
+        );
+    },
+    child: Scaffold(
+      backgroundColor: const Color(0xfff3f5f9),
+      appBar: AuthenticatedAppBar(
+        title: const Text('Card designer'),
+        actions: [
+          Center(
+            child: Text(
+              _saveState,
+              key: const Key('designer-save-state'),
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton.icon(
+            key: const Key('designer-save'),
+            onPressed: _dirty && !_saving ? _save : null,
+            icon: _saving
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: const Text('Save'),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _toolbar(),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => constraints.maxWidth >= 1050
+                  ? Row(
+                      children: [
+                        SizedBox(width: 250, child: _layers()),
+                        Expanded(child: _workspace()),
+                        SizedBox(width: 300, child: _inspector()),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: _workspace()),
+                        SizedBox(width: 300, child: _inspector()),
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     ),
   );
 
-  Widget _controls() => ListView(
-    padding: const EdgeInsets.all(22),
+  Widget _toolbar() => Material(
+    elevation: 1,
+    child: SizedBox(
+      height: 54,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        children: [
+          _tool(
+            Icons.text_fields,
+            'Text',
+            () => _add(DesignElementType.text),
+            key: 'add-text',
+          ),
+          _tool(
+            Icons.badge_outlined,
+            'Student field',
+            () => _add(DesignElementType.boundText),
+            key: 'add-student-field',
+          ),
+          PopupMenuButton<StudentFieldDefinition>(
+            tooltip: 'Custom field',
+            enabled: _customFields.isNotEmpty,
+            onSelected: (field) =>
+                _add(DesignElementType.customFieldText, customField: field),
+            itemBuilder: (_) => [
+              for (final field in _customFields.where((f) => f.isActive))
+                PopupMenuItem(value: field, child: Text(field.label)),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.dynamic_form_outlined),
+                  SizedBox(width: 6),
+                  Text('Custom field'),
+                ],
+              ),
+            ),
+          ),
+          _tool(
+            Icons.person_outline,
+            'Photo',
+            () => _add(DesignElementType.studentPhoto),
+            key: 'add-photo',
+          ),
+          _tool(
+            Icons.school_outlined,
+            'Logo',
+            () => _add(DesignElementType.schoolLogo),
+            key: 'add-logo',
+          ),
+          _tool(
+            Icons.rectangle_outlined,
+            'Rectangle',
+            () => _add(DesignElementType.rectangle),
+            key: 'add-rectangle',
+          ),
+          _tool(
+            Icons.horizontal_rule,
+            'Line',
+            () => _add(DesignElementType.line),
+            key: 'add-line',
+          ),
+          const VerticalDivider(),
+          IconButton(
+            onPressed: _canUndo ? _undo : null,
+            icon: const Icon(Icons.undo),
+            tooltip: 'Undo',
+          ),
+          IconButton(
+            onPressed: _canRedo ? _redo : null,
+            icon: const Icon(Icons.redo),
+            tooltip: 'Redo',
+          ),
+          IconButton(
+            onPressed: _selected == null ? null : _duplicate,
+            icon: const Icon(Icons.copy_outlined),
+            tooltip: 'Duplicate',
+          ),
+          IconButton(
+            onPressed: _selected == null ? null : _remove,
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Delete',
+          ),
+          IconButton(
+            key: const Key('reset-design'),
+            onPressed: _reset,
+            icon: const Icon(Icons.restart_alt),
+            tooltip: 'Reset to default',
+          ),
+          const VerticalDivider(),
+          ...['left', 'hcenter', 'right', 'top', 'vcenter', 'bottom'].map(
+            (value) => IconButton(
+              onPressed: _selected == null ? null : () => _align(value),
+              icon: Icon(switch (value) {
+                'left' => Icons.align_horizontal_left,
+                'hcenter' => Icons.align_horizontal_center,
+                'right' => Icons.align_horizontal_right,
+                'top' => Icons.align_vertical_top,
+                'vcenter' => Icons.align_vertical_center,
+                _ => Icons.align_vertical_bottom,
+              }),
+              tooltip: 'Align $value',
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _tool(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    required String key,
+  }) => TextButton.icon(
+    key: Key(key),
+    onPressed: onTap,
+    icon: Icon(icon),
+    label: Text(label),
+  );
+
+  Widget _workspace() => Column(
     children: [
-      Text('Template settings', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: 6),
-      const Text(
-        'This first test template follows the uploaded blue school-card design.',
-        style: TextStyle(color: AppColors.textSecondary),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            const Icon(Icons.zoom_out),
+            Expanded(
+              child: Slider(
+                value: _zoom,
+                min: .5,
+                max: 2,
+                divisions: 15,
+                label: '${(_zoom * 100).round()}%',
+                onChanged: (v) => setState(() => _zoom = v),
+              ),
+            ),
+            const Icon(Icons.zoom_in),
+            TextButton(
+              onPressed: () => setState(() => _zoom = 1),
+              child: const Text('Fit'),
+            ),
+            Switch(
+              value: _document.settings['grid_enabled'] != false,
+              onChanged: (v) => _commit(
+                _document.copyWith(
+                  settings: {..._document.settings, 'grid_enabled': v},
+                ),
+              ),
+            ),
+            const Text('Grid'),
+          ],
+        ),
       ),
-      const SizedBox(height: 20),
-      _textField(_name, 'Template name'),
-      _textField(_schoolTitle, 'School title'),
-      _textField(_schoolSubtitle, 'School subtitle'),
-      const SizedBox(height: 8),
-      _palette('Header colour', _template.primaryColor, (value) {
-        setState(() => _template = _template.copyWith(primaryColor: value));
-      }),
-      _palette('Heading colour', _template.accentColor, (value) {
-        setState(() => _template = _template.copyWith(accentColor: value));
-      }),
-      _palette('Photo border', _template.photoBorderColor, (value) {
-        setState(() => _template = _template.copyWith(photoBorderColor: value));
-      }),
-      const Divider(height: 28),
-      _toggle(
-        'Show stream',
-        _template.showStream,
-        (v) => _template = _template.copyWith(showStream: v),
-      ),
-      _toggle(
-        'Show blood group',
-        _template.showBloodGroup,
-        (v) => _template = _template.copyWith(showBloodGroup: v),
-      ),
-      _toggle(
-        'Show mobile number',
-        _template.showMobile,
-        (v) => _template = _template.copyWith(showMobile: v),
-      ),
-      _toggle(
-        'Show address',
-        _template.showAddress,
-        (v) => _template = _template.copyWith(showAddress: v),
-      ),
-      _toggle(
-        'Mask Aadhaar except last four digits',
-        _template.maskAadhaar,
-        (v) => _template = _template.copyWith(maskAadhaar: v),
-      ),
-      _toggle(
-        'Rounded photo frame',
-        _template.roundedPhoto,
-        (v) => _template = _template.copyWith(roundedPhoto: v),
+      Expanded(
+        child: KeyboardListener(
+          focusNode: _canvasFocus,
+          onKeyEvent: _key,
+          child: GestureDetector(
+            onTap: () => _canvasFocus.requestFocus(),
+            child: InteractiveViewer(
+              minScale: .5,
+              maxScale: 3,
+              child: Center(
+                child: Transform.scale(
+                  scale: _zoom,
+                  child: SizedBox(
+                    width: 856,
+                    child: Stack(
+                      children: [
+                        DesignDocumentView(
+                          key: const Key('designer-canvas'),
+                          document: _document,
+                          student: _sampleStudent,
+                          sessionName: '2026-2028',
+                          className: 'XII',
+                          sectionName: 'A',
+                          logoUrl: _logoUrl,
+                          selectedId: _selectedId,
+                          interactive: true,
+                          onSelect: (id) => setState(() => _selectedId = id),
+                          onMove: _move,
+                          onResize: _resize,
+                        ),
+                        if (_document.settings['grid_enabled'] != false)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _GridPainter(
+                                  (_document.settings['grid_size'] as num?)
+                                          ?.toDouble() ??
+                                      2,
+                                  _document.canvas.width,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     ],
   );
 
-  Widget _textField(TextEditingController controller, String label) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: TextField(
-      controller: controller,
-      onChanged: (_) => _syncText(),
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-    ),
-  );
-
-  Widget _palette(String label, Color selected, ValueChanged<Color> onChanged) {
-    const colors = [
-      Color(0xff242c61),
-      Color(0xff005b96),
-      Color(0xff1565c0),
-      Color(0xff1976d2),
-      Color(0xff3949ab),
-      Color(0xff5e35b1),
-      Color(0xff7b1fa2),
-      Color(0xff8e24aa),
-      Color(0xffad1457),
-      Color(0xff00695c),
-      Color(0xff00897b),
-      Color(0xff2e7d32),
-      Color(0xff43a047),
-      Color(0xff7cb342),
-      Color(0xff9e9d24),
-      Color(0xff7b1f32),
-      Color(0xffc62828),
-      Color(0xffe53935),
-      Color(0xffef6c00),
-      Color(0xfff9a825),
-      Color(0xffffe000),
-      Color(0xffe52b24),
-      Color(0xff00aee8),
-      Color(0xff00838f),
-      Color(0xff455a64),
-      Color(0xff212121),
-      Color(0xff6d4c41),
-      Color(0xff757575),
-    ];
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+  Widget _layers() {
+    final elements = [..._document.elements]
+      ..sort((a, b) => b.zIndex.compareTo(a.zIndex));
+    return Material(
+      color: Colors.white,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: colors
-                .map(
-                  (color) => InkWell(
-                    onTap: () => onChanged(color),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: color == selected
-                              ? Colors.black
-                              : Colors.white,
-                          width: color == selected ? 3 : 1,
-                        ),
+          const ListTile(
+            title: Text(
+              'Layers',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              children: [
+                for (final e in elements)
+                  ListTile(
+                    key: Key('layer-${e.id}'),
+                    selected: e.id == _selectedId,
+                    dense: true,
+                    onTap: () => setState(() => _selectedId = e.id),
+                    leading: IconButton(
+                      tooltip: e.visible ? 'Hide' : 'Show',
+                      icon: Icon(
+                        e.visible
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 18,
                       ),
+                      onPressed: () =>
+                          _replace(e.copyWith(visible: !e.visible)),
+                    ),
+                    title: Text(
+                      _elementLabel(e),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: IconButton(
+                      icon: Icon(
+                        e.locked ? Icons.lock : Icons.lock_open,
+                        size: 18,
+                      ),
+                      onPressed: () => _replace(e.copyWith(locked: !e.locked)),
                     ),
                   ),
-                )
-                .toList(),
+              ],
+            ),
+          ),
+          Wrap(
+            children: [
+              IconButton(
+                onPressed: _selected == null ? null : () => _layer('front'),
+                icon: const Icon(Icons.vertical_align_top),
+                tooltip: 'Bring to front',
+              ),
+              IconButton(
+                onPressed: _selected == null ? null : () => _layer('forward'),
+                icon: const Icon(Icons.arrow_upward),
+                tooltip: 'Bring forward',
+              ),
+              IconButton(
+                onPressed: _selected == null ? null : () => _layer('backward'),
+                icon: const Icon(Icons.arrow_downward),
+                tooltip: 'Send backward',
+              ),
+              IconButton(
+                onPressed: _selected == null ? null : () => _layer('back'),
+                icon: const Icon(Icons.vertical_align_bottom),
+                tooltip: 'Send to back',
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _toggle(String label, bool value, ValueChanged<bool> apply) =>
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(label),
-        value: value,
-        onChanged: (next) => setState(() => apply(next)),
-      );
+  String _elementLabel(DesignElement e) => e.type == DesignElementType.text
+      ? (e.data['text'] as String? ?? 'Text')
+      : e.type.wire.replaceAll('_', ' ');
+
+  Widget _inspector() {
+    final e = _selected;
+    return Material(
+      color: Colors.white,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          TextField(
+            controller: _name,
+            decoration: const InputDecoration(
+              labelText: 'Template name',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            e == null
+                ? 'Select an element'
+                : 'Properties · ${_elementLabel(e)}',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          if (e != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _numberField(
+                  'X',
+                  e.x,
+                  (v) => _replace(
+                    e.copyWith(x: v.clamp(0, _document.canvas.width - e.width)),
+                  ),
+                ),
+                _numberField(
+                  'Y',
+                  e.y,
+                  (v) => _replace(
+                    e.copyWith(
+                      y: v.clamp(0, _document.canvas.height - e.height),
+                    ),
+                  ),
+                ),
+                _numberField(
+                  'Width',
+                  e.width,
+                  (v) => _replace(
+                    e.copyWith(width: v.clamp(2, _document.canvas.width - e.x)),
+                  ),
+                ),
+                _numberField(
+                  'Height',
+                  e.height,
+                  (v) => _replace(
+                    e.copyWith(
+                      height: v.clamp(1, _document.canvas.height - e.y),
+                    ),
+                  ),
+                ),
+                _numberField(
+                  'Rotation',
+                  e.rotation,
+                  (v) => _replace(e.copyWith(rotation: v.clamp(-360, 360))),
+                ),
+              ],
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Locked'),
+              value: e.locked,
+              onChanged: (v) => _replace(e.copyWith(locked: v)),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Visible'),
+              value: e.visible,
+              onChanged: (v) => _replace(e.copyWith(visible: v)),
+            ),
+            if (e.type == DesignElementType.text)
+              _textProperty(
+                'Text',
+                e.data['text'] as String? ?? '',
+                (v) => _replace(e.copyWith(data: {...e.data, 'text': v})),
+              ),
+            if (e.type == DesignElementType.boundText)
+              DropdownButtonFormField<String>(
+                initialValue: e.data['field'] as String? ?? 'full_name',
+                decoration: const InputDecoration(labelText: 'Student field'),
+                items: _systemFields.entries
+                    .map(
+                      (entry) => DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null)
+                    _replace(
+                      e.copyWith(
+                        data: {
+                          ...e.data,
+                          'field': v,
+                          'fallback': _systemFields[v],
+                        },
+                      ),
+                    );
+                },
+              ),
+            if ({
+              DesignElementType.text,
+              DesignElementType.boundText,
+              DesignElementType.customFieldText,
+            }.contains(e.type)) ...[
+              _numberField(
+                'Font size (mm)',
+                (e.style['font_size'] as num?)?.toDouble() ?? 3,
+                (v) => _replace(
+                  e.copyWith(style: {...e.style, 'font_size': v.clamp(1, 20)}),
+                ),
+                wide: true,
+              ),
+              DropdownButtonFormField<int>(
+                initialValue: (e.style['font_weight'] as num?)?.toInt() ?? 400,
+                decoration: const InputDecoration(labelText: 'Weight'),
+                items: const [
+                  DropdownMenuItem(value: 400, child: Text('Regular')),
+                  DropdownMenuItem(value: 600, child: Text('Semi-bold')),
+                  DropdownMenuItem(value: 700, child: Text('Bold')),
+                  DropdownMenuItem(value: 900, child: Text('Black')),
+                ],
+                onChanged: (v) {
+                  if (v != null)
+                    _replace(e.copyWith(style: {...e.style, 'font_weight': v}));
+                },
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: e.style['alignment'] as String? ?? 'left',
+                decoration: const InputDecoration(labelText: 'Alignment'),
+                items: const [
+                  DropdownMenuItem(value: 'left', child: Text('Left')),
+                  DropdownMenuItem(value: 'center', child: Text('Center')),
+                  DropdownMenuItem(value: 'right', child: Text('Right')),
+                ],
+                onChanged: (v) {
+                  if (v != null)
+                    _replace(e.copyWith(style: {...e.style, 'alignment': v}));
+                },
+              ),
+              _textProperty(
+                'Text colour (hex)',
+                e.style['color'] as String? ?? '#111111',
+                (v) {
+                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
+                    _replace(
+                      e.copyWith(style: {...e.style, 'color': v.toUpperCase()}),
+                    );
+                },
+              ),
+            ],
+            if (e.type == DesignElementType.studentPhoto ||
+                e.type == DesignElementType.schoolLogo)
+              DropdownButtonFormField<String>(
+                initialValue: e.style['fit'] as String? ?? 'cover',
+                decoration: const InputDecoration(labelText: 'Image fit'),
+                items: const [
+                  DropdownMenuItem(value: 'cover', child: Text('Cover')),
+                  DropdownMenuItem(value: 'contain', child: Text('Contain')),
+                ],
+                onChanged: (v) {
+                  if (v != null)
+                    _replace(e.copyWith(style: {...e.style, 'fit': v}));
+                },
+              ),
+            if (e.type == DesignElementType.rectangle) ...[
+              _textProperty(
+                'Fill colour (hex)',
+                e.style['fill_color'] as String? ?? '#FFFFFF',
+                (v) {
+                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
+                    _replace(
+                      e.copyWith(
+                        style: {...e.style, 'fill_color': v.toUpperCase()},
+                      ),
+                    );
+                },
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _numberField(
+    String label,
+    double value,
+    ValueChanged<double> apply, {
+    bool wide = false,
+  }) => SizedBox(
+    width: wide ? 250 : 118,
+    child: TextFormField(
+      key: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
+      initialValue: value.toStringAsFixed(2),
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        border: const OutlineInputBorder(),
+      ),
+      onFieldSubmitted: (text) {
+        final next = double.tryParse(text);
+        if (next != null) apply(next);
+      },
+    ),
+  );
+  Widget _textProperty(
+    String label,
+    String value,
+    ValueChanged<String> apply,
+  ) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: TextFormField(
+      key: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      onChanged: apply,
+    ),
+  );
+}
+
+const _systemFields = <String, String>{
+  'full_name': 'Full name',
+  'admission_no': 'Admission number',
+  'roll_no': 'Roll number',
+  'stream': 'Stream',
+  'father_name': "Father's name",
+  'mother_name': "Mother's name",
+  'dob': 'Date of birth',
+  'gender': 'Gender',
+  'blood_group': 'Blood group',
+  'mobile': 'Mobile',
+  'aadhaar': 'Aadhaar',
+  'address': 'Address',
+  'session': 'Session',
+  'class': 'Class',
+  'section': 'Section',
+};
+
+class _GridPainter extends CustomPainter {
+  const _GridPainter(this.gridMm, this.canvasWidthMm);
+  final double gridMm, canvasWidthMm;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final step = gridMm * size.width / canvasWidthMm;
+    if (step < 4) return;
+    final p = Paint()
+      ..color = const Color(0x18000000)
+      ..strokeWidth = .5;
+    for (double x = step; x < size.width; x += step)
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
+    for (double y = step; y < size.height; y += step)
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GridPainter oldDelegate) =>
+      oldDelegate.gridMm != gridMm ||
+      oldDelegate.canvasWidthMm != canvasWidthMm;
 }

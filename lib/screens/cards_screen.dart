@@ -78,6 +78,7 @@ class _CardsScreenState extends State<CardsScreen> {
   List<SchoolSection> _sections = const [];
   List<ApiStudent> _students = [];
   CardTemplate _cardTemplate = CardTemplate.uploadedDesign;
+  String? _schoolLogoUrl;
 
   String? _selectedSessionUuid;
   String? _selectedClassUuid;
@@ -144,6 +145,14 @@ class _CardsScreenState extends State<CardsScreen> {
       } on ApiException catch (e) {
         if (e.statusCode != 404) rethrow;
       }
+      String? schoolLogoUrl;
+      try {
+        schoolLogoUrl = (await widget.api.getSchoolProfile(
+          widget.schoolUuid,
+        )).logoUrl;
+      } on ApiException {
+        // A missing logo must not prevent card work.
+      }
 
       if (!mounted) return;
 
@@ -151,6 +160,7 @@ class _CardsScreenState extends State<CardsScreen> {
         _sessions = sessions;
         _classes = classes;
         _cardTemplate = cardTemplate;
+        _schoolLogoUrl = schoolLogoUrl;
         _loadingFilters = false;
       });
 
@@ -569,6 +579,7 @@ class _CardsScreenState extends State<CardsScreen> {
             schoolName: widget.schoolName,
             sessionName: sessionName,
             photoUrl: photoUrl,
+            schoolLogoUrl: _schoolLogoUrl,
             template: _cardTemplate,
           );
         },
@@ -594,6 +605,20 @@ class _CardsScreenState extends State<CardsScreen> {
   String? _sessionName(ApiStudent student) {
     for (final session in _sessions) {
       if (session.uuid == student.sessionUuid) return session.name;
+    }
+    return null;
+  }
+
+  String? _className(ApiStudent student) {
+    for (final item in _classes) {
+      if (item.uuid == student.classUuid) return item.name;
+    }
+    return null;
+  }
+
+  String? _sectionName(ApiStudent student) {
+    for (final item in _sections) {
+      if (item.uuid == student.sectionUuid) return item.name;
     }
     return null;
   }
@@ -652,12 +677,15 @@ class _CardsScreenState extends State<CardsScreen> {
               (student) => PdfCardData(
                 student: student,
                 sessionName: _sessionName(student),
+                className: _className(student),
+                sectionName: _sectionName(student),
                 photoUrl: _photoUrl(student),
               ),
             )
             .toList(),
         schoolName: widget.schoolName,
         template: _cardTemplate,
+        schoolLogoUrl: _schoolLogoUrl,
       );
       await Printing.sharePdf(
         bytes: bytes,
