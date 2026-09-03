@@ -41,13 +41,35 @@ class DesignCanvas {
   final double width, height;
   final String orientation, backgroundColor;
   final String? backgroundImage;
-  factory DesignCanvas.fromJson(Map<String, dynamic> json) => DesignCanvas(
-    width: _number(json['width'], 85.6),
-    height: _number(json['height'], 53.98),
-    orientation: json['orientation'] == 'portrait' ? 'portrait' : 'landscape',
-    backgroundColor: _safeHex(json['background_color'], '#FFFFFF'),
-    backgroundImage: json['background_image'] as String?,
-  );
+  factory DesignCanvas.fromJson(Map<String, dynamic> json) {
+    final width = _number(json['width'], 85.6);
+    final height = _number(json['height'], 53.98);
+    return DesignCanvas(
+      width: width,
+      height: height,
+      orientation: width >= height ? 'landscape' : 'portrait',
+      backgroundColor: _safeHex(json['background_color'], '#FFFFFF'),
+      backgroundImage: json['background_image'] as String?,
+    );
+  }
+
+  DesignCanvas copyWith({
+    double? width,
+    double? height,
+    String? backgroundColor,
+    String? backgroundImage,
+  }) {
+    final nextWidth = width ?? this.width;
+    final nextHeight = height ?? this.height;
+    return DesignCanvas(
+      width: nextWidth,
+      height: nextHeight,
+      orientation: nextWidth >= nextHeight ? 'landscape' : 'portrait',
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      backgroundImage: backgroundImage ?? this.backgroundImage,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'width': width,
     'height': height,

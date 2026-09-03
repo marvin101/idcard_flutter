@@ -11,10 +11,12 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 ### Added
 
 - Added Designer v2 with a millimetre-based visual canvas, element tools, layers, inspector, alignment, keyboard editing, and undo/redo.
+- Added editable canvas presets, custom physical dimensions, orientation, background, grid, and snapping controls.
 
 ### Changed
 
 - Legacy card templates now normalize safely to the v2 document format, shared by preview and PDF rendering.
+- Improved constrained-width property-inspector spacing and made canvas fitting responsive to physical card size.
 
 ## [0.7.0] - 2026-09-02
 

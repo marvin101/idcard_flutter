@@ -60,6 +60,31 @@ void main() {
     );
   });
 
+  test(
+    'custom canvas dimensions reload with orientation derived from size',
+    () {
+      final template = CardTemplate.fromApi({
+        'name': 'Portrait pass',
+        'design': {
+          'schema_version': 2,
+          'canvas': {
+            'width': 70.0,
+            'height': 100.0,
+            'orientation': 'landscape',
+            'background_color': '#ABCDEF',
+          },
+          'elements': <dynamic>[],
+          'settings': <String, dynamic>{},
+        },
+      });
+
+      expect(template.document.canvas.width, 70);
+      expect(template.document.canvas.height, 100);
+      expect(template.document.canvas.orientation, 'portrait');
+      expect(template.toApi()['design']['canvas']['orientation'], 'portrait');
+    },
+  );
+
   test('Aadhaar masking keeps only the final four digits visible', () {
     expect(maskAadhaarValue('2162 3230 1889'), 'XXXXXXXX1889');
   });

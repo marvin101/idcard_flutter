@@ -30,6 +30,9 @@ class CardDesignerScreen extends StatefulWidget {
 class _CardDesignerScreenState extends State<CardDesignerScreen> {
   late CardTemplate _template;
   late final TextEditingController _name;
+  late final TextEditingController _canvasWidth;
+  late final TextEditingController _canvasHeight;
+  late final TextEditingController _canvasBackground;
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'designer canvas');
   final List<DesignDocument> _history = [];
   int _historyIndex = 0;
@@ -39,6 +42,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   double _zoom = 1;
   bool _saving = false;
   String _saveState = 'Saved';
+  String? _canvasError;
   int _idCounter = 0;
 
   static final _sampleStudent = ApiStudent(
@@ -73,6 +77,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     super.initState();
     _template = widget.initialTemplate;
     _name = TextEditingController(text: _template.name)..addListener(_rename);
+    _canvasWidth = TextEditingController(
+      text: _document.canvas.width.toStringAsFixed(2),
+    );
+    _canvasHeight = TextEditingController(
+      text: _document.canvas.height.toStringAsFixed(2),
+    );
+    _canvasBackground = TextEditingController(
+      text: _document.canvas.backgroundColor,
+    );
     _history.add(_document);
     _savedDocument = jsonEncode(_template.toApi());
     _loadAssets();
@@ -98,6 +111,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   void dispose() {
     _name.removeListener(_rename);
     _name.dispose();
+    _canvasWidth.dispose();
+    _canvasHeight.dispose();
+    _canvasBackground.dispose();
     _canvasFocus.dispose();
     super.dispose();
   }
@@ -106,6 +122,61 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _template = _template.copyWith(name: _name.text);
     _saveState = 'Unsaved changes';
   });
+
+  void _applyCanvasDimensions() {
+    final width = double.tryParse(_canvasWidth.text.trim());
+    final height = double.tryParse(_canvasHeight.text.trim());
+    if (width == null ||
+        height == null ||
+        !width.isFinite ||
+        !height.isFinite ||
+        width <= 10 ||
+        height <= 10 ||
+        width > 2000 ||
+        height > 2000) {
+      setState(() {
+        _canvasError = 'Width and height must be between 10 and 2000 mm.';
+      });
+      return;
+    }
+    setState(() => _canvasError = null);
+    _commit(
+      _document.copyWith(
+        canvas: _document.canvas.copyWith(width: width, height: height),
+      ),
+    );
+  }
+
+  void _setCanvasOrientation(String orientation) {
+    final canvas = _document.canvas;
+    if (orientation == canvas.orientation) return;
+    final next = canvas.copyWith(width: canvas.height, height: canvas.width);
+    _canvasWidth.text = next.width.toStringAsFixed(2);
+    _canvasHeight.text = next.height.toStringAsFixed(2);
+    setState(() => _canvasError = null);
+    _commit(_document.copyWith(canvas: next));
+  }
+
+  void _setCr80Preset() {
+    _canvasWidth.text = '85.60';
+    _canvasHeight.text = '53.98';
+    setState(() => _canvasError = null);
+    _commit(
+      _document.copyWith(
+        canvas: _document.canvas.copyWith(width: 85.6, height: 53.98),
+      ),
+    );
+  }
+
+  bool get _isCr80 =>
+      (_document.canvas.width - 85.6).abs() < .001 &&
+      (_document.canvas.height - 53.98).abs() < .001;
+
+  void _syncCanvasControllers() {
+    _canvasWidth.text = _document.canvas.width.toStringAsFixed(2);
+    _canvasHeight.text = _document.canvas.height.toStringAsFixed(2);
+    _canvasBackground.text = _document.canvas.backgroundColor;
+  }
 
   void _commit(DesignDocument next, {String? selectedId}) {
     if (jsonEncode(next.toJson()) == jsonEncode(_document.toJson())) return;
@@ -128,6 +199,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     setState(() {
       _historyIndex--;
       _template = _template.copyWith(document: _history[_historyIndex]);
+      _syncCanvasControllers();
       _saveState = _dirty ? 'Unsaved changes' : 'Saved';
     });
   }
@@ -137,6 +209,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     setState(() {
       _historyIndex++;
       _template = _template.copyWith(document: _history[_historyIndex]);
+      _syncCanvasControllers();
       _saveState = 'Unsaved changes';
     });
   }
@@ -425,6 +498,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     );
     if (confirmed == true) {
       _commit(CardTemplate.uploadedDesign.document);
+      _syncCanvasControllers();
       setState(() => _selectedId = null);
     }
   }
@@ -638,68 +712,71 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               onPressed: () => setState(() => _zoom = 1),
               child: const Text('Fit'),
             ),
-            Switch(
-              value: _document.settings['grid_enabled'] != false,
-              onChanged: (v) => _commit(
-                _document.copyWith(
-                  settings: {..._document.settings, 'grid_enabled': v},
-                ),
-              ),
-            ),
-            const Text('Grid'),
           ],
         ),
       ),
       Expanded(
-        child: KeyboardListener(
-          focusNode: _canvasFocus,
-          onKeyEvent: _key,
-          child: GestureDetector(
-            onTap: () => _canvasFocus.requestFocus(),
-            child: InteractiveViewer(
-              minScale: .5,
-              maxScale: 3,
-              child: Center(
-                child: Transform.scale(
-                  scale: _zoom,
-                  child: SizedBox(
-                    width: 856,
-                    child: Stack(
-                      children: [
-                        DesignDocumentView(
-                          key: const Key('designer-canvas'),
-                          document: _document,
-                          student: _sampleStudent,
-                          sessionName: '2026-2028',
-                          className: 'XII',
-                          sectionName: 'A',
-                          logoUrl: _logoUrl,
-                          selectedId: _selectedId,
-                          interactive: true,
-                          onSelect: (id) => setState(() => _selectedId = id),
-                          onMove: _move,
-                          onResize: _resize,
-                        ),
-                        if (_document.settings['grid_enabled'] != false)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: CustomPaint(
-                                painter: _GridPainter(
-                                  (_document.settings['grid_size'] as num?)
-                                          ?.toDouble() ??
-                                      2,
-                                  _document.canvas.width,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            const pixelsPerMillimetre = 10.0;
+            final naturalWidth = _document.canvas.width * pixelsPerMillimetre;
+            final naturalHeight = _document.canvas.height * pixelsPerMillimetre;
+            final fitScale = math.min(
+              (constraints.maxWidth - 32).clamp(1, double.infinity) /
+                  naturalWidth,
+              (constraints.maxHeight - 32).clamp(1, double.infinity) /
+                  naturalHeight,
+            );
+            final displayWidth = naturalWidth * fitScale * _zoom;
+            return KeyboardListener(
+              focusNode: _canvasFocus,
+              onKeyEvent: _key,
+              child: GestureDetector(
+                onTap: () => _canvasFocus.requestFocus(),
+                child: InteractiveViewer(
+                  minScale: .5,
+                  maxScale: 3,
+                  child: Center(
+                    child: SizedBox(
+                      key: const Key('designer-canvas-frame'),
+                      width: displayWidth,
+                      child: Stack(
+                        children: [
+                          DesignDocumentView(
+                            key: const Key('designer-canvas'),
+                            document: _document,
+                            student: _sampleStudent,
+                            sessionName: '2026-2028',
+                            className: 'XII',
+                            sectionName: 'A',
+                            logoUrl: _logoUrl,
+                            selectedId: _selectedId,
+                            interactive: true,
+                            onSelect: (id) => setState(() => _selectedId = id),
+                            onMove: _move,
+                            onResize: _resize,
+                          ),
+                          if (_document.settings['grid_enabled'] != false)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _GridPainter(
+                                    (_document.settings['grid_size'] as num?)
+                                            ?.toDouble() ??
+                                        2,
+                                    _document.canvas.width,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     ],
@@ -790,286 +867,461 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     final e = _selected;
     return Material(
       color: Colors.white,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(
-            controller: _name,
-            decoration: const InputDecoration(
-              labelText: 'Template name',
-              border: OutlineInputBorder(),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          inputDecorationTheme: const InputDecorationTheme(
+            border: OutlineInputBorder(),
+            floatingLabelBehavior: FloatingLabelBehavior.auto,
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _propertyControl(
+              TextField(
+                key: const Key('template-name'),
+                controller: _name,
+                decoration: _propertyDecoration('Template name'),
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            e == null
-                ? 'Select an element'
-                : 'Properties · ${_elementLabel(e)}',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          if (e != null) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _numberField(
-                  'X',
-                  e.x,
-                  (v) => _replace(
-                    e.copyWith(x: v.clamp(0, _document.canvas.width - e.width)),
-                  ),
-                ),
-                _numberField(
-                  'Y',
-                  e.y,
-                  (v) => _replace(
-                    e.copyWith(
-                      y: v.clamp(0, _document.canvas.height - e.height),
+            Text(
+              e == null
+                  ? 'Canvas properties'
+                  : 'Properties · ${_elementLabel(e)}',
+              key: Key(e == null ? 'canvas-properties' : 'element-properties'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            if (e == null) ..._canvasProperties(),
+            if (e != null) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _numberField(
+                    'X',
+                    e.x,
+                    (v) => _replace(
+                      e.copyWith(
+                        x: v.clamp(0, _document.canvas.width - e.width),
+                      ),
                     ),
                   ),
-                ),
-                _numberField(
-                  'Width',
-                  e.width,
-                  (v) => _replace(
-                    e.copyWith(width: v.clamp(2, _document.canvas.width - e.x)),
-                  ),
-                ),
-                _numberField(
-                  'Height',
-                  e.height,
-                  (v) => _replace(
-                    e.copyWith(
-                      height: v.clamp(1, _document.canvas.height - e.y),
+                  _numberField(
+                    'Y',
+                    e.y,
+                    (v) => _replace(
+                      e.copyWith(
+                        y: v.clamp(0, _document.canvas.height - e.height),
+                      ),
                     ),
                   ),
+                  _numberField(
+                    'Width',
+                    e.width,
+                    (v) => _replace(
+                      e.copyWith(
+                        width: v.clamp(2, _document.canvas.width - e.x),
+                      ),
+                    ),
+                  ),
+                  _numberField(
+                    'Height',
+                    e.height,
+                    (v) => _replace(
+                      e.copyWith(
+                        height: v.clamp(1, _document.canvas.height - e.y),
+                      ),
+                    ),
+                  ),
+                  _numberField(
+                    'Rotation',
+                    e.rotation,
+                    (v) => _replace(e.copyWith(rotation: v.clamp(-360, 360))),
+                  ),
+                ],
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Locked'),
+                value: e.locked,
+                onChanged: (v) => _replace(e.copyWith(locked: v)),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Visible'),
+                value: e.visible,
+                onChanged: (v) => _replace(e.copyWith(visible: v)),
+              ),
+              if (e.type == DesignElementType.text)
+                _textProperty(
+                  'Text',
+                  e.data['text'] as String? ?? '',
+                  (v) => _replace(e.copyWith(data: {...e.data, 'text': v})),
                 ),
+              if (e.type == DesignElementType.boundText)
+                _dropdownProperty<String>(
+                  key: ValueKey('student-field-${e.id}'),
+                  label: 'Student field',
+                  value: e.data['field'] as String? ?? 'full_name',
+                  items: _systemFields.entries
+                      .map(
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null)
+                      _replace(
+                        e.copyWith(
+                          data: {
+                            ...e.data,
+                            'field': v,
+                            'fallback': _systemFields[v],
+                          },
+                        ),
+                      );
+                  },
+                ),
+              if ({
+                DesignElementType.text,
+                DesignElementType.boundText,
+                DesignElementType.customFieldText,
+              }.contains(e.type)) ...[
                 _numberField(
-                  'Rotation',
-                  e.rotation,
-                  (v) => _replace(e.copyWith(rotation: v.clamp(-360, 360))),
+                  'Font size (mm)',
+                  (e.style['font_size'] as num?)?.toDouble() ?? 3,
+                  (v) => _replace(
+                    e.copyWith(
+                      style: {...e.style, 'font_size': v.clamp(1, 20)},
+                    ),
+                  ),
+                  wide: true,
+                ),
+                _dropdownProperty<int>(
+                  key: ValueKey('font-weight-${e.id}'),
+                  label: 'Weight',
+                  value: (e.style['font_weight'] as num?)?.toInt() ?? 400,
+                  items: const [
+                    DropdownMenuItem(value: 400, child: Text('Regular')),
+                    DropdownMenuItem(value: 600, child: Text('Semi-bold')),
+                    DropdownMenuItem(value: 700, child: Text('Bold')),
+                    DropdownMenuItem(value: 900, child: Text('Black')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null)
+                      _replace(
+                        e.copyWith(style: {...e.style, 'font_weight': v}),
+                      );
+                  },
+                ),
+                _dropdownProperty<String>(
+                  key: ValueKey('alignment-${e.id}'),
+                  label: 'Alignment',
+                  value: e.style['alignment'] as String? ?? 'left',
+                  items: const [
+                    DropdownMenuItem(value: 'left', child: Text('Left')),
+                    DropdownMenuItem(value: 'center', child: Text('Center')),
+                    DropdownMenuItem(value: 'right', child: Text('Right')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null)
+                      _replace(e.copyWith(style: {...e.style, 'alignment': v}));
+                  },
+                ),
+                _textProperty(
+                  'Text colour (hex)',
+                  e.style['color'] as String? ?? '#111111',
+                  (v) {
+                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
+                      _replace(
+                        e.copyWith(
+                          style: {...e.style, 'color': v.toUpperCase()},
+                        ),
+                      );
+                  },
                 ),
               ],
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Locked'),
-              value: e.locked,
-              onChanged: (v) => _replace(e.copyWith(locked: v)),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Visible'),
-              value: e.visible,
-              onChanged: (v) => _replace(e.copyWith(visible: v)),
-            ),
-            if (e.type == DesignElementType.text)
-              _textProperty(
-                'Text',
-                e.data['text'] as String? ?? '',
-                (v) => _replace(e.copyWith(data: {...e.data, 'text': v})),
-              ),
-            if (e.type == DesignElementType.boundText)
-              DropdownButtonFormField<String>(
-                initialValue: e.data['field'] as String? ?? 'full_name',
-                decoration: const InputDecoration(labelText: 'Student field'),
-                items: _systemFields.entries
-                    .map(
-                      (entry) => DropdownMenuItem(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null)
-                    _replace(
-                      e.copyWith(
-                        data: {
-                          ...e.data,
-                          'field': v,
-                          'fallback': _systemFields[v],
-                        },
-                      ),
-                    );
-                },
-              ),
-            if ({
-              DesignElementType.text,
-              DesignElementType.boundText,
-              DesignElementType.customFieldText,
-            }.contains(e.type)) ...[
-              _numberField(
-                'Font size (mm)',
-                (e.style['font_size'] as num?)?.toDouble() ?? 3,
-                (v) => _replace(
-                  e.copyWith(style: {...e.style, 'font_size': v.clamp(1, 20)}),
+              if (e.type == DesignElementType.studentPhoto ||
+                  e.type == DesignElementType.schoolLogo)
+                _dropdownProperty<String>(
+                  key: ValueKey('image-fit-${e.id}'),
+                  label: 'Image fit',
+                  value: e.style['fit'] as String? ?? 'cover',
+                  items: const [
+                    DropdownMenuItem(value: 'cover', child: Text('Cover')),
+                    DropdownMenuItem(value: 'contain', child: Text('Contain')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null)
+                      _replace(e.copyWith(style: {...e.style, 'fit': v}));
+                  },
                 ),
-                wide: true,
-              ),
-              DropdownButtonFormField<int>(
-                initialValue: (e.style['font_weight'] as num?)?.toInt() ?? 400,
-                decoration: const InputDecoration(labelText: 'Weight'),
-                items: const [
-                  DropdownMenuItem(value: 400, child: Text('Regular')),
-                  DropdownMenuItem(value: 600, child: Text('Semi-bold')),
-                  DropdownMenuItem(value: 700, child: Text('Bold')),
-                  DropdownMenuItem(value: 900, child: Text('Black')),
-                ],
-                onChanged: (v) {
-                  if (v != null)
-                    _replace(e.copyWith(style: {...e.style, 'font_weight': v}));
-                },
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: e.style['alignment'] as String? ?? 'left',
-                decoration: const InputDecoration(labelText: 'Alignment'),
-                items: const [
-                  DropdownMenuItem(value: 'left', child: Text('Left')),
-                  DropdownMenuItem(value: 'center', child: Text('Center')),
-                  DropdownMenuItem(value: 'right', child: Text('Right')),
-                ],
-                onChanged: (v) {
-                  if (v != null)
-                    _replace(e.copyWith(style: {...e.style, 'alignment': v}));
-                },
-              ),
-              _textProperty(
-                'Text colour (hex)',
-                e.style['color'] as String? ?? '#111111',
-                (v) {
-                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
-                    _replace(
-                      e.copyWith(style: {...e.style, 'color': v.toUpperCase()}),
-                    );
-                },
-              ),
-            ],
-            if (e.type == DesignElementType.studentPhoto ||
-                e.type == DesignElementType.schoolLogo)
-              DropdownButtonFormField<String>(
-                initialValue: e.style['fit'] as String? ?? 'cover',
-                decoration: const InputDecoration(labelText: 'Image fit'),
-                items: const [
-                  DropdownMenuItem(value: 'cover', child: Text('Cover')),
-                  DropdownMenuItem(value: 'contain', child: Text('Contain')),
-                ],
-                onChanged: (v) {
-                  if (v != null)
-                    _replace(e.copyWith(style: {...e.style, 'fit': v}));
-                },
-              ),
-            if ({
-              DesignElementType.studentPhoto,
-              DesignElementType.schoolLogo,
-              DesignElementType.rectangle,
-            }.contains(e.type)) ...[
-              _textProperty(
-                'Border colour (hex)',
-                e.style['border_color'] as String? ?? '#000000',
-                (value) {
-                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-                    _replace(
-                      e.copyWith(
-                        style: {
-                          ...e.style,
-                          'border_color': value.toUpperCase(),
-                        },
-                      ),
-                    );
-                  }
-                },
-              ),
-              _numberField(
-                'Border width',
-                (e.style['border_width'] as num?)?.toDouble() ?? 0,
-                (value) => _replace(
-                  e.copyWith(
-                    style: {...e.style, 'border_width': value.clamp(0, 10)},
+              if ({
+                DesignElementType.studentPhoto,
+                DesignElementType.schoolLogo,
+                DesignElementType.rectangle,
+              }.contains(e.type)) ...[
+                _textProperty(
+                  'Border colour (hex)',
+                  e.style['border_color'] as String? ?? '#000000',
+                  (value) {
+                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                      _replace(
+                        e.copyWith(
+                          style: {
+                            ...e.style,
+                            'border_color': value.toUpperCase(),
+                          },
+                        ),
+                      );
+                    }
+                  },
+                ),
+                _numberField(
+                  'Border width',
+                  (e.style['border_width'] as num?)?.toDouble() ?? 0,
+                  (value) => _replace(
+                    e.copyWith(
+                      style: {...e.style, 'border_width': value.clamp(0, 10)},
+                    ),
                   ),
+                  wide: true,
                 ),
-                wide: true,
-              ),
-              _numberField(
-                'Corner radius',
-                (e.style['corner_radius'] as num?)?.toDouble() ?? 0,
-                (value) => _replace(
-                  e.copyWith(
-                    style: {...e.style, 'corner_radius': value.clamp(0, 30)},
+                _numberField(
+                  'Corner radius',
+                  (e.style['corner_radius'] as num?)?.toDouble() ?? 0,
+                  (value) => _replace(
+                    e.copyWith(
+                      style: {...e.style, 'corner_radius': value.clamp(0, 30)},
+                    ),
                   ),
+                  wide: true,
                 ),
-                wide: true,
-              ),
-            ],
-            if (e.type == DesignElementType.rectangle) ...[
-              _textProperty(
-                'Fill colour (hex)',
-                e.style['fill_color'] as String? ?? '#FFFFFF',
-                (v) {
-                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
-                    _replace(
-                      e.copyWith(
-                        style: {...e.style, 'fill_color': v.toUpperCase()},
-                      ),
-                    );
-                },
-              ),
-            ],
-            if (e.type == DesignElementType.line) ...[
-              _textProperty(
-                'Line colour (hex)',
-                e.style['color'] as String? ?? '#000000',
-                (value) {
-                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-                    _replace(
-                      e.copyWith(
-                        style: {...e.style, 'color': value.toUpperCase()},
-                      ),
-                    );
-                  }
-                },
-              ),
-              _numberField(
-                'Line width',
-                (e.style['border_width'] as num?)?.toDouble() ?? .5,
-                (value) => _replace(
-                  e.copyWith(
-                    style: {...e.style, 'border_width': value.clamp(.1, 10)},
+              ],
+              if (e.type == DesignElementType.rectangle) ...[
+                _textProperty(
+                  'Fill colour (hex)',
+                  e.style['fill_color'] as String? ?? '#FFFFFF',
+                  (v) {
+                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
+                      _replace(
+                        e.copyWith(
+                          style: {...e.style, 'fill_color': v.toUpperCase()},
+                        ),
+                      );
+                  },
+                ),
+              ],
+              if (e.type == DesignElementType.line) ...[
+                _textProperty(
+                  'Line colour (hex)',
+                  e.style['color'] as String? ?? '#000000',
+                  (value) {
+                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                      _replace(
+                        e.copyWith(
+                          style: {...e.style, 'color': value.toUpperCase()},
+                        ),
+                      );
+                    }
+                  },
+                ),
+                _numberField(
+                  'Line width',
+                  (e.style['border_width'] as num?)?.toDouble() ?? .5,
+                  (value) => _replace(
+                    e.copyWith(
+                      style: {...e.style, 'border_width': value.clamp(.1, 10)},
+                    ),
                   ),
+                  wide: true,
                 ),
-                wide: true,
-              ),
+              ],
             ],
           ],
-        ],
+        ),
       ),
     );
   }
+
+  List<Widget> _canvasProperties() => [
+    _dropdownProperty<String>(
+      key: const ValueKey('canvas-preset'),
+      label: 'Preset',
+      value: _isCr80 ? 'cr80' : 'custom',
+      items: const [
+        DropdownMenuItem(
+          value: 'cr80',
+          child: Text('CR80 / ID-1 — 85.60 × 53.98 mm'),
+        ),
+        DropdownMenuItem(value: 'custom', child: Text('Custom')),
+      ],
+      onChanged: (value) {
+        if (value == 'cr80') _setCr80Preset();
+      },
+    ),
+    _canvasDimensionField(
+      key: const Key('canvas-width'),
+      label: 'Width (mm)',
+      controller: _canvasWidth,
+    ),
+    _canvasDimensionField(
+      key: const Key('canvas-height'),
+      label: 'Height (mm)',
+      controller: _canvasHeight,
+    ),
+    _dropdownProperty<String>(
+      key: ValueKey('canvas-orientation-${_document.canvas.orientation}'),
+      label: 'Orientation',
+      value: _document.canvas.orientation,
+      items: const [
+        DropdownMenuItem(value: 'landscape', child: Text('Landscape')),
+        DropdownMenuItem(value: 'portrait', child: Text('Portrait')),
+      ],
+      onChanged: (value) {
+        if (value != null) _setCanvasOrientation(value);
+      },
+    ),
+    _propertyControl(
+      TextField(
+        key: const Key('canvas-background-color'),
+        controller: _canvasBackground,
+        decoration: _propertyDecoration('Background colour'),
+        onChanged: (value) {
+          if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+            setState(() => _canvasError = null);
+            _commit(
+              _document.copyWith(
+                canvas: _document.canvas.copyWith(
+                  backgroundColor: value.toUpperCase(),
+                ),
+              ),
+            );
+          }
+        },
+      ),
+    ),
+    if (_canvasError != null)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          _canvasError!,
+          key: const Key('canvas-validation-error'),
+          style: const TextStyle(color: Colors.red, fontSize: 12),
+        ),
+      ),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Grid enabled'),
+      value: _document.settings['grid_enabled'] != false,
+      onChanged: (value) => _commit(
+        _document.copyWith(
+          settings: {..._document.settings, 'grid_enabled': value},
+        ),
+      ),
+    ),
+    _numberField(
+      'Grid size (mm)',
+      (_document.settings['grid_size'] as num?)?.toDouble() ?? 2,
+      (value) {
+        if (!value.isFinite || value <= 0 || value > 200) {
+          setState(
+            () => _canvasError = 'Grid size must be between 0 and 200 mm.',
+          );
+          return;
+        }
+        setState(() => _canvasError = null);
+        _commit(
+          _document.copyWith(
+            settings: {..._document.settings, 'grid_size': value},
+          ),
+        );
+      },
+      wide: true,
+    ),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Snap enabled'),
+      value: _document.settings['snap_enabled'] != false,
+      onChanged: (value) => _commit(
+        _document.copyWith(
+          settings: {..._document.settings, 'snap_enabled': value},
+        ),
+      ),
+    ),
+    const Text(
+      'Canvas resizing keeps every element at its existing millimetre position and size. Content outside the new bounds is clipped.',
+      style: TextStyle(color: Colors.black54, fontSize: 12),
+    ),
+  ];
+
+  Widget _canvasDimensionField({
+    required Key key,
+    required String label,
+    required TextEditingController controller,
+  }) => _propertyControl(
+    TextField(
+      key: key,
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: _propertyDecoration(label),
+      onChanged: (_) => _applyCanvasDimensions(),
+    ),
+  );
+
+  InputDecoration _propertyDecoration(String label) => InputDecoration(
+    labelText: label,
+    floatingLabelBehavior: FloatingLabelBehavior.auto,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+    border: const OutlineInputBorder(),
+  );
+
+  Widget _propertyControl(Widget child) =>
+      Padding(padding: const EdgeInsets.only(bottom: 16), child: child);
+
+  Widget _dropdownProperty<T>({
+    required Key key,
+    required String label,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) => _propertyControl(
+    DropdownButtonFormField<T>(
+      key: key,
+      initialValue: value,
+      isExpanded: true,
+      decoration: _propertyDecoration(label),
+      items: items,
+      onChanged: onChanged,
+    ),
+  );
 
   Widget _numberField(
     String label,
     double value,
     ValueChanged<double> apply, {
     bool wide = false,
-  }) => SizedBox(
-    width: wide ? 250 : 118,
-    child: TextFormField(
-      key: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
-      initialValue: value.toStringAsFixed(2),
-      keyboardType: const TextInputType.numberWithOptions(
-        decimal: true,
-        signed: true,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: SizedBox(
+      width: wide ? double.infinity : 118,
+      child: TextFormField(
+        key: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
+        initialValue: value.toStringAsFixed(2),
+        keyboardType: const TextInputType.numberWithOptions(
+          decimal: true,
+          signed: true,
+        ),
+        decoration: _propertyDecoration(label),
+        onFieldSubmitted: (text) {
+          final next = double.tryParse(text);
+          if (next != null) apply(next);
+        },
       ),
-      decoration: InputDecoration(
-        labelText: label,
-        isDense: true,
-        border: const OutlineInputBorder(),
-      ),
-      onFieldSubmitted: (text) {
-        final next = double.tryParse(text);
-        if (next != null) apply(next);
-      },
     ),
   );
   Widget _textProperty(
@@ -1077,14 +1329,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     String value,
     ValueChanged<String> apply,
   ) => Padding(
-    padding: const EdgeInsets.only(top: 12),
+    padding: const EdgeInsets.only(bottom: 16),
     child: TextFormField(
       key: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
       initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: _propertyDecoration(label),
       onChanged: apply,
     ),
   );
