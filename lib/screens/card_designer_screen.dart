@@ -960,6 +960,48 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     _replace(e.copyWith(style: {...e.style, 'fit': v}));
                 },
               ),
+            if ({
+              DesignElementType.studentPhoto,
+              DesignElementType.schoolLogo,
+              DesignElementType.rectangle,
+            }.contains(e.type)) ...[
+              _textProperty(
+                'Border colour (hex)',
+                e.style['border_color'] as String? ?? '#000000',
+                (value) {
+                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                    _replace(
+                      e.copyWith(
+                        style: {
+                          ...e.style,
+                          'border_color': value.toUpperCase(),
+                        },
+                      ),
+                    );
+                  }
+                },
+              ),
+              _numberField(
+                'Border width',
+                (e.style['border_width'] as num?)?.toDouble() ?? 0,
+                (value) => _replace(
+                  e.copyWith(
+                    style: {...e.style, 'border_width': value.clamp(0, 10)},
+                  ),
+                ),
+                wide: true,
+              ),
+              _numberField(
+                'Corner radius',
+                (e.style['corner_radius'] as num?)?.toDouble() ?? 0,
+                (value) => _replace(
+                  e.copyWith(
+                    style: {...e.style, 'corner_radius': value.clamp(0, 30)},
+                  ),
+                ),
+                wide: true,
+              ),
+            ],
             if (e.type == DesignElementType.rectangle) ...[
               _textProperty(
                 'Fill colour (hex)',
@@ -972,6 +1014,31 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       ),
                     );
                 },
+              ),
+            ],
+            if (e.type == DesignElementType.line) ...[
+              _textProperty(
+                'Line colour (hex)',
+                e.style['color'] as String? ?? '#000000',
+                (value) {
+                  if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                    _replace(
+                      e.copyWith(
+                        style: {...e.style, 'color': value.toUpperCase()},
+                      ),
+                    );
+                  }
+                },
+              ),
+              _numberField(
+                'Line width',
+                (e.style['border_width'] as num?)?.toDouble() ?? .5,
+                (value) => _replace(
+                  e.copyWith(
+                    style: {...e.style, 'border_width': value.clamp(.1, 10)},
+                  ),
+                ),
+                wide: true,
               ),
             ],
           ],
