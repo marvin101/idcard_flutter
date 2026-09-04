@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
@@ -160,7 +159,6 @@ class DesignDocumentView extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
             ],
           ),
         ),
@@ -287,9 +285,7 @@ class _InteractiveElementState extends State<_InteractiveElement> {
   int? _pointer;
   bool _resizing = false;
   void _down(PointerDownEvent event) {
-    if (!widget.interactive ||
-        event.buttons != kPrimaryButton ||
-        _pointer != null) {
+    if (!widget.interactive || event.buttons != 1 || _pointer != null) {
       return;
     }
     final size = context.size!;
@@ -369,11 +365,4 @@ class _InteractiveElementState extends State<_InteractiveElement> {
       ],
     ),
   );
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
