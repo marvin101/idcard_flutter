@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
@@ -26,6 +27,9 @@ class DesignDocumentView extends StatelessWidget {
     this.onSelect,
     this.onMove,
     this.onResize,
+    this.onGestureStart,
+    this.onGestureEnd,
+    this.isGestureActive,
   });
 
   final String? schoolName;
@@ -34,7 +38,6 @@ class DesignDocumentView extends StatelessWidget {
 
   final DesignDocument document;
   final ApiStudent student;
-
   final String? sessionName;
   final String? className;
   final String? sectionName;
@@ -42,6 +45,9 @@ class DesignDocumentView extends StatelessWidget {
   final String? logoUrl;
   final String? selectedId;
 
+  final ValueChanged<String>? onGestureStart;
+  final VoidCallback? onGestureEnd;
+  final bool Function(String)? isGestureActive;
   final bool interactive;
 
   final ValueChanged<String?>? onSelect;
@@ -92,6 +98,8 @@ class DesignDocumentView extends StatelessWidget {
       assetBaseUrl: assetBaseUrl,
     );
 
+    final elements = [...scene.elements]
+      ..sort((a, b) => a.element.zIndex.compareTo(b.element.zIndex));
     return RepaintBoundary(
       child: ClipRect(
         child: ColoredBox(
@@ -109,9 +117,11 @@ class DesignDocumentView extends StatelessWidget {
                       : null,
                 ),
               ),
-
-              if (scene.backgroundImage case final String url
-                  when url.isNotEmpty)
+              if (resolveDesignAssetUrl(
+                    document.canvas.backgroundImage,
+                    assetBaseUrl,
+                  )
+                  case final String url when url.isNotEmpty)
                 Positioned.fill(
                   child: IgnorePointer(
                     child: Image.network(
@@ -123,26 +133,31 @@ class DesignDocumentView extends StatelessWidget {
                     ),
                   ),
                 ),
-
-              for (final node in scene.elements)
-                Positioned(
-                  key: ValueKey(node.element.id),
-                  left: node.element.x * scale,
-                  top: node.element.y * scale,
-                  width: node.element.width * scale,
-                  height: node.element.height * scale,
-                  child: _InteractiveElement(
-                    element: node.element,
-                    selected: selectedId == node.element.id,
-                    interactive: interactive,
-                    scaleX: scale,
-                    scaleY: scale,
-                    onSelect: onSelect,
-                    onMove: onMove,
-                    onResize: onResize,
-                    child: Transform.rotate(
-                      angle: node.radians,
-                      child: _render(node, scale),
+              for (final node in elements)
+                if (node.element.visible)
+                  Positioned(
+                    key: ValueKey(node.element.id),
+                    left: node.element.x * scale,
+                    top: node.element.y * scale,
+                    width: node.element.width * scale,
+                    height: node.element.height * scale,
+                    child: _InteractiveElement(
+                      element: node.element,
+                      selected: selectedId == node.element.id,
+                      interactive: interactive,
+                      scaleX: scale,
+                      scaleY: scale,
+                      canvasContext: context,
+                      onGestureStart: onGestureStart,
+                      onGestureEnd: onGestureEnd,
+                      isGestureActive: isGestureActive,
+                      onSelect: onSelect,
+                      onMove: onMove,
+                      onResize: onResize,
+                      child: Transform.rotate(
+                        angle: node.radians,
+                        child: _render(node, scale),
+                      ),
                     ),
                   ),
                 ),
@@ -231,94 +246,129 @@ class DesignDocumentView extends StatelessWidget {
   }
 }
 
-class _InteractiveElement extends StatelessWidget {
+// Only pointer bookkeeping is local. Every content/geometry value is supplied
+// by the live document; raw input avoids gesture-arena delay on mouse selection.
+class _InteractiveElement extends StatefulWidget {
   const _InteractiveElement({
     required this.element,
     required this.selected,
     required this.interactive,
     required this.scaleX,
     required this.scaleY,
+    required this.canvasContext,
     required this.child,
     this.onSelect,
     this.onMove,
     this.onResize,
+    this.onGestureStart,
+    this.onGestureEnd,
+    this.isGestureActive,
   });
 
   final DesignElement element;
-
   final bool selected;
   final bool interactive;
 
   final double scaleX;
   final double scaleY;
-
+  final BuildContext canvasContext;
   final Widget child;
 
   final ValueChanged<String?>? onSelect;
-  final void Function(String id, double dx, double dy)? onMove;
-  final void Function(String id, double dw, double dh)? onResize;
+  final ValueChanged<String>? onGestureStart;
+  final VoidCallback? onGestureEnd;
+  final bool Function(String)? isGestureActive;
+  final void Function(String, double, double)? onMove, onResize;
+  @override
+  State<_InteractiveElement> createState() => _InteractiveElementState();
+}
+
+class _InteractiveElementState extends State<_InteractiveElement> {
+  int? _pointer;
+  bool _resizing = false;
+  void _down(PointerDownEvent event) {
+    if (!widget.interactive ||
+        event.buttons != kPrimaryButton ||
+        _pointer != null) {
+      return;
+    }
+    final size = context.size!;
+    _resizing =
+        widget.selected &&
+        !widget.element.locked &&
+        event.localPosition.dx >= size.width - 6 &&
+        event.localPosition.dy >= size.height - 6;
+    widget.onSelect?.call(widget.element.id);
+    if (widget.element.locked) return;
+    _pointer = event.pointer;
+    widget.onGestureStart?.call(widget.element.id);
+  }
+
+  void _move(PointerMoveEvent event) {
+    if (event.pointer != _pointer ||
+        widget.isGestureActive?.call(widget.element.id) == false) {
+      return;
+    }
+    final box = widget.canvasContext.findRenderObject()! as RenderBox;
+    // Convert both endpoints through the same canvas transform. This includes
+    // InteractiveViewer zoom and avoids the moving element's local origin.
+    final delta =
+        box.globalToLocal(event.position) -
+        box.globalToLocal(event.position - event.delta);
+    final callback = _resizing ? widget.onResize : widget.onMove;
+    callback?.call(
+      widget.element.id,
+      delta.dx / widget.scaleX,
+      delta.dy / widget.scaleY,
+    );
+  }
+
+  void _end(PointerEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    widget.onGestureEnd?.call();
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      key: Key('design-element-${element.id}'),
-      behavior: HitTestBehavior.opaque,
-
-      // onTapDown gives immediate selection feedback instead of waiting
-      // for the complete tap gesture to resolve.
-      onTapDown: interactive ? (_) => onSelect?.call(element.id) : null,
-
-      onPanStart: interactive && !element.locked
-          ? (_) => onSelect?.call(element.id)
-          : null,
-
-      onPanUpdate: interactive && !element.locked
-          ? (details) {
-              onMove?.call(
-                element.id,
-                details.delta.dx / scaleX,
-                details.delta.dy / scaleY,
-              );
-            }
-          : null,
-
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: selected
-                    ? Border.all(color: Colors.blue, width: 1.5)
-                    : null,
+  Widget build(BuildContext context) => Listener(
+    key: Key('design-element-${widget.element.id}'),
+    behavior: HitTestBehavior.opaque,
+    onPointerDown: _down,
+    onPointerMove: _move,
+    onPointerUp: _end,
+    onPointerCancel: _end,
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: widget.selected
+                  ? Border.all(color: Colors.blue, width: 1.5)
+                  : null,
+            ),
+            child: RepaintBoundary(child: widget.child),
+          ),
+        ),
+        if (widget.selected && widget.interactive && !widget.element.locked)
+          Positioned(
+            right: -6,
+            bottom: -6,
+            child: Container(
+              key: Key('resize-${widget.element.id}'),
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border.fromBorderSide(
+                  BorderSide(color: Colors.blue, width: 2),
+                ),
               ),
-              child: child,
             ),
           ),
-
-          if (selected && interactive && !element.locked)
-            Positioned(
-              right: -6,
-              bottom: -6,
-              child: GestureDetector(
-                key: Key('resize-${element.id}'),
-                behavior: HitTestBehavior.opaque,
-                onPanUpdate: (details) {
-                  onResize?.call(
-                    element.id,
-                    details.delta.dx / scaleX,
-                    details.delta.dy / scaleY,
-                  );
-                },
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border.fromBorderSide(
-                      BorderSide(color: Colors.blue, width: 2),
-                    ),
-                  ),
+      ],
+    ),
+  );
                 ),
               ),
             ),
