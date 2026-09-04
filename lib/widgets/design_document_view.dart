@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
@@ -25,6 +26,9 @@ class DesignDocumentView extends StatelessWidget {
     this.onSelect,
     this.onMove,
     this.onResize,
+    this.onGestureStart,
+    this.onGestureEnd,
+    this.isGestureActive,
   });
 
   final String? schoolName, assetBaseUrl;
@@ -37,6 +41,9 @@ class DesignDocumentView extends StatelessWidget {
       photoUrl,
       logoUrl,
       selectedId;
+  final ValueChanged<String>? onGestureStart;
+  final VoidCallback? onGestureEnd;
+  final bool Function(String)? isGestureActive;
   final bool interactive;
   final ValueChanged<String?>? onSelect;
   final void Function(String id, double dx, double dy)? onMove;
@@ -68,15 +75,21 @@ class DesignDocumentView extends StatelessWidget {
   Widget _canvas(BuildContext context, double scale) {
     final elements = [...document.elements]
       ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: interactive ? () => onSelect?.call(null) : null,
+    return RepaintBoundary(
       child: ClipRect(
         child: ColoredBox(
           key: const Key('design-document-surface'),
           color: colorFromHex(document.canvas.backgroundColor, Colors.white),
           child: Stack(
             children: [
+              Positioned.fill(
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: interactive
+                      ? (_) => onSelect?.call(null)
+                      : null,
+                ),
+              ),
               if (resolveDesignAssetUrl(
                     document.canvas.backgroundImage,
                     assetBaseUrl,
@@ -105,6 +118,10 @@ class DesignDocumentView extends StatelessWidget {
                       interactive: interactive,
                       scaleX: scale,
                       scaleY: scale,
+                      canvasContext: context,
+                      onGestureStart: onGestureStart,
+                      onGestureEnd: onGestureEnd,
+                      isGestureActive: isGestureActive,
                       onSelect: onSelect,
                       onMove: onMove,
                       onResize: onResize,
@@ -236,72 +253,117 @@ class DesignDocumentView extends StatelessWidget {
   );
 }
 
-class _InteractiveElement extends StatelessWidget {
+// Only pointer bookkeeping is local. Every content/geometry value is supplied
+// by the live document; raw input avoids gesture-arena delay on mouse selection.
+class _InteractiveElement extends StatefulWidget {
   const _InteractiveElement({
     required this.element,
     required this.selected,
     required this.interactive,
     required this.scaleX,
     required this.scaleY,
+    required this.canvasContext,
     required this.child,
     this.onSelect,
     this.onMove,
     this.onResize,
+    this.onGestureStart,
+    this.onGestureEnd,
+    this.isGestureActive,
   });
   final DesignElement element;
   final bool selected, interactive;
   final double scaleX, scaleY;
+  final BuildContext canvasContext;
   final Widget child;
   final ValueChanged<String?>? onSelect;
+  final ValueChanged<String>? onGestureStart;
+  final VoidCallback? onGestureEnd;
+  final bool Function(String)? isGestureActive;
   final void Function(String, double, double)? onMove, onResize;
+  @override
+  State<_InteractiveElement> createState() => _InteractiveElementState();
+}
+
+class _InteractiveElementState extends State<_InteractiveElement> {
+  int? _pointer;
+  bool _resizing = false;
+  void _down(PointerDownEvent event) {
+    if (!widget.interactive ||
+        event.buttons != kPrimaryButton ||
+        _pointer != null) {
+      return;
+    }
+    final size = context.size!;
+    _resizing =
+        widget.selected &&
+        !widget.element.locked &&
+        event.localPosition.dx >= size.width - 6 &&
+        event.localPosition.dy >= size.height - 6;
+    widget.onSelect?.call(widget.element.id);
+    if (widget.element.locked) return;
+    _pointer = event.pointer;
+    widget.onGestureStart?.call(widget.element.id);
+  }
+
+  void _move(PointerMoveEvent event) {
+    if (event.pointer != _pointer ||
+        widget.isGestureActive?.call(widget.element.id) == false) {
+      return;
+    }
+    final box = widget.canvasContext.findRenderObject()! as RenderBox;
+    // Convert both endpoints through the same canvas transform. This includes
+    // InteractiveViewer zoom and avoids the moving element's local origin.
+    final delta =
+        box.globalToLocal(event.position) -
+        box.globalToLocal(event.position - event.delta);
+    final callback = _resizing ? widget.onResize : widget.onMove;
+    callback?.call(
+      widget.element.id,
+      delta.dx / widget.scaleX,
+      delta.dy / widget.scaleY,
+    );
+  }
+
+  void _end(PointerEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    widget.onGestureEnd?.call();
+  }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    key: Key('design-element-${element.id}'),
+  Widget build(BuildContext context) => Listener(
+    key: Key('design-element-${widget.element.id}'),
     behavior: HitTestBehavior.opaque,
-    onTap: interactive ? () => onSelect?.call(element.id) : null,
-    onPanStart: interactive && !element.locked
-        ? (_) => onSelect?.call(element.id)
-        : null,
-    onPanUpdate: interactive && !element.locked
-        ? (details) => onMove?.call(
-            element.id,
-            details.delta.dx / scaleX,
-            details.delta.dy / scaleY,
-          )
-        : null,
+    onPointerDown: _down,
+    onPointerMove: _move,
+    onPointerUp: _end,
+    onPointerCancel: _end,
     child: Stack(
       clipBehavior: Clip.none,
       children: [
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              border: selected
+              border: widget.selected
                   ? Border.all(color: Colors.blue, width: 1.5)
                   : null,
             ),
-            child: child,
+            child: RepaintBoundary(child: widget.child),
           ),
         ),
-        if (selected && interactive && !element.locked)
+        if (widget.selected && widget.interactive && !widget.element.locked)
           Positioned(
             right: -6,
             bottom: -6,
-            child: GestureDetector(
-              key: Key('resize-${element.id}'),
-              onPanUpdate: (details) => onResize?.call(
-                element.id,
-                details.delta.dx / scaleX,
-                details.delta.dy / scaleY,
-              ),
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border.fromBorderSide(
-                    BorderSide(color: Colors.blue, width: 2),
-                  ),
+            child: Container(
+              key: Key('resize-${widget.element.id}'),
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border.fromBorderSide(
+                  BorderSide(color: Colors.blue, width: 2),
                 ),
               ),
             ),

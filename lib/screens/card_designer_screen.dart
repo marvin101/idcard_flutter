@@ -1,10 +1,14 @@
 // ignore_for_file: curly_braces_in_flow_control_structures
 
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+
+import '../widgets/designer_numeric_field.dart';
+import '../widgets/designer_shortcuts.dart';
+import '../widgets/designer_guides.dart';
+import '../widgets/designer_colour_field.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
@@ -21,6 +25,13 @@ class CardDesignerScreen extends StatefulWidget {
     required this.api,
     required this.initialTemplate,
   });
+  // Logical pixels; shared by the entry warning and editor layout.
+  static const minimumEditorWidth = 600.0;
+  static const recommendedEditorWidth = 1050.0;
+  static const recommendedEditorHeight = 600.0;
+  static const smallScreenMessage =
+      'Card Designer works best on a larger screen. Please open this page on a desktop or larger display for easier editing.';
+
   final String schoolUuid;
   final ApiService api;
   final CardTemplate initialTemplate;
@@ -34,13 +45,24 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   late final TextEditingController _canvasWidth;
   late final TextEditingController _canvasHeight;
   late final TextEditingController _canvasBackground;
+  final TransformationController _viewTransform = TransformationController();
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'designer canvas');
-  final List<DesignDocument> _history = [];
+  final List<_DesignerSnapshot> _history = [];
+  final _canvasCoordinates = GlobalKey();
+  final _guides = ValueNotifier<List<DesignerGuide>>([]);
+  final List<String> _recentColours = [];
+  final ValueNotifier<int> _revision = ValueNotifier(0);
+  CardTemplate? _gestureStart;
+  String? _gestureId;
+  Offset _gestureRemainder = Offset.zero;
+  bool _syncingName = false;
+  bool _smallScreenAccepted = false;
+  bool _dirtyValue = false;
+  late CardTemplate _savedTemplate;
   int _historyIndex = 0;
   String? _selectedId, _logoUrl;
   SchoolProfile? _schoolProfile;
   List<StudentFieldDefinition> _customFields = const [];
-  late String _savedDocument;
   double _zoom = 1;
   bool _saving = false;
   String _saveState = 'Saved';
@@ -70,9 +92,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   DesignElement? get _selected => _document.elements
       .where((element) => element.id == _selectedId)
       .firstOrNull;
-  bool get _dirty => jsonEncode(_template.toApi()) != _savedDocument;
-  bool get _canUndo => _historyIndex > 0;
-  bool get _canRedo => _historyIndex + 1 < _history.length;
+  bool get _dirty => _dirtyValue;
+  bool get _canUndo =>
+      _historyIndex > 0 ||
+      (_gestureStart != null && !identical(_gestureStart, _template));
+  bool get _canRedo =>
+      _gestureStart == null && _historyIndex + 1 < _history.length;
 
   @override
   void initState() {
@@ -88,8 +113,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _canvasBackground = TextEditingController(
       text: _document.canvas.backgroundColor,
     );
-    _history.add(_document);
-    _savedDocument = jsonEncode(_template.toApi());
+    _history.add(_DesignerSnapshot(_template, _selectedId));
+    _savedTemplate = _template;
     _loadAssets();
   }
 
@@ -104,7 +129,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             .then<SchoolProfile?>((profile) => profile, onError: (_) => null),
       ]);
       if (!mounted) return;
-      setState(() {
+      _updateUi(() {
         _customFields = results[0] as List<StudentFieldDefinition>;
         _schoolProfile = results[1] as SchoolProfile?;
         _logoUrl = _schoolProfile?.logoUrl;
@@ -122,13 +147,30 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _canvasHeight.dispose();
     _canvasBackground.dispose();
     _canvasFocus.dispose();
+    _viewTransform.dispose();
+    _revision.dispose();
+    _guides.dispose();
     super.dispose();
   }
 
-  void _rename() => setState(() {
-    _template = _template.copyWith(name: _name.text);
-    _saveState = 'Unsaved changes';
-  });
+  void _updateUi(VoidCallback change) {
+    change();
+    _revision.value++;
+  }
+
+  void _rename() {
+    if (!_syncingName) _commitTemplate(_template.copyWith(name: _name.text));
+  }
+
+  void _select(String? id) {
+    _canvasFocus.requestFocus();
+    if (_selectedId == id) return;
+    _endGesture();
+    _updateUi(() {
+      _selectedId = id;
+      _history[_historyIndex] = _DesignerSnapshot(_template, id);
+    });
+  }
 
   void _applyCanvasDimensions() {
     final width = double.tryParse(_canvasWidth.text.trim());
@@ -141,12 +183,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         height <= 10 ||
         width > 2000 ||
         height > 2000) {
-      setState(() {
+      _updateUi(() {
         _canvasError = 'Width and height must be between 10 and 2000 mm.';
       });
       return;
     }
-    setState(() => _canvasError = null);
+    _updateUi(() => _canvasError = null);
     _commit(
       _document.copyWith(
         canvas: _document.canvas.copyWith(width: width, height: height),
@@ -160,14 +202,14 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     final next = canvas.copyWith(width: canvas.height, height: canvas.width);
     _canvasWidth.text = next.width.toStringAsFixed(2);
     _canvasHeight.text = next.height.toStringAsFixed(2);
-    setState(() => _canvasError = null);
+    _updateUi(() => _canvasError = null);
     _commit(_document.copyWith(canvas: next));
   }
 
   void _setCr80Preset() {
     _canvasWidth.text = '85.60';
     _canvasHeight.text = '53.98';
-    setState(() => _canvasError = null);
+    _updateUi(() => _canvasError = null);
     _commit(
       _document.copyWith(
         canvas: _document.canvas.copyWith(width: 85.6, height: 53.98),
@@ -185,50 +227,136 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _canvasBackground.text = _document.canvas.backgroundColor;
   }
 
-  void _commit(DesignDocument next, {String? selectedId}) {
-    if (jsonEncode(next.toJson()) == jsonEncode(_document.toJson())) return;
-    if (_historyIndex + 1 < _history.length)
-      _history.removeRange(_historyIndex + 1, _history.length);
-    _history.add(next);
-    if (_history.length > 80)
-      _history.removeAt(0);
-    else
-      _historyIndex++;
-    setState(() {
-      _template = _template.copyWith(document: next);
-      if (selectedId != null) _selectedId = selectedId;
-      _saveState = 'Unsaved changes';
-    });
+  bool _sameTemplate(CardTemplate a, CardTemplate b) =>
+      identical(a, b) ||
+      (a.name == b.name && _sameDocument(a.document, b.document));
+
+  bool _sameDocument(DesignDocument a, DesignDocument b) =>
+      identical(a, b) ||
+      (mapEquals(a.canvas.toJson(), b.canvas.toJson()) &&
+          mapEquals(a.settings, b.settings) &&
+          a.elements.length == b.elements.length &&
+          Iterable<int>.generate(a.elements.length).every(
+            (i) =>
+                identical(a.elements[i], b.elements[i]) ||
+                _sameElement(a.elements[i], b.elements[i]),
+          ));
+
+  bool _sameElement(DesignElement a, DesignElement b) =>
+      a.id == b.id &&
+      a.type == b.type &&
+      a.x == b.x &&
+      a.y == b.y &&
+      a.width == b.width &&
+      a.height == b.height &&
+      a.rotation == b.rotation &&
+      a.zIndex == b.zIndex &&
+      a.locked == b.locked &&
+      a.visible == b.visible &&
+      mapEquals(a.style, b.style) &&
+      mapEquals(a.data, b.data);
+
+  void _record(CardTemplate next) {
+    _history.removeRange(_historyIndex + 1, _history.length);
+    _history.add(_DesignerSnapshot(next, _selectedId));
+    if (_history.length > 80) _history.removeAt(0);
+    _historyIndex = _history.length - 1;
   }
 
-  void _undo() {
-    if (!_canUndo) return;
-    setState(() {
-      _historyIndex--;
-      _template = _template.copyWith(document: _history[_historyIndex]);
-      _syncCanvasControllers();
+  void _commit(
+    DesignDocument next, {
+    String? selectedId,
+    bool gestureUpdate = false,
+  }) => _commitTemplate(
+    _template.copyWith(document: next),
+    selectedId: selectedId,
+    gestureUpdate: gestureUpdate,
+  );
+
+  void _commitTemplate(
+    CardTemplate next, {
+    String? selectedId,
+    bool gestureUpdate = false,
+  }) {
+    if (!gestureUpdate) _endGesture();
+    if (_sameTemplate(next, _template)) return;
+    _updateUi(() {
+      _template = next;
+      if (selectedId != null) _selectedId = selectedId;
+      if (_selected == null) _selectedId = null;
+      if (_gestureStart == null) _record(next);
+      // Avoid full-document serialization/comparison for every pointer event.
+      _dirtyValue =
+          _gestureStart != null || !_sameTemplate(next, _savedTemplate);
       _saveState = _dirty ? 'Unsaved changes' : 'Saved';
     });
   }
 
-  void _redo() {
-    if (!_canRedo) return;
-    setState(() {
-      _historyIndex++;
-      _template = _template.copyWith(document: _history[_historyIndex]);
-      _syncCanvasControllers();
-      _saveState = 'Unsaved changes';
+  void _beginGesture(String id) {
+    _endGesture();
+    _gestureStart = _template;
+    _gestureId = id;
+    _gestureRemainder = Offset.zero;
+  }
+
+  void _endGesture() {
+    if (_guides.value.isNotEmpty) _guides.value = [];
+    final start = _gestureStart;
+    if (start == null) return;
+    _updateUi(() {
+      _gestureStart = null;
+      _gestureId = null;
+      _gestureRemainder = Offset.zero;
+      if (!_sameTemplate(start, _template)) _record(_template);
+      _dirtyValue = !_sameTemplate(_template, _savedTemplate);
+      _saveState = _dirty ? 'Unsaved changes' : 'Saved';
     });
   }
 
-  void _replace(DesignElement replacement) => _commit(
-    _document.copyWith(
-      elements: [
-        for (final element in _document.elements)
-          if (element.id == replacement.id) replacement else element,
-      ],
-    ),
-  );
+  void _restore(int index) {
+    _updateUi(() {
+      _historyIndex = index;
+      _template = _history[index].template;
+      _selectedId = _history[index].selectedId;
+      _syncingName = true;
+      _name.text = _template.name;
+      _syncingName = false;
+      _syncCanvasControllers();
+      _canvasError = null;
+      _dirtyValue = !_sameTemplate(_template, _savedTemplate);
+      _saveState = _dirty ? 'Unsaved changes' : 'Saved';
+    });
+  }
+
+  void _undo() {
+    _endGesture();
+    if (_canUndo) _restore(_historyIndex - 1);
+  }
+
+  void _redo() {
+    _endGesture();
+    if (_canRedo) _restore(_historyIndex + 1);
+  }
+
+  void _updateElement(
+    String id,
+    DesignElement Function(DesignElement) change, {
+    bool gestureUpdate = false,
+  }) {
+    final live = _document.elements.where((e) => e.id == id).firstOrNull;
+    if (live != null) _replace(change(live), gestureUpdate: gestureUpdate);
+  }
+
+  void _replace(DesignElement replacement, {bool gestureUpdate = false}) =>
+      _commit(
+        _document.copyWith(
+          elements: [
+            for (final element in _document.elements)
+              if (element.id == replacement.id) replacement else element,
+          ],
+        ),
+        gestureUpdate: gestureUpdate,
+      );
 
   void _add(DesignElementType type, {StudentFieldDefinition? customField}) {
     final id =
@@ -294,45 +422,50 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _move(String id, double dx, double dy) {
-    final element = _document.elements.firstWhere((item) => item.id == id);
-    if (element.locked) return;
-    var x = (element.x + dx)
-        .clamp(0.0, math.max(0, _document.canvas.width - element.width))
-        .toDouble();
-    var y = (element.y + dy)
-        .clamp(0.0, math.max(0, _document.canvas.height - element.height))
-        .toDouble();
-    if (_document.settings['snap_enabled'] != false) {
-      const tolerance = 0.8;
-      final centerX = (_document.canvas.width - element.width) / 2;
-      final centerY = (_document.canvas.height - element.height) / 2;
-      if ((x - centerX).abs() < tolerance) x = centerX;
-      if ((y - centerY).abs() < tolerance) y = centerY;
-      final grid = (_document.settings['grid_size'] as num?)?.toDouble() ?? 2;
-      if (grid > 0) {
-        x = ((x / grid).round() * grid).toDouble();
-        y = ((y / grid).round() * grid).toDouble();
+    if (!dx.isFinite || !dy.isFinite) return;
+    _updateElement(id, (element) {
+      if (element.locked) return element;
+      final maxX = math.max(0.0, _document.canvas.width - element.width);
+      final maxY = math.max(0.0, _document.canvas.height - element.height);
+      final remainder = _gestureId == id ? _gestureRemainder : Offset.zero;
+      final rawX = (element.x + dx + remainder.dx).clamp(0.0, maxX);
+      final rawY = (element.y + dy + remainder.dy).clamp(0.0, maxY);
+      var x = rawX;
+      var y = rawY;
+      if (_document.settings['snap_enabled'] != false) {
+        final grid = (_document.settings['grid_size'] as num?)?.toDouble() ?? 2;
+        if (grid.isFinite && grid > 0) {
+          x = (x / grid).round() * grid;
+          y = (y / grid).round() * grid;
+        }
       }
-    }
-    _replace(element.copyWith(x: x, y: y));
+      x = x.clamp(0.0, maxX);
+      y = y.clamp(0.0, maxY);
+      if (_gestureId == id) _gestureRemainder = Offset(rawX - x, rawY - y);
+      final next = element.copyWith(x: x, y: y);
+      _updateGuides(next);
+      return next;
+    }, gestureUpdate: true);
   }
 
   void _resize(String id, double dw, double dh) {
-    final element = _document.elements.firstWhere((item) => item.id == id);
-    if (element.locked) return;
-    final ratio = element.width / element.height;
-    var width = (element.width + dw).clamp(
-      2.0,
-      _document.canvas.width - element.x,
-    );
-    var height = (element.height + dh).clamp(
-      1.0,
-      _document.canvas.height - element.y,
-    );
-    if (element.type == DesignElementType.studentPhoto ||
-        element.type == DesignElementType.schoolLogo)
-      height = (width / ratio).clamp(1.0, _document.canvas.height - element.y);
-    _replace(element.copyWith(width: width, height: height));
+    if (!dw.isFinite || !dh.isFinite) return;
+    _updateElement(id, (element) {
+      if (element.locked) return element;
+      final maxW = math.max(2.0, _document.canvas.width - element.x);
+      final maxH = math.max(1.0, _document.canvas.height - element.y);
+      var width = (element.width + dw).clamp(2.0, maxW);
+      var height = (element.height + dh).clamp(1.0, maxH);
+      if (element.type == DesignElementType.studentPhoto ||
+          element.type == DesignElementType.schoolLogo) {
+        final ratio = element.width / element.height;
+        height = (width / ratio).clamp(1.0, maxH);
+        width = (height * ratio).clamp(2.0, maxW);
+      }
+      final next = element.copyWith(width: width, height: height);
+      _updateGuides(next);
+      return next;
+    }, gestureUpdate: true);
   }
 
   void _remove() {
@@ -343,7 +476,6 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         elements: _document.elements.where((e) => e.id != selected.id).toList(),
       ),
     );
-    setState(() => _selectedId = null);
   }
 
   void _duplicate() {
@@ -411,69 +543,83 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     );
   }
 
-  void _key(KeyEvent event) {
-    if (event is! KeyDownEvent) return;
-    final control =
-        HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed;
-    final shift = HardwareKeyboard.instance.isShiftPressed;
-    if (control && event.logicalKey == LogicalKeyboardKey.keyZ) {
-      shift ? _redo() : _undo();
-      return;
+  void _updateGuides(DesignElement next) {
+    if (_gestureId != next.id) return;
+    final box = _canvasCoordinates.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    final pixelsPerMm =
+        (box.localToGlobal(Offset(box.size.width, 0)) -
+                box.localToGlobal(Offset.zero))
+            .distance /
+        _document.canvas.width;
+    _guides.value = DesignerGuides.detect(
+      moving: next,
+      elements: _document.elements,
+      pixelsPerMm: pixelsPerMm,
+    );
+  }
+
+  void _command(DesignerCommand command, Offset delta) {
+    switch (command) {
+      case DesignerCommand.undo:
+        _undo();
+      case DesignerCommand.redo:
+        _redo();
+      case DesignerCommand.save:
+        _save();
+      case DesignerCommand.delete:
+        _remove();
+      case DesignerCommand.duplicate:
+        _duplicate();
+      case DesignerCommand.deselect:
+        _select(null);
+      case DesignerCommand.nudge:
+        _endGesture();
+        final id = _selectedId;
+        if (id == null) return;
+        // Keyboard nudges are precise even when pointer grid snapping is on.
+        _updateElement(
+          id,
+          (e) => e.locked
+              ? e
+              : e.copyWith(
+                  x: (e.x + delta.dx).clamp(
+                    0.0,
+                    math.max(0.0, _document.canvas.width - e.width),
+                  ),
+                  y: (e.y + delta.dy).clamp(
+                    0.0,
+                    math.max(0.0, _document.canvas.height - e.height),
+                  ),
+                ),
+        );
     }
-    if (control && event.logicalKey == LogicalKeyboardKey.keyY) {
-      _redo();
-      return;
-    }
-    if (control && event.logicalKey == LogicalKeyboardKey.keyD) {
-      _duplicate();
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.escape) {
-      setState(() => _selectedId = null);
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.delete ||
-        event.logicalKey == LogicalKeyboardKey.backspace) {
-      _remove();
-      return;
-    }
-    final step = shift ? 5.0 : 0.5;
-    final selectedId = _selectedId;
-    if (selectedId == null) return;
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft)
-      _move(selectedId, -step, 0);
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight)
-      _move(selectedId, step, 0);
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp)
-      _move(selectedId, 0, -step);
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown)
-      _move(selectedId, 0, step);
   }
 
   Future<void> _save() async {
     if (!_dirty || _saving || _name.text.trim().isEmpty) return;
-    setState(() {
+    _endGesture();
+    _commitTemplate(_template.copyWith(name: _name.text.trim()));
+    final submitted = _template;
+    _updateUi(() {
       _saving = true;
       _saveState = 'Saving…';
-      _template = _template.copyWith(name: _name.text.trim());
     });
     try {
       final saved = await widget.api.saveCardTemplate(
         widget.schoolUuid,
-        _template,
+        submitted,
       );
       if (!mounted) return;
-      setState(() {
-        _template = saved;
-        _savedDocument = jsonEncode(saved.toApi());
-        _name.text = saved.name;
+      _updateUi(() {
+        _savedTemplate = saved;
+        _dirtyValue = !_sameTemplate(_template, saved);
         _saving = false;
-        _saveState = 'Saved';
+        _saveState = _dirty ? 'Unsaved changes' : 'Saved';
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() {
+      _updateUi(() {
         _saving = false;
         _saveState = 'Save failed';
       });
@@ -504,67 +650,193 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ),
     );
     if (confirmed == true) {
+      _endGesture();
+      _selectedId = null;
       _commit(CardTemplate.uploadedDesign.document);
       _syncCanvasControllers();
-      setState(() => _selectedId = null);
     }
   }
 
+  Widget _section(Object? Function() select, Widget Function() builder) =>
+      _DesignerSection(revision: _revision, select: select, builder: builder);
+
+  Object _layerSignature() => <Object?>[
+    _selectedId,
+    for (final e in _document.elements)
+      (e.id, e.zIndex, e.visible, e.locked, _elementLabel(e)),
+  ];
+
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !_dirty,
-    onPopInvokedWithResult: (didPop, _) {
-      if (!didPop && _dirty)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Save or undo your changes before leaving.'),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = constraints.biggest;
+      final mobile = size.width < CardDesignerScreen.minimumEditorWidth;
+      final small =
+          size.width < CardDesignerScreen.recommendedEditorWidth ||
+          size.height < CardDesignerScreen.recommendedEditorHeight;
+      if (mobile || (small && !_smallScreenAccepted)) {
+        // A viewport change may remove a pointer target before it receives up.
+        if (_gestureStart != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _endGesture();
+          });
+        }
+        return _guardNavigation(
+          Scaffold(
+            appBar: const AuthenticatedAppBar(title: Text('Card designer')),
+            body: Center(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.desktop_windows_outlined, size: 42),
+                      const SizedBox(height: 16),
+                      const Text(
+                        CardDesignerScreen.smallScreenMessage,
+                        key: Key('designer-screen-warning'),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (!mobile) ...[
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: () =>
+                              setState(() => _smallScreenAccepted = true),
+                          child: const Text('Continue anyway'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         );
+      }
+      return DesignerShortcuts(
+        onCommand: _command,
+        child: Focus(autofocus: true, child: _editor()),
+      );
     },
-    child: Scaffold(
+  );
+
+  Widget _guardNavigation(Widget child) => ValueListenableBuilder<int>(
+    valueListenable: _revision,
+    builder: (context, _, child) => PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _dirty)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Save or undo your changes before leaving.'),
+            ),
+          );
+      },
+      child: child!,
+    ),
+    child: child,
+  );
+
+  Widget _editor() => _guardNavigation(
+    Scaffold(
       backgroundColor: const Color(0xfff3f5f9),
       appBar: AuthenticatedAppBar(
         title: const Text('Card designer'),
         actions: [
-          Center(
-            child: Text(
-              _saveState,
-              key: const Key('designer-save-state'),
-              style: const TextStyle(color: Colors.white70),
+          _section(
+            () => (_saveState, _saving, _dirty),
+            () => Center(
+              child: Text(
+                _saveState,
+                key: const Key('designer-save-state'),
+                style: const TextStyle(color: Colors.white70),
+              ),
             ),
           ),
           const SizedBox(width: 12),
-          TextButton.icon(
-            key: const Key('designer-save'),
-            onPressed: _dirty && !_saving ? _save : null,
-            icon: _saving
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save_outlined),
-            label: const Text('Save'),
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
+          _section(
+            () => (_saveState, _saving, _dirty),
+            () => TextButton.icon(
+              key: const Key('designer-save'),
+              onPressed: _dirty && !_saving ? _save : null,
+              icon: _saving
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: const Text('Save'),
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+            ),
           ),
         ],
       ),
       body: Column(
         children: [
-          _toolbar(),
+          _section(
+            () => (
+              _canUndo,
+              _canRedo,
+              _selectedId,
+              _selected?.locked,
+              _customFields,
+            ),
+            _toolbar,
+          ),
           Expanded(
             child: LayoutBuilder(
-              builder: (context, constraints) => constraints.maxWidth >= 1050
+              builder: (context, constraints) =>
+                  constraints.maxWidth >=
+                      CardDesignerScreen.recommendedEditorWidth
                   ? Row(
                       children: [
-                        SizedBox(width: 250, child: _layers()),
-                        Expanded(child: _workspace()),
-                        SizedBox(width: 300, child: _inspector()),
+                        SizedBox(
+                          width: 250,
+                          child: _section(_layerSignature, _layers),
+                        ),
+                        Expanded(
+                          child: _section(
+                            () => (
+                              _document,
+                              _selectedId,
+                              _zoom,
+                              _logoUrl,
+                              _schoolProfile,
+                            ),
+                            _workspace,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 300,
+                          child: _section(
+                            () => (_template, _selectedId, _canvasError),
+                            _inspector,
+                          ),
+                        ),
                       ],
                     )
                   : Row(
                       children: [
-                        Expanded(child: _workspace()),
-                        SizedBox(width: 300, child: _inspector()),
+                        Expanded(
+                          child: _section(
+                            () => (
+                              _document,
+                              _selectedId,
+                              _zoom,
+                              _logoUrl,
+                              _schoolProfile,
+                            ),
+                            _workspace,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 300,
+                          child: _section(
+                            () => (_template, _selectedId, _canvasError),
+                            _inspector,
+                          ),
+                        ),
                       ],
                     ),
             ),
@@ -711,12 +983,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 max: 2,
                 divisions: 15,
                 label: '${(_zoom * 100).round()}%',
-                onChanged: (v) => setState(() => _zoom = v),
+                onChanged: (v) => _updateUi(() => _zoom = v),
               ),
             ),
             const Icon(Icons.zoom_in),
             TextButton(
-              onPressed: () => setState(() => _zoom = 1),
+              onPressed: () => _updateUi(() {
+                _zoom = 1;
+                _viewTransform.value = Matrix4.identity();
+              }),
               child: const Text('Fit'),
             ),
           ],
@@ -735,21 +1010,22 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   naturalHeight,
             );
             final displayWidth = naturalWidth * fitScale * _zoom;
-            return KeyboardListener(
+            return Focus(
               focusNode: _canvasFocus,
-              onKeyEvent: _key,
-              child: GestureDetector(
-                onTap: () => _canvasFocus.requestFocus(),
-                child: InteractiveViewer(
-                  minScale: .5,
-                  maxScale: 3,
-                  child: Center(
-                    child: SizedBox(
-                      key: const Key('designer-canvas-frame'),
-                      width: displayWidth,
-                      child: Stack(
-                        children: [
-                          DesignDocumentView(
+              child: InteractiveViewer(
+                transformationController: _viewTransform,
+                panEnabled: _selectedId == null,
+                minScale: .5,
+                maxScale: 3,
+                child: Center(
+                  child: SizedBox(
+                    key: const Key('designer-canvas-frame'),
+                    width: displayWidth,
+                    child: Stack(
+                      children: [
+                        KeyedSubtree(
+                          key: _canvasCoordinates,
+                          child: DesignDocumentView(
                             key: const Key('designer-canvas'),
                             document: _document,
                             student: _sampleStudent,
@@ -761,25 +1037,42 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                             assetBaseUrl: widget.api.baseUrl,
                             selectedId: _selectedId,
                             interactive: true,
-                            onSelect: (id) => setState(() => _selectedId = id),
+                            onSelect: _select,
+                            onGestureStart: _beginGesture,
+                            onGestureEnd: _endGesture,
+                            isGestureActive: (id) => _gestureId == id,
                             onMove: _move,
                             onResize: _resize,
                           ),
-                          if (_document.settings['grid_enabled'] != false)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: CustomPaint(
-                                  painter: _GridPainter(
-                                    (_document.settings['grid_size'] as num?)
-                                            ?.toDouble() ??
-                                        2,
-                                    _document.canvas.width,
+                        ),
+                        Positioned.fill(
+                          child: ValueListenableBuilder<List<DesignerGuide>>(
+                            valueListenable: _guides,
+                            builder: (context, guides, _) => guides.isEmpty
+                                ? const SizedBox.shrink()
+                                : DesignerGuideOverlay(
+                                    key: const Key('designer-smart-guides'),
+                                    guides: guides,
+                                    canvasWidth: _document.canvas.width,
+                                    viewScale: _viewTransform.value
+                                        .getMaxScaleOnAxis(),
                                   ),
+                          ),
+                        ),
+                        if (_document.settings['grid_enabled'] != false)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _GridPainter(
+                                  (_document.settings['grid_size'] as num?)
+                                          ?.toDouble() ??
+                                      2,
+                                  _document.canvas.width,
                                 ),
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -812,7 +1105,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     key: Key('layer-${e.id}'),
                     selected: e.id == _selectedId,
                     dense: true,
-                    onTap: () => setState(() => _selectedId = e.id),
+                    onTap: () => _select(e.id),
                     leading: IconButton(
                       tooltip: e.visible ? 'Hide' : 'Show',
                       icon: Icon(
@@ -821,8 +1114,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                             : Icons.visibility_off_outlined,
                         size: 18,
                       ),
-                      onPressed: () =>
-                          _replace(e.copyWith(visible: !e.visible)),
+                      onPressed: () => _updateElement(
+                        e.id,
+                        (live) => live.copyWith(visible: !live.visible),
+                      ),
                     ),
                     title: Text(
                       _elementLabel(e),
@@ -833,7 +1128,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         e.locked ? Icons.lock : Icons.lock_open,
                         size: 18,
                       ),
-                      onPressed: () => _replace(e.copyWith(locked: !e.locked)),
+                      onPressed: () => _updateElement(
+                        e.id,
+                        (live) => live.copyWith(locked: !live.locked),
+                      ),
                     ),
                   ),
               ],
@@ -922,7 +1220,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     e.x,
                     (v) => update(
                       (e) => e.copyWith(
-                        x: v.clamp(0, _document.canvas.width - e.width),
+                        x: v.clamp(
+                          0.0,
+                          math.max(0.0, _document.canvas.width - e.width),
+                        ),
                       ),
                     ),
                   ),
@@ -931,7 +1232,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     e.y,
                     (v) => update(
                       (e) => e.copyWith(
-                        y: v.clamp(0, _document.canvas.height - e.height),
+                        y: v.clamp(
+                          0.0,
+                          math.max(0.0, _document.canvas.height - e.height),
+                        ),
                       ),
                     ),
                   ),
@@ -940,7 +1244,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     e.width,
                     (v) => update(
                       (e) => e.copyWith(
-                        width: v.clamp(2, _document.canvas.width - e.x),
+                        width: v.clamp(
+                          2.0,
+                          math.max(2.0, _document.canvas.width - e.x),
+                        ),
                       ),
                     ),
                   ),
@@ -949,7 +1256,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     e.height,
                     (v) => update(
                       (e) => e.copyWith(
-                        height: v.clamp(1, _document.canvas.height - e.y),
+                        height: v.clamp(
+                          1.0,
+                          math.max(1.0, _document.canvas.height - e.y),
+                        ),
                       ),
                     ),
                   ),
@@ -1055,11 +1365,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       );
                   },
                 ),
-                _textProperty(
+                _colourProperty(
                   'Text colour (hex)',
                   e.style['color'] as String? ?? '#111111',
                   (v) {
-                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
+                    if (isDesignerHex(v))
                       update(
                         (e) => e.copyWith(
                           style: {...e.style, 'color': v.toUpperCase()},
@@ -1088,11 +1398,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 DesignElementType.schoolLogo,
                 DesignElementType.rectangle,
               }.contains(e.type)) ...[
-                _textProperty(
+                _colourProperty(
                   'Border colour (hex)',
                   e.style['border_color'] as String? ?? '#000000',
                   (value) {
-                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                    if (isDesignerHex(value)) {
                       update(
                         (e) => e.copyWith(
                           style: {
@@ -1126,11 +1436,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 ),
               ],
               if (e.type == DesignElementType.rectangle) ...[
-                _textProperty(
+                _colourProperty(
                   'Fill colour (hex)',
                   e.style['fill_color'] as String? ?? '#FFFFFF',
                   (v) {
-                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
+                    if (isDesignerHex(v))
                       update(
                         (e) => e.copyWith(
                           style: {...e.style, 'fill_color': v.toUpperCase()},
@@ -1140,11 +1450,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 ),
               ],
               if (e.type == DesignElementType.line) ...[
-                _textProperty(
+                _colourProperty(
                   'Line colour (hex)',
                   e.style['color'] as String? ?? '#000000',
                   (value) {
-                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                    if (isDesignerHex(value)) {
                       update(
                         (e) => e.copyWith(
                           style: {...e.style, 'color': value.toUpperCase()},
@@ -1210,13 +1520,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       },
     ),
     _propertyControl(
-      TextField(
-        key: const Key('canvas-background-color'),
-        controller: _canvasBackground,
+      DesignerColourField(
+        fieldKey: const Key('canvas-background-color'),
+        ownerId: null,
+        value: _document.canvas.backgroundColor,
+        recentColours: _recentColours,
         decoration: _propertyDecoration('Background colour'),
         onChanged: (value) {
-          if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-            setState(() => _canvasError = null);
+          if (isDesignerHex(value)) {
+            _rememberColour(value);
+            _updateUi(() => _canvasError = null);
             _commit(
               _document.copyWith(
                 canvas: _document.canvas.copyWith(
@@ -1252,12 +1565,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       (_document.settings['grid_size'] as num?)?.toDouble() ?? 2,
       (value) {
         if (!value.isFinite || value <= 0 || value > 200) {
-          setState(
+          _updateUi(
             () => _canvasError = 'Grid size must be between 0 and 200 mm.',
           );
           return;
         }
-        setState(() => _canvasError = null);
+        _updateUi(() => _canvasError = null);
         _commit(
           _document.copyWith(
             settings: {..._document.settings, 'grid_size': value},
@@ -1287,12 +1600,18 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     required String label,
     required TextEditingController controller,
   }) => _propertyControl(
-    TextField(
-      key: key,
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    DesignerNumericField(
+      fieldKey: key,
+      ownerId: null,
+      value: key == const Key('canvas-width')
+          ? _document.canvas.width
+          : _document.canvas.height,
       decoration: _propertyDecoration(label),
-      onChanged: (_) => _applyCanvasDimensions(),
+      liveEntry: true,
+      onChanged: (value) {
+        controller.text = value.clamp(10.1, 2000.0).toStringAsFixed(2);
+        _applyCanvasDimensions();
+      },
     ),
   );
 
@@ -1335,22 +1654,41 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     padding: const EdgeInsets.only(bottom: 14),
     child: SizedBox(
       width: wide ? double.infinity : 118,
-      child: _ModelTextProperty(
+      child: DesignerNumericField(
         fieldKey: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
         ownerId: _selectedId,
-        value: value.toStringAsFixed(2),
-        keyboardType: const TextInputType.numberWithOptions(
-          decimal: true,
-          signed: true,
-        ),
+        value: value,
         decoration: _propertyDecoration(label),
-        onFieldSubmitted: (text) {
-          final next = double.tryParse(text);
-          if (next != null && next.isFinite) apply(next);
-        },
+        onChanged: apply,
+        normalStep: label == 'Rotation' ? 1 : .1,
+        largeStep: label == 'Rotation' ? 10 : 1,
       ),
     ),
   );
+  void _rememberColour(String value) {
+    _recentColours.remove(value);
+    _recentColours.insert(0, value);
+    if (_recentColours.length > 12) _recentColours.removeLast();
+  }
+
+  Widget _colourProperty(
+    String label,
+    String value,
+    ValueChanged<String> apply,
+  ) => _propertyControl(
+    DesignerColourField(
+      fieldKey: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
+      ownerId: _selectedId,
+      value: value,
+      decoration: _propertyDecoration(label),
+      recentColours: _recentColours,
+      onChanged: (colour) {
+        _rememberColour(colour);
+        apply(colour);
+      },
+    ),
+  );
+
   Widget _textProperty(
     String label,
     String value,
@@ -1375,17 +1713,14 @@ class _ModelTextProperty extends StatefulWidget {
     required this.ownerId,
     required this.value,
     required this.decoration,
-    this.keyboardType,
     this.onChanged,
-    this.onFieldSubmitted,
   });
 
   final Key fieldKey;
   final String? ownerId;
   final String value;
   final InputDecoration decoration;
-  final TextInputType? keyboardType;
-  final ValueChanged<String>? onChanged, onFieldSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<_ModelTextProperty> createState() => _ModelTextPropertyState();
@@ -1428,19 +1763,8 @@ class _ModelTextPropertyState extends State<_ModelTextProperty> {
   Widget build(BuildContext context) => TextFormField(
     key: widget.fieldKey,
     controller: _controller,
-    keyboardType: widget.keyboardType,
     decoration: widget.decoration,
     onChanged: widget.onChanged,
-    onFieldSubmitted: widget.onFieldSubmitted == null
-        ? null
-        : (text) {
-            widget.onFieldSubmitted!(text);
-            // A no-op or rejected submission may not rebuild the parent.
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _sync();
-            });
-            setState(() {});
-          },
   );
 }
 
@@ -1494,4 +1818,63 @@ class _GridPainter extends CustomPainter {
   bool shouldRepaint(covariant _GridPainter oldDelegate) =>
       oldDelegate.gridMm != gridMm ||
       oldDelegate.canvasWidthMm != canvasWidthMm;
+}
+
+// Cache each section by the state it actually displays. Geometry updates do not
+// rebuild app chrome, toolbar or layers; no element model is cached here.
+class _DesignerSection extends StatefulWidget {
+  const _DesignerSection({
+    required this.revision,
+    required this.select,
+    required this.builder,
+  });
+  final ValueListenable<int> revision;
+  final Object? Function() select;
+  final Widget Function() builder;
+  @override
+  State<_DesignerSection> createState() => _DesignerSectionState();
+}
+
+class _DesignerSectionState extends State<_DesignerSection> {
+  Object? _signature;
+  @override
+  void initState() {
+    super.initState();
+    _signature = widget.select();
+    widget.revision.addListener(_changed);
+  }
+
+  void _changed() {
+    final next = widget.select();
+    final unchanged = next is List && _signature is List
+        ? listEquals(next, _signature as List)
+        : next == _signature;
+    if (!unchanged) setState(() => _signature = next);
+  }
+
+  @override
+  void didUpdateWidget(covariant _DesignerSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) {
+      oldWidget.revision.removeListener(_changed);
+      widget.revision.addListener(_changed);
+    }
+    _signature = widget.select();
+  }
+
+  @override
+  void dispose() {
+    widget.revision.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      RepaintBoundary(child: widget.builder());
+}
+
+class _DesignerSnapshot {
+  const _DesignerSnapshot(this.template, this.selectedId);
+  final CardTemplate template;
+  final String? selectedId;
 }

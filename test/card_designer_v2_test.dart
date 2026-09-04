@@ -133,6 +133,8 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.tap(find.text('Continue anyway'));
+    await tester.pump();
     expect(find.byKey(const Key('canvas-properties')), findsOneWidget);
     expect(tester.takeException(), isNull);
 
