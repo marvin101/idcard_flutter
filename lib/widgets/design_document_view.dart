@@ -6,6 +6,7 @@ import '../models/api_student.dart';
 import '../models/card_template.dart';
 import '../models/design_bindings.dart';
 import '../models/school_profile.dart';
+import '../models/design_render_scene.dart';
 
 class DesignDocumentView extends StatelessWidget {
   const DesignDocumentView({
@@ -66,22 +67,53 @@ class DesignDocumentView extends StatelessWidget {
   );
 
   Widget _canvas(BuildContext context, double scale) {
+<<<<<<< Updated upstream
     final elements = [...document.elements]
       ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: interactive ? () => onSelect?.call(null) : null,
+=======
+    final scene = DesignRenderScene(
+      document: document,
+      bindings: DesignBindings(
+        student: student,
+        sessionName: sessionName,
+        className: className,
+        sectionName: sectionName,
+        schoolName: schoolName,
+        schoolProfile: schoolProfile,
+      ),
+      photoUrl: photoUrl,
+      logoUrl: logoUrl,
+      assetBaseUrl: assetBaseUrl,
+    );
+    return RepaintBoundary(
+>>>>>>> Stashed changes
       child: ClipRect(
         child: ColoredBox(
           key: const Key('design-document-surface'),
-          color: colorFromHex(document.canvas.backgroundColor, Colors.white),
+          color: scene.background,
           child: Stack(
             children: [
+<<<<<<< Updated upstream
               if (resolveDesignAssetUrl(
                     document.canvas.backgroundImage,
                     assetBaseUrl,
                   )
                   case final String url when url.isNotEmpty)
+=======
+              Positioned.fill(
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: interactive
+                      ? (_) => onSelect?.call(null)
+                      : null,
+                ),
+              ),
+              if (scene.backgroundImage case final String url
+                  when url.isNotEmpty)
+>>>>>>> Stashed changes
                 Positioned.fill(
                   child: IgnorePointer(
                     child: Image.network(
@@ -91,8 +123,8 @@ class DesignDocumentView extends StatelessWidget {
                     ),
                   ),
                 ),
-              for (final element in elements)
-                if (element.visible)
+              for (final node in scene.elements)
+                for (final element in [node.element])
                   Positioned(
                     key: ValueKey(element.id),
                     left: element.x * scale,
@@ -109,8 +141,8 @@ class DesignDocumentView extends StatelessWidget {
                       onMove: onMove,
                       onResize: onResize,
                       child: Transform.rotate(
-                        angle: element.rotation * math.pi / 180,
-                        child: _render(element, scale),
+                        angle: node.radians,
+                        child: _render(node, scale),
                       ),
                     ),
                   ),
@@ -121,119 +153,63 @@ class DesignDocumentView extends StatelessWidget {
     );
   }
 
-  Widget _render(DesignElement element, double scale) {
-    final style = element.style;
-    final color = colorFromHex(style['color'], Colors.black);
-    final alignment = switch (style['alignment']) {
-      'center' => TextAlign.center,
-      'right' => TextAlign.right,
-      _ => TextAlign.left,
-    };
-    switch (element.type) {
+  Widget _render(DesignRenderElement node, double scale) {
+    final s = node.style;
+    switch (node.element.type) {
       case DesignElementType.rectangle:
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: colorFromHex(style['fill_color'], Colors.transparent),
-            border: Border.all(
-              color: colorFromHex(style['border_color'], Colors.transparent),
-              width: ((style['border_width'] as num?)?.toDouble() ?? 0) * scale,
-            ),
-            borderRadius: BorderRadius.circular(
-              ((style['corner_radius'] as num?)?.toDouble() ?? 0) * scale,
-            ),
+            color: s.fill,
+            border: Border.all(color: s.border, width: s.borderWidth * scale),
+            borderRadius: BorderRadius.circular(s.radius * scale),
           ),
         );
       case DesignElementType.line:
         return Center(
-          child: Container(
-            height:
-                math.max(0, (style['border_width'] as num?)?.toDouble() ?? .5) *
-                scale,
-            color: colorFromHex(style['color'], Colors.black),
-          ),
+          child: Container(height: s.borderWidth * scale, color: s.color),
         );
       case DesignElementType.studentPhoto:
-        return _image(
-          resolveDesignAssetUrl(photoUrl ?? student.photoPath, assetBaseUrl),
-          style,
-          Icons.person_outline,
-          scale,
-        );
       case DesignElementType.schoolLogo:
-        return _image(
-          resolveDesignAssetUrl(
-            logoUrl ?? schoolProfile?.logoUrl ?? schoolProfile?.logoPath,
-            assetBaseUrl,
+        final fallback = node.element.type == DesignElementType.studentPhoto
+            ? Icons.person_outline
+            : Icons.school_outlined;
+        return Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: DesignRenderStyle.imageBackground,
+            border: Border.all(color: s.border, width: s.borderWidth * scale),
+            borderRadius: BorderRadius.circular(s.radius * scale),
           ),
-          style,
-          Icons.school_outlined,
-          scale,
+          child: node.imageUrl == null
+              ? Icon(fallback, color: Colors.grey, size: 6 * scale)
+              : Image.network(
+                  node.imageUrl!,
+                  fit: s.fit,
+                  errorBuilder: (_, _, _) =>
+                      Icon(fallback, color: Colors.grey, size: 6 * scale),
+                ),
         );
       case DesignElementType.text:
       case DesignElementType.boundText:
       case DesignElementType.customFieldText:
-        final text = DesignBindings(
-          student: student,
-          sessionName: sessionName,
-          className: className,
-          sectionName: sectionName,
-          schoolName: schoolName,
-          schoolProfile: schoolProfile,
-        ).text(element);
         return Align(
-          alignment: switch (alignment) {
+          alignment: switch (s.alignment) {
             TextAlign.center => Alignment.center,
             TextAlign.right => Alignment.centerRight,
             _ => Alignment.centerLeft,
           },
           child: Text(
-            text,
+            node.text,
             textScaler: TextScaler.noScaling,
-            maxLines: (style['max_lines'] as num?)?.toInt() ?? 2,
+            textDirection: TextDirection.ltr,
+            maxLines: s.maxLines,
             overflow: TextOverflow.clip,
-            textAlign: alignment,
-            style: TextStyle(
-              color: color,
-              fontSize: ((style['font_size'] as num?)?.toDouble() ?? 3) * scale,
-              fontWeight:
-                  FontWeight.values[((style['font_weight'] as num?)?.toInt() ??
-                                  400)
-                              .clamp(100, 900) ~/
-                          100 -
-                      1],
-              height: 1,
-            ),
+            textAlign: s.alignment,
+            style: s.textStyle(scale),
           ),
         );
     }
   }
-
-  Widget _image(
-    String? url,
-    Map<String, dynamic> style,
-    IconData fallback,
-    double scale,
-  ) => Container(
-    clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(
-      color: const Color(0xffeef1f5),
-      border: Border.all(
-        color: colorFromHex(style['border_color'], Colors.transparent),
-        width: ((style['border_width'] as num?)?.toDouble() ?? 0) * scale,
-      ),
-      borderRadius: BorderRadius.circular(
-        ((style['corner_radius'] as num?)?.toDouble() ?? 0) * scale,
-      ),
-    ),
-    child: url == null || url.isEmpty
-        ? Icon(fallback, color: Colors.grey, size: 6 * scale)
-        : Image.network(
-            url,
-            fit: style['fit'] == 'contain' ? BoxFit.contain : BoxFit.cover,
-            errorBuilder: (_, _, _) =>
-                Icon(fallback, color: Colors.grey, size: 6 * scale),
-          ),
-  );
 }
 
 class _InteractiveElement extends StatelessWidget {

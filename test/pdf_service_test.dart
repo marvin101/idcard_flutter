@@ -7,6 +7,7 @@ import 'package:idcard_flutter/models/student_field.dart';
 import 'package:idcard_flutter/services/pdf_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('v2 PDF renders every card and safely resolves custom data', () async {
     final cards = List.generate(
       3,
