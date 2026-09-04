@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' show LineMetrics;
 import 'package:flutter/material.dart';
 import 'design_render_scene.dart';
 

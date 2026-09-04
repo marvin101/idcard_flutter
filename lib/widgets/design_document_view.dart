@@ -117,7 +117,7 @@ class DesignDocumentView extends StatelessWidget {
                     child: Image.network(
                       url,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) {
+                      errorBuilder: (_, _, _) {
                         return const SizedBox.shrink();
                       },
                     ),
@@ -198,7 +198,7 @@ class DesignDocumentView extends StatelessWidget {
               : Image.network(
                   node.imageUrl!,
                   fit: style.fit,
-                  errorBuilder: (_, __, ___) {
+                  errorBuilder: (_, _, _) {
                     return Icon(
                       fallbackIcon,
                       color: Colors.grey,
