@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
+import '../models/school_profile.dart';
 import '../models/student_field.dart';
 import '../services/api_service.dart';
 import '../widgets/authenticated_app_bar.dart';
@@ -37,6 +38,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   final List<DesignDocument> _history = [];
   int _historyIndex = 0;
   String? _selectedId, _logoUrl;
+  SchoolProfile? _schoolProfile;
   List<StudentFieldDefinition> _customFields = const [];
   late String _savedDocument;
   double _zoom = 1;
@@ -94,13 +96,18 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   Future<void> _loadAssets() async {
     try {
       final results = await Future.wait<dynamic>([
-        widget.api.getStudentFields(widget.schoolUuid),
-        widget.api.getSchoolProfile(widget.schoolUuid),
+        widget.api
+            .getStudentFields(widget.schoolUuid)
+            .catchError((_) => <StudentFieldDefinition>[]),
+        widget.api
+            .getSchoolProfile(widget.schoolUuid)
+            .then<SchoolProfile?>((profile) => profile, onError: (_) => null),
       ]);
       if (!mounted) return;
       setState(() {
         _customFields = results[0] as List<StudentFieldDefinition>;
-        _logoUrl = results[1].logoUrl as String?;
+        _schoolProfile = results[1] as SchoolProfile?;
+        _logoUrl = _schoolProfile?.logoUrl;
       });
     } catch (_) {
       /* The editor remains usable when optional metadata is unavailable. */
@@ -750,6 +757,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                             className: 'XII',
                             sectionName: 'A',
                             logoUrl: _logoUrl,
+                            schoolProfile: _schoolProfile,
+                            assetBaseUrl: widget.api.baseUrl,
                             selectedId: _selectedId,
                             interactive: true,
                             onSelect: (id) => setState(() => _selectedId = id),
@@ -1451,6 +1460,18 @@ const _systemFields = <String, String>{
   'session': 'Session',
   'class': 'Class',
   'section': 'Section',
+  'school_name': 'School name',
+  'school_address': 'School address',
+  'school_code': 'School code',
+  'school_phone': 'School phone',
+  'school_email': 'School email',
+  'school_website': 'School website',
+  'school_city': 'School city',
+  'school_district': 'School district',
+  'school_state': 'School state',
+  'school_country': 'School country',
+  'school_postal_code': 'School postal code',
+  'principal_name': 'Principal name',
 };
 
 class _GridPainter extends CustomPainter {

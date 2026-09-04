@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -9,6 +10,8 @@ import '../models/school_class.dart';
 import '../models/section.dart';
 import '../navigation/app_navigation.dart';
 import '../models/card_template.dart';
+import '../models/school_profile.dart';
+import '../models/design_bindings.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
@@ -79,6 +82,8 @@ class _CardsScreenState extends State<CardsScreen> {
   List<ApiStudent> _students = [];
   CardTemplate _cardTemplate = CardTemplate.uploadedDesign;
   String? _schoolLogoUrl;
+  SchoolProfile? _schoolProfile;
+  final Map<String, String> _sectionNames = {};
 
   String? _selectedSessionUuid;
   String? _selectedClassUuid;
@@ -145,14 +150,28 @@ class _CardsScreenState extends State<CardsScreen> {
       } on ApiException catch (e) {
         if (e.statusCode != 404) rethrow;
       }
-      String? schoolLogoUrl;
+      SchoolProfile? schoolProfile;
       try {
-        schoolLogoUrl = (await widget.api.getSchoolProfile(
-          widget.schoolUuid,
-        )).logoUrl;
+        schoolProfile = await widget.api.getSchoolProfile(widget.schoolUuid);
       } on ApiException {
         // A missing logo must not prevent card work.
       }
+
+      final sectionGroups =
+          cardTemplate.document.elements.any(
+            (e) => e.data['field'] == 'section',
+          )
+          ? await Future.wait(
+              classes.map(
+                (c) => widget.api
+                    .getSections(
+                      schoolUuid: widget.schoolUuid,
+                      classUuid: c.uuid,
+                    )
+                    .catchError((_) => <SchoolSection>[]),
+              ),
+            )
+          : <List<SchoolSection>>[];
 
       if (!mounted) return;
 
@@ -160,7 +179,17 @@ class _CardsScreenState extends State<CardsScreen> {
         _sessions = sessions;
         _classes = classes;
         _cardTemplate = cardTemplate;
-        _schoolLogoUrl = schoolLogoUrl;
+        _schoolProfile = schoolProfile;
+        _schoolLogoUrl = resolveDesignAssetUrl(
+          schoolProfile?.logoUrl ?? schoolProfile?.logoPath,
+          widget.api.baseUrl,
+        );
+        _sectionNames.clear();
+        for (final group in sectionGroups) {
+          for (final section in group) {
+            _sectionNames[section.uuid] = section.name;
+          }
+        }
         _loadingFilters = false;
       });
 
@@ -396,6 +425,9 @@ class _CardsScreenState extends State<CardsScreen> {
 
         setState(() {
           _sections = sections;
+          for (final section in sections) {
+            _sectionNames[section.uuid] = section.name;
+          }
         });
       } on ApiException catch (e) {
         if (!mounted) return;
@@ -546,30 +578,16 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<void> _openDesigner() async {
-    final saved = await AppNavigation.navigateToPage<CardTemplate>(
-      context,
-      AppRoutes.design,
-    );
-    if (saved != null && mounted) setState(() => _cardTemplate = saved);
+    await AppNavigation.navigateToPage<void>(context, AppRoutes.design);
+    // Designer saves through the API; route dismissal does not return a template.
+    if (mounted) await _loadFilterData();
   }
 
   Future<void> _printStudentCard(
     ApiStudent student,
     String? sessionName,
   ) async {
-    String? photoUrl;
-
-    final path = student.photoPath?.trim();
-
-    if (path != null && path.isNotEmpty) {
-      if (path.startsWith('http://') || path.startsWith('https://')) {
-        photoUrl = path;
-      } else {
-        photoUrl = path.startsWith('/')
-            ? '${widget.api.baseUrl}$path'
-            : '${widget.api.baseUrl}/$path';
-      }
-    }
+    final photoUrl = _photoUrl(student);
 
     try {
       await Printing.layoutPdf(
@@ -578,6 +596,10 @@ class _CardsScreenState extends State<CardsScreen> {
             student: student,
             schoolName: widget.schoolName,
             sessionName: sessionName,
+            className: _className(student),
+            sectionName: _sectionName(student),
+            schoolProfile: _schoolProfile,
+            assetBaseUrl: widget.api.baseUrl,
             photoUrl: photoUrl,
             schoolLogoUrl: _schoolLogoUrl,
             template: _cardTemplate,
@@ -593,14 +615,8 @@ class _CardsScreenState extends State<CardsScreen> {
     }
   }
 
-  String? _photoUrl(ApiStudent student) {
-    final path = student.photoPath?.trim();
-    if (path == null || path.isEmpty) return null;
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    return path.startsWith('/')
-        ? '${widget.api.baseUrl}$path'
-        : '${widget.api.baseUrl}/$path';
-  }
+  String? _photoUrl(ApiStudent student) =>
+      resolveDesignAssetUrl(student.photoPath, widget.api.baseUrl);
 
   String? _sessionName(ApiStudent student) {
     for (final session in _sessions) {
@@ -616,12 +632,8 @@ class _CardsScreenState extends State<CardsScreen> {
     return null;
   }
 
-  String? _sectionName(ApiStudent student) {
-    for (final item in _sections) {
-      if (item.uuid == student.sectionUuid) return item.name;
-    }
-    return null;
-  }
+  String? _sectionName(ApiStudent student) =>
+      _sectionNames[student.sectionUuid];
 
   Future<void> _downloadFilteredCards() async {
     if (_exportingBulk) return;
@@ -684,6 +696,8 @@ class _CardsScreenState extends State<CardsScreen> {
             )
             .toList(),
         schoolName: widget.schoolName,
+        schoolProfile: _schoolProfile,
+        assetBaseUrl: widget.api.baseUrl,
         template: _cardTemplate,
         schoolLogoUrl: _schoolLogoUrl,
       );
@@ -1067,78 +1081,96 @@ class _CardsScreenState extends State<CardsScreen> {
       );
     }
 
-    return GridView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.only(bottom: 24),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 250,
-        childAspectRatio: 1.22,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: _students.length + (_loadingMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        // Loading indicator at the bottom of the grid.
-        if (index >= _students.length) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          );
-        }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 16.0;
+        final columns = math.max(
+          1,
+          (constraints.maxWidth / (250 + spacing)).ceil(),
+        );
+        final tileWidth =
+            (constraints.maxWidth - (columns - 1) * spacing) / columns;
+        final canvas = _cardTemplate.document.canvas;
+        return GridView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.only(bottom: 24),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisExtent:
+                tileWidth * canvas.height / canvas.width +
+                IdCardPreview.actionsHeight,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+          ),
+          itemCount: _students.length + (_loadingMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            // Loading indicator at the bottom of the grid.
+            if (index >= _students.length) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              );
+            }
 
-        final student = _students[index];
+            final student = _students[index];
 
-        AcademicSession? session;
+            AcademicSession? session;
 
-        for (final item in _sessions) {
-          if (item.uuid == student.sessionUuid) {
-            session = item;
-            break;
-          }
-        }
+            for (final item in _sessions) {
+              if (item.uuid == student.sessionUuid) {
+                session = item;
+                break;
+              }
+            }
 
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: IdCardPreview(
-                student: student,
-                schoolName: widget.schoolName,
-                api: widget.api,
-                template: _cardTemplate,
-                sessionName: session?.name,
-                onEdit: widget.canEdit ? () => _editStudent(student) : null,
-                onPrint: widget.canPrint
-                    ? () => _printStudentCard(student, session?.name)
-                    : null,
-                onMarkPrinted: widget.canMarkPrinted && student.isVerified
-                    ? () => _markPrinted(student)
-                    : null,
-              ),
-            ),
-            Positioned(
-              top: 6,
-              left: 6,
-              child: Checkbox(
-                value: _selectedStudentUuids.contains(student.uuid),
-                onChanged: widget.canVerify || widget.canMarkPrinted
-                    ? (value) => setState(() {
-                        if (value == true) {
-                          _selectedStudentUuids.add(student.uuid);
-                        } else {
-                          _selectedStudentUuids.remove(student.uuid);
-                        }
-                      })
-                    : null,
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: StudentLifecycleBadge(status: student.lifecycleStatus),
-            ),
-          ],
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: IdCardPreview(
+                    student: student,
+                    schoolName: widget.schoolName,
+                    api: widget.api,
+                    template: _cardTemplate,
+                    sessionName: session?.name,
+                    className: _className(student),
+                    sectionName: _sectionName(student),
+                    logoUrl: _schoolLogoUrl,
+                    schoolProfile: _schoolProfile,
+                    onEdit: widget.canEdit ? () => _editStudent(student) : null,
+                    onPrint: widget.canPrint
+                        ? () => _printStudentCard(student, session?.name)
+                        : null,
+                    onMarkPrinted: widget.canMarkPrinted && student.isVerified
+                        ? () => _markPrinted(student)
+                        : null,
+                  ),
+                ),
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Checkbox(
+                    value: _selectedStudentUuids.contains(student.uuid),
+                    onChanged: widget.canVerify || widget.canMarkPrinted
+                        ? (value) => setState(() {
+                            if (value == true) {
+                              _selectedStudentUuids.add(student.uuid);
+                            } else {
+                              _selectedStudentUuids.remove(student.uuid);
+                            }
+                          })
+                        : null,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: StudentLifecycleBadge(status: student.lifecycleStatus),
+                ),
+              ],
+            );
+          },
         );
       },
     );

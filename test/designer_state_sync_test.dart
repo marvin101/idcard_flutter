@@ -190,7 +190,15 @@ void main() {
         matching: find.text('Updated title'),
       ),
     );
-    expect(rendered.style!.fontSize, 5 * 3.78);
+    expect(
+      rendered.style!.fontSize,
+      closeTo(
+        5 *
+            tester.getSize(find.byKey(const Key('design-element-b'))).width /
+            live().width,
+        .001,
+      ),
+    );
     expect(rendered.style!.fontWeight, FontWeight.w900);
     expect(rendered.style!.color, const Color(0xffabcdef));
     expect(rendered.textAlign, TextAlign.center);

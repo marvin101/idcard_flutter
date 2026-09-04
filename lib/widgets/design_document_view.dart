@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
+import '../models/design_bindings.dart';
+import '../models/school_profile.dart';
 
 class DesignDocumentView extends StatelessWidget {
   const DesignDocumentView({
@@ -15,6 +17,9 @@ class DesignDocumentView extends StatelessWidget {
     this.sectionName,
     this.photoUrl,
     this.logoUrl,
+    this.schoolName,
+    this.schoolProfile,
+    this.assetBaseUrl,
     this.selectedId,
     this.interactive = false,
     this.onSelect,
@@ -22,6 +27,8 @@ class DesignDocumentView extends StatelessWidget {
     this.onResize,
   });
 
+  final String? schoolName, assetBaseUrl;
+  final SchoolProfile? schoolProfile;
   final DesignDocument document;
   final ApiStudent student;
   final String? sessionName,
@@ -36,67 +43,85 @@ class DesignDocumentView extends StatelessWidget {
   final void Function(String id, double dw, double dh)? onResize;
 
   @override
-  Widget build(BuildContext context) => AspectRatio(
-    aspectRatio: document.canvas.width / document.canvas.height,
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final sx = constraints.maxWidth / document.canvas.width;
-        final sy = constraints.maxHeight / document.canvas.height;
-        final elements = [...document.elements]
-          ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: interactive ? () => onSelect?.call(null) : null,
-          child: ClipRect(
-            child: ColoredBox(
-              color: colorFromHex(
-                document.canvas.backgroundColor,
-                Colors.white,
-              ),
-              child: Stack(
-                children: [
-                  if (document.canvas.backgroundImage case final String url
-                      when url.isNotEmpty)
-                    Positioned.fill(
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                      ),
-                    ),
-                  for (final element in elements)
-                    if (element.visible)
-                      Positioned(
-                        key: ValueKey(element.id),
-                        left: element.x * sx,
-                        top: element.y * sy,
-                        width: element.width * sx,
-                        height: element.height * sy,
-                        child: _InteractiveElement(
-                          element: element,
-                          selected: selectedId == element.id,
-                          interactive: interactive,
-                          scaleX: sx,
-                          scaleY: sy,
-                          onSelect: onSelect,
-                          onMove: onMove,
-                          onResize: onResize,
-                          child: Transform.rotate(
-                            angle: element.rotation * math.pi / 180,
-                            child: _render(element),
-                          ),
-                        ),
-                      ),
-                ],
-              ),
-            ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // A single scale preserves the document even inside a tight container
+      // whose aspect ratio differs. No orientation presets are applied here.
+      final widthScale = constraints.maxWidth / document.canvas.width;
+      final heightScale = constraints.maxHeight / document.canvas.height;
+      final available = math.min(widthScale, heightScale);
+      final scale = available.isFinite ? available : 3.78;
+      return Align(
+        widthFactor: 1,
+        heightFactor: 1,
+        child: SizedBox(
+          width: document.canvas.width * scale,
+          height: document.canvas.height * scale,
+          child: LayoutBuilder(
+            builder: (context, _) => _canvas(context, scale),
           ),
-        );
-      },
-    ),
+        ),
+      );
+    },
   );
 
-  Widget _render(DesignElement element) {
+  Widget _canvas(BuildContext context, double scale) {
+    final elements = [...document.elements]
+      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: interactive ? () => onSelect?.call(null) : null,
+      child: ClipRect(
+        child: ColoredBox(
+          key: const Key('design-document-surface'),
+          color: colorFromHex(document.canvas.backgroundColor, Colors.white),
+          child: Stack(
+            children: [
+              if (resolveDesignAssetUrl(
+                    document.canvas.backgroundImage,
+                    assetBaseUrl,
+                  )
+                  case final String url when url.isNotEmpty)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              for (final element in elements)
+                if (element.visible)
+                  Positioned(
+                    key: ValueKey(element.id),
+                    left: element.x * scale,
+                    top: element.y * scale,
+                    width: element.width * scale,
+                    height: element.height * scale,
+                    child: _InteractiveElement(
+                      element: element,
+                      selected: selectedId == element.id,
+                      interactive: interactive,
+                      scaleX: scale,
+                      scaleY: scale,
+                      onSelect: onSelect,
+                      onMove: onMove,
+                      onResize: onResize,
+                      child: Transform.rotate(
+                        angle: element.rotation * math.pi / 180,
+                        child: _render(element, scale),
+                      ),
+                    ),
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _render(DesignElement element, double scale) {
     final style = element.style;
     final color = colorFromHex(style['color'], Colors.black);
     final alignment = switch (style['alignment']) {
@@ -111,31 +136,50 @@ class DesignDocumentView extends StatelessWidget {
             color: colorFromHex(style['fill_color'], Colors.transparent),
             border: Border.all(
               color: colorFromHex(style['border_color'], Colors.transparent),
-              width: ((style['border_width'] as num?)?.toDouble() ?? 0),
+              width: ((style['border_width'] as num?)?.toDouble() ?? 0) * scale,
             ),
             borderRadius: BorderRadius.circular(
-              (style['corner_radius'] as num?)?.toDouble() ?? 0,
+              ((style['corner_radius'] as num?)?.toDouble() ?? 0) * scale,
             ),
           ),
         );
       case DesignElementType.line:
         return Center(
           child: Container(
-            height: math.max(
-              1,
-              (style['border_width'] as num?)?.toDouble() ?? 1,
-            ),
+            height:
+                math.max(0, (style['border_width'] as num?)?.toDouble() ?? .5) *
+                scale,
             color: colorFromHex(style['color'], Colors.black),
           ),
         );
       case DesignElementType.studentPhoto:
-        return _image(photoUrl, style, Icons.person_outline);
+        return _image(
+          resolveDesignAssetUrl(photoUrl ?? student.photoPath, assetBaseUrl),
+          style,
+          Icons.person_outline,
+          scale,
+        );
       case DesignElementType.schoolLogo:
-        return _image(logoUrl, style, Icons.school_outlined);
+        return _image(
+          resolveDesignAssetUrl(
+            logoUrl ?? schoolProfile?.logoUrl ?? schoolProfile?.logoPath,
+            assetBaseUrl,
+          ),
+          style,
+          Icons.school_outlined,
+          scale,
+        );
       case DesignElementType.text:
       case DesignElementType.boundText:
       case DesignElementType.customFieldText:
-        final text = _text(element);
+        final text = DesignBindings(
+          student: student,
+          sessionName: sessionName,
+          className: className,
+          sectionName: sectionName,
+          schoolName: schoolName,
+          schoolProfile: schoolProfile,
+        ).text(element);
         return Align(
           alignment: switch (alignment) {
             TextAlign.center => Alignment.center,
@@ -144,12 +188,13 @@ class DesignDocumentView extends StatelessWidget {
           },
           child: Text(
             text,
+            textScaler: TextScaler.noScaling,
             maxLines: (style['max_lines'] as num?)?.toInt() ?? 2,
             overflow: TextOverflow.clip,
             textAlign: alignment,
             style: TextStyle(
               color: color,
-              fontSize: ((style['font_size'] as num?)?.toDouble() ?? 3) * 3.78,
+              fontSize: ((style['font_size'] as num?)?.toDouble() ?? 3) * scale,
               fontWeight:
                   FontWeight.values[((style['font_weight'] as num?)?.toInt() ??
                                   400)
@@ -163,70 +208,32 @@ class DesignDocumentView extends StatelessWidget {
     }
   }
 
-  Widget _image(String? url, Map<String, dynamic> style, IconData fallback) =>
-      Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: const Color(0xffeef1f5),
-          border: Border.all(
-            color: colorFromHex(style['border_color'], Colors.transparent),
-            width: (style['border_width'] as num?)?.toDouble() ?? 0,
+  Widget _image(
+    String? url,
+    Map<String, dynamic> style,
+    IconData fallback,
+    double scale,
+  ) => Container(
+    clipBehavior: Clip.antiAlias,
+    decoration: BoxDecoration(
+      color: const Color(0xffeef1f5),
+      border: Border.all(
+        color: colorFromHex(style['border_color'], Colors.transparent),
+        width: ((style['border_width'] as num?)?.toDouble() ?? 0) * scale,
+      ),
+      borderRadius: BorderRadius.circular(
+        ((style['corner_radius'] as num?)?.toDouble() ?? 0) * scale,
+      ),
+    ),
+    child: url == null || url.isEmpty
+        ? Icon(fallback, color: Colors.grey, size: 6 * scale)
+        : Image.network(
+            url,
+            fit: style['fit'] == 'contain' ? BoxFit.contain : BoxFit.cover,
+            errorBuilder: (_, _, _) =>
+                Icon(fallback, color: Colors.grey, size: 6 * scale),
           ),
-          borderRadius: BorderRadius.circular(
-            (style['corner_radius'] as num?)?.toDouble() ?? 0,
-          ),
-        ),
-        child: url == null || url.isEmpty
-            ? Icon(fallback, color: Colors.grey)
-            : Image.network(
-                url,
-                fit: style['fit'] == 'contain' ? BoxFit.contain : BoxFit.cover,
-                errorBuilder: (_, _, _) => Icon(fallback, color: Colors.grey),
-              ),
-      );
-
-  String _text(DesignElement element) {
-    final data = element.data;
-    String value;
-    if (element.type == DesignElementType.text) {
-      value = data['text'] as String? ?? 'Text';
-    } else if (element.type == DesignElementType.customFieldText) {
-      final uuid = data['field_uuid'];
-      value =
-          student.customFields
-              .where((field) => field.fieldUuid == uuid)
-              .map((field) => field.value)
-              .firstOrNull ??
-          (data['fallback'] as String? ??
-              data['label'] as String? ??
-              'Custom field');
-    } else {
-      value = switch (data['field']) {
-        'full_name' => student.fullName,
-        'admission_no' => student.admissionNo,
-        'roll_no' => student.rollNo ?? '',
-        'stream' => student.stream ?? '',
-        'father_name' => student.fatherName ?? '',
-        'mother_name' => student.motherName ?? '',
-        'dob' => _date(student.dob),
-        'gender' => student.gender ?? '',
-        'blood_group' => student.bloodGroup ?? '',
-        'mobile' => student.mobile ?? '',
-        'aadhaar' => student.aadhaar ?? '',
-        'address' => student.address ?? '',
-        'session' => sessionName ?? '',
-        'class' => className ?? '',
-        'section' => sectionName ?? '',
-        _ => '',
-      };
-      if (value.isEmpty) value = data['fallback'] as String? ?? 'Student field';
-    }
-    return '${data['prefix'] ?? ''}$value${data['suffix'] ?? ''}';
-  }
-
-  String _date(DateTime? value) => value == null
-      ? ''
-      : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  );
 }
 
 class _InteractiveElement extends StatelessWidget {

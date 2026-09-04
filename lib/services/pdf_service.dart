@@ -9,6 +9,8 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
+import '../models/design_bindings.dart';
+import '../models/school_profile.dart';
 
 class PdfService {
   static double _mm(double value) => value * PdfPageFormat.mm;
@@ -18,19 +20,27 @@ class PdfService {
     required String schoolName,
     required CardTemplate template,
     String? sessionName,
+    String? className,
+    String? sectionName,
     String? photoUrl,
     String? schoolLogoUrl,
+    SchoolProfile? schoolProfile,
+    String? assetBaseUrl,
   }) => generateStudentCards(
     cards: [
       PdfCardData(
         student: student,
         sessionName: sessionName,
+        className: className,
+        sectionName: sectionName,
         photoUrl: photoUrl,
       ),
     ],
     schoolName: schoolName,
     template: template,
     schoolLogoUrl: schoolLogoUrl,
+    schoolProfile: schoolProfile,
+    assetBaseUrl: assetBaseUrl,
   );
 
   static Future<Uint8List> generateStudentCards({
@@ -38,11 +48,29 @@ class PdfService {
     required String schoolName,
     required CardTemplate template,
     String? schoolLogoUrl,
+    SchoolProfile? schoolProfile,
+    String? assetBaseUrl,
   }) async {
     final pdf = pw.Document();
-    final logo = await _download(schoolLogoUrl);
+    final logo = await _download(
+      resolveDesignAssetUrl(
+        schoolLogoUrl ?? schoolProfile?.logoUrl ?? schoolProfile?.logoPath,
+        assetBaseUrl,
+      ),
+    );
+    final background = await _download(
+      resolveDesignAssetUrl(
+        template.document.canvas.backgroundImage,
+        assetBaseUrl,
+      ),
+    );
     for (final card in cards) {
-      final photo = await _download(card.photoUrl);
+      final photo = await _download(
+        resolveDesignAssetUrl(
+          card.photoUrl ?? card.student.photoPath,
+          assetBaseUrl,
+        ),
+      );
       final canvas = template.document.canvas;
       pdf.addPage(
         pw.Page(
@@ -54,6 +82,16 @@ class PdfService {
             color: _color(canvas.backgroundColor, PdfColors.white),
             child: pw.Stack(
               children: [
+                if (background != null)
+                  pw.Positioned(
+                    left: 0,
+                    top: 0,
+                    child: pw.SizedBox(
+                      width: _mm(canvas.width),
+                      height: _mm(canvas.height),
+                      child: pw.Image(background, fit: pw.BoxFit.cover),
+                    ),
+                  ),
                 for (final element in ([
                   ...template.document.elements,
                 ]..sort((a, b) => a.zIndex.compareTo(b.zIndex))))
@@ -69,7 +107,14 @@ class PdfService {
                           child: _element(
                             element,
                             card,
-                            schoolName,
+                            DesignBindings(
+                              student: card.student,
+                              sessionName: card.sessionName,
+                              className: card.className,
+                              sectionName: card.sectionName,
+                              schoolName: schoolName,
+                              schoolProfile: schoolProfile,
+                            ),
                             photo,
                             logo,
                           ),
@@ -100,7 +145,7 @@ class PdfService {
   static pw.Widget _element(
     DesignElement element,
     PdfCardData card,
-    String schoolName,
+    DesignBindings bindings,
     pw.MemoryImage? photo,
     pw.MemoryImage? logo,
   ) {
@@ -123,7 +168,7 @@ class PdfService {
         return pw.Center(
           child: pw.Container(
             height: _mm(
-              math.max(.2, (style['border_width'] as num?)?.toDouble() ?? .5),
+              math.max(0, (style['border_width'] as num?)?.toDouble() ?? .5),
             ),
             color: _color(style['color'], PdfColors.black),
           ),
@@ -174,7 +219,7 @@ class PdfService {
       case DesignElementType.text:
       case DesignElementType.boundText:
       case DesignElementType.customFieldText:
-        final text = _resolve(element, card, schoolName);
+        final text = bindings.text(element);
         final align = switch (style['alignment']) {
           'center' => pw.TextAlign.center,
           'right' => pw.TextAlign.right,
@@ -204,49 +249,6 @@ class PdfService {
     }
   }
 
-  static String _resolve(
-    DesignElement element,
-    PdfCardData card,
-    String schoolName,
-  ) {
-    final data = element.data;
-    String value;
-    if (element.type == DesignElementType.text)
-      value = data['text'] as String? ?? 'Text';
-    else if (element.type == DesignElementType.customFieldText)
-      value =
-          card.student.customFields
-              .where((field) => field.fieldUuid == data['field_uuid'])
-              .map((field) => field.value)
-              .firstOrNull ??
-          (data['fallback'] as String? ?? '');
-    else
-      value = switch (data['field']) {
-        'full_name' => card.student.fullName,
-        'admission_no' => card.student.admissionNo,
-        'roll_no' => card.student.rollNo ?? '',
-        'stream' => card.student.stream ?? '',
-        'father_name' => card.student.fatherName ?? '',
-        'mother_name' => card.student.motherName ?? '',
-        'dob' => _date(card.student.dob),
-        'gender' => card.student.gender ?? '',
-        'blood_group' => card.student.bloodGroup ?? '',
-        'mobile' => card.student.mobile ?? '',
-        'aadhaar' => card.student.aadhaar ?? '',
-        'address' => card.student.address ?? '',
-        'session' => card.sessionName ?? '',
-        'class' => card.className ?? '',
-        'section' => card.sectionName ?? '',
-        'school_name' => schoolName,
-        _ => '',
-      };
-    if (value.isEmpty) value = data['fallback'] as String? ?? '';
-    return '${data['prefix'] ?? ''}$value${data['suffix'] ?? ''}';
-  }
-
-  static String _date(DateTime? value) => value == null
-      ? ''
-      : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
   static PdfColor _color(Object? value, PdfColor fallback) {
     if (value is! String) return fallback;
     final parsed = int.tryParse(value.replaceFirst('#', ''), radix: 16);

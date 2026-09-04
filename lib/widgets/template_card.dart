@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
+import '../models/school_profile.dart';
 import 'design_document_view.dart';
 
 class TemplateCard extends StatelessWidget {
@@ -14,7 +15,12 @@ class TemplateCard extends StatelessWidget {
     this.sectionName,
     this.photoUrl,
     this.logoUrl,
+    this.schoolName,
+    this.schoolProfile,
+    this.assetBaseUrl,
   });
+  final String? schoolName, assetBaseUrl;
+  final SchoolProfile? schoolProfile;
   final ApiStudent student;
   final CardTemplate template;
   final String? sessionName, className, sectionName, photoUrl, logoUrl;
@@ -33,6 +39,9 @@ class TemplateCard extends StatelessWidget {
       sectionName: sectionName,
       photoUrl: photoUrl,
       logoUrl: logoUrl,
+      schoolName: schoolName,
+      schoolProfile: schoolProfile,
+      assetBaseUrl: assetBaseUrl,
     ),
   );
 }
