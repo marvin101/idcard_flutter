@@ -865,6 +865,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Widget _inspector() {
     final e = _selected;
+    // Resolve by identity at event time; callbacks must not replace newer edits
+    // with the element snapshot captured by the previous build.
+    void update(DesignElement Function(DesignElement) change) {
+      final live = _document.elements
+          .where((element) => element.id == e?.id)
+          .firstOrNull;
+      if (live != null) _replace(change(live));
+    }
+
     return Material(
       color: Colors.white,
       child: Theme(
@@ -902,8 +911,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   _numberField(
                     'X',
                     e.x,
-                    (v) => _replace(
-                      e.copyWith(
+                    (v) => update(
+                      (e) => e.copyWith(
                         x: v.clamp(0, _document.canvas.width - e.width),
                       ),
                     ),
@@ -911,8 +920,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   _numberField(
                     'Y',
                     e.y,
-                    (v) => _replace(
-                      e.copyWith(
+                    (v) => update(
+                      (e) => e.copyWith(
                         y: v.clamp(0, _document.canvas.height - e.height),
                       ),
                     ),
@@ -920,8 +929,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   _numberField(
                     'Width',
                     e.width,
-                    (v) => _replace(
-                      e.copyWith(
+                    (v) => update(
+                      (e) => e.copyWith(
                         width: v.clamp(2, _document.canvas.width - e.x),
                       ),
                     ),
@@ -929,8 +938,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   _numberField(
                     'Height',
                     e.height,
-                    (v) => _replace(
-                      e.copyWith(
+                    (v) => update(
+                      (e) => e.copyWith(
                         height: v.clamp(1, _document.canvas.height - e.y),
                       ),
                     ),
@@ -938,7 +947,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   _numberField(
                     'Rotation',
                     e.rotation,
-                    (v) => _replace(e.copyWith(rotation: v.clamp(-360, 360))),
+                    (v) =>
+                        update((e) => e.copyWith(rotation: v.clamp(-360, 360))),
                   ),
                 ],
               ),
@@ -946,19 +956,20 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Locked'),
                 value: e.locked,
-                onChanged: (v) => _replace(e.copyWith(locked: v)),
+                onChanged: (v) => update((e) => e.copyWith(locked: v)),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Visible'),
                 value: e.visible,
-                onChanged: (v) => _replace(e.copyWith(visible: v)),
+                onChanged: (v) => update((e) => e.copyWith(visible: v)),
               ),
               if (e.type == DesignElementType.text)
                 _textProperty(
                   'Text',
                   e.data['text'] as String? ?? '',
-                  (v) => _replace(e.copyWith(data: {...e.data, 'text': v})),
+                  (v) =>
+                      update((e) => e.copyWith(data: {...e.data, 'text': v})),
                 ),
               if (e.type == DesignElementType.boundText)
                 _dropdownProperty<String>(
@@ -975,8 +986,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       .toList(),
                   onChanged: (v) {
                     if (v != null)
-                      _replace(
-                        e.copyWith(
+                      update(
+                        (e) => e.copyWith(
                           data: {
                             ...e.data,
                             'field': v,
@@ -994,8 +1005,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 _numberField(
                   'Font size (mm)',
                   (e.style['font_size'] as num?)?.toDouble() ?? 3,
-                  (v) => _replace(
-                    e.copyWith(
+                  (v) => update(
+                    (e) => e.copyWith(
                       style: {...e.style, 'font_size': v.clamp(1, 20)},
                     ),
                   ),
@@ -1013,8 +1024,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   ],
                   onChanged: (v) {
                     if (v != null)
-                      _replace(
-                        e.copyWith(style: {...e.style, 'font_weight': v}),
+                      update(
+                        (e) =>
+                            e.copyWith(style: {...e.style, 'font_weight': v}),
                       );
                   },
                 ),
@@ -1029,7 +1041,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   ],
                   onChanged: (v) {
                     if (v != null)
-                      _replace(e.copyWith(style: {...e.style, 'alignment': v}));
+                      update(
+                        (e) => e.copyWith(style: {...e.style, 'alignment': v}),
+                      );
                   },
                 ),
                 _textProperty(
@@ -1037,8 +1051,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   e.style['color'] as String? ?? '#111111',
                   (v) {
                     if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
-                      _replace(
-                        e.copyWith(
+                      update(
+                        (e) => e.copyWith(
                           style: {...e.style, 'color': v.toUpperCase()},
                         ),
                       );
@@ -1057,7 +1071,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   ],
                   onChanged: (v) {
                     if (v != null)
-                      _replace(e.copyWith(style: {...e.style, 'fit': v}));
+                      update((e) => e.copyWith(style: {...e.style, 'fit': v}));
                   },
                 ),
               if ({
@@ -1070,8 +1084,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   e.style['border_color'] as String? ?? '#000000',
                   (value) {
                     if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-                      _replace(
-                        e.copyWith(
+                      update(
+                        (e) => e.copyWith(
                           style: {
                             ...e.style,
                             'border_color': value.toUpperCase(),
@@ -1084,8 +1098,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 _numberField(
                   'Border width',
                   (e.style['border_width'] as num?)?.toDouble() ?? 0,
-                  (value) => _replace(
-                    e.copyWith(
+                  (value) => update(
+                    (e) => e.copyWith(
                       style: {...e.style, 'border_width': value.clamp(0, 10)},
                     ),
                   ),
@@ -1094,8 +1108,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 _numberField(
                   'Corner radius',
                   (e.style['corner_radius'] as num?)?.toDouble() ?? 0,
-                  (value) => _replace(
-                    e.copyWith(
+                  (value) => update(
+                    (e) => e.copyWith(
                       style: {...e.style, 'corner_radius': value.clamp(0, 30)},
                     ),
                   ),
@@ -1108,8 +1122,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   e.style['fill_color'] as String? ?? '#FFFFFF',
                   (v) {
                     if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v))
-                      _replace(
-                        e.copyWith(
+                      update(
+                        (e) => e.copyWith(
                           style: {...e.style, 'fill_color': v.toUpperCase()},
                         ),
                       );
@@ -1122,8 +1136,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   e.style['color'] as String? ?? '#000000',
                   (value) {
                     if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-                      _replace(
-                        e.copyWith(
+                      update(
+                        (e) => e.copyWith(
                           style: {...e.style, 'color': value.toUpperCase()},
                         ),
                       );
@@ -1133,8 +1147,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 _numberField(
                   'Line width',
                   (e.style['border_width'] as num?)?.toDouble() ?? .5,
-                  (value) => _replace(
-                    e.copyWith(
+                  (value) => update(
+                    (e) => e.copyWith(
                       style: {...e.style, 'border_width': value.clamp(.1, 10)},
                     ),
                   ),
@@ -1290,13 +1304,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?> onChanged,
   }) => _propertyControl(
-    DropdownButtonFormField<T>(
+    KeyedSubtree(
       key: key,
-      initialValue: value,
-      isExpanded: true,
-      decoration: _propertyDecoration(label),
-      items: items,
-      onChanged: onChanged,
+      child: DropdownButtonFormField<T>(
+        key: ValueKey(value),
+        initialValue: value,
+        isExpanded: true,
+        decoration: _propertyDecoration(label),
+        items: items,
+        onChanged: onChanged,
+      ),
     ),
   );
 
@@ -1309,9 +1326,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     padding: const EdgeInsets.only(bottom: 14),
     child: SizedBox(
       width: wide ? double.infinity : 118,
-      child: TextFormField(
-        key: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
-        initialValue: value.toStringAsFixed(2),
+      child: _ModelTextProperty(
+        fieldKey: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
+        ownerId: _selectedId,
+        value: value.toStringAsFixed(2),
         keyboardType: const TextInputType.numberWithOptions(
           decimal: true,
           signed: true,
@@ -1319,7 +1337,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         decoration: _propertyDecoration(label),
         onFieldSubmitted: (text) {
           final next = double.tryParse(text);
-          if (next != null) apply(next);
+          if (next != null && next.isFinite) apply(next);
         },
       ),
     ),
@@ -1330,12 +1348,90 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     ValueChanged<String> apply,
   ) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
-    child: TextFormField(
-      key: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
-      initialValue: value,
+    child: _ModelTextProperty(
+      fieldKey: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
+      ownerId: _selectedId,
+      value: value,
       decoration: _propertyDecoration(label),
       onChanged: apply,
     ),
+  );
+}
+
+// Controllers hold editing drafts only. Committed values always come from the
+// document, including selection changes, gestures, and undo/redo.
+class _ModelTextProperty extends StatefulWidget {
+  const _ModelTextProperty({
+    required this.fieldKey,
+    required this.ownerId,
+    required this.value,
+    required this.decoration,
+    this.keyboardType,
+    this.onChanged,
+    this.onFieldSubmitted,
+  });
+
+  final Key fieldKey;
+  final String? ownerId;
+  final String value;
+  final InputDecoration decoration;
+  final TextInputType? keyboardType;
+  final ValueChanged<String>? onChanged, onFieldSubmitted;
+
+  @override
+  State<_ModelTextProperty> createState() => _ModelTextPropertyState();
+}
+
+class _ModelTextPropertyState extends State<_ModelTextProperty> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  void _sync() {
+    if (_controller.text == widget.value) return;
+    _controller.value = TextEditingValue(
+      text: widget.value,
+      selection: TextSelection.collapsed(offset: widget.value.length),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ModelTextProperty oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ownerId != widget.ownerId ||
+        oldWidget.fieldKey != widget.fieldKey ||
+        oldWidget.value != widget.value) {
+      _sync();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+    key: widget.fieldKey,
+    controller: _controller,
+    keyboardType: widget.keyboardType,
+    decoration: widget.decoration,
+    onChanged: widget.onChanged,
+    onFieldSubmitted: widget.onFieldSubmitted == null
+        ? null
+        : (text) {
+            widget.onFieldSubmitted!(text);
+            // A no-op or rejected submission may not rebuild the parent.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _sync();
+            });
+            setState(() {});
+          },
   );
 }
 

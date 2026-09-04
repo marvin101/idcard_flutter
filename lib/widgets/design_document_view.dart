@@ -67,6 +67,7 @@ class DesignDocumentView extends StatelessWidget {
                   for (final element in elements)
                     if (element.visible)
                       Positioned(
+                        key: ValueKey(element.id),
                         left: element.x * sx,
                         top: element.y * sy,
                         width: element.width * sx,
