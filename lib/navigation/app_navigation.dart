@@ -3,6 +3,23 @@ import 'package:flutter/material.dart';
 import '../app_routes.dart';
 import 'app_router.dart';
 
+class AppNavigationGuard extends InheritedWidget {
+  const AppNavigationGuard({
+    super.key,
+    required this.onNavigateAway,
+    required super.child,
+  });
+
+  final Future<bool> Function() onNavigateAway;
+
+  static AppNavigationGuard? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppNavigationGuard>();
+
+  @override
+  bool updateShouldNotify(AppNavigationGuard oldWidget) =>
+      oldWidget.onNavigateAway != onNavigateAway;
+}
+
 abstract final class AppNavigation {
   static const primaryModuleRoutes = <String>{
     AppRoutes.dashboard,
@@ -44,6 +61,23 @@ abstract final class AppNavigation {
     Object? arguments,
   }) {
     assert(primaryModuleRoutes.contains(routeName));
+    final guard = AppNavigationGuard.maybeOf(context);
+    if (guard != null) {
+      guard.onNavigateAway().then((allowed) {
+        if (allowed && context.mounted) {
+          _navigateToModuleUnchecked(context, routeName, arguments);
+        }
+      });
+      return;
+    }
+    _navigateToModuleUnchecked(context, routeName, arguments);
+  }
+
+  static void _navigateToModuleUnchecked(
+    BuildContext context,
+    String routeName,
+    Object? arguments,
+  ) {
     final delegate = _delegate(context);
     if (delegate != null) {
       if (delegate.currentLocation == routeName) return;
@@ -63,6 +97,17 @@ abstract final class AppNavigation {
     Object? arguments,
   }) {
     assert(nestedWorkflowRoutes.contains(routeName));
+    return _navigateToWorkflowGuarded<T>(context, routeName, arguments);
+  }
+
+  static Future<T?> _navigateToWorkflowGuarded<T>(
+    BuildContext context,
+    String routeName,
+    Object? arguments,
+  ) async {
+    final guard = AppNavigationGuard.maybeOf(context);
+    if (guard != null && !await guard.onNavigateAway()) return null;
+    if (!context.mounted) return null;
     final delegate = _delegate(context);
     if (delegate != null) {
       late Future<T?> result;
@@ -81,6 +126,23 @@ abstract final class AppNavigation {
     String? routeName, {
     T? result,
   }) {
+    final guard = AppNavigationGuard.maybeOf(context);
+    if (guard != null) {
+      guard.onNavigateAway().then((allowed) {
+        if (allowed && context.mounted) {
+          _navigateBackUnchecked(context, routeName, result);
+        }
+      });
+      return;
+    }
+    _navigateBackUnchecked(context, routeName, result);
+  }
+
+  static void _navigateBackUnchecked<T>(
+    BuildContext context,
+    String? routeName,
+    T? result,
+  ) {
     final delegate = _delegate(context);
     if (isNestedWorkflow(routeName) || (delegate?.canPop ?? false)) {
       if (delegate != null) {
@@ -94,14 +156,17 @@ abstract final class AppNavigation {
     final destination = routeName == AppRoutes.studentFields
         ? AppRoutes.students
         : AppRoutes.dashboard;
-    navigateToModule(context, destination);
+    _navigateToModuleUnchecked(context, destination, null);
   }
 
   static Future<T?> navigateToPage<T>(
     BuildContext context,
     String routeName, {
     Object? arguments,
-  }) {
+  }) async {
+    final guard = AppNavigationGuard.maybeOf(context);
+    if (guard != null && !await guard.onNavigateAway()) return null;
+    if (!context.mounted) return null;
     final delegate = _delegate(context);
     if (delegate != null) {
       return delegate.pushPage<T>(routeName, arguments: arguments);

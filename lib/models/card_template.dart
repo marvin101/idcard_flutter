@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 enum DesignElementType {
@@ -254,6 +256,36 @@ class CardTemplate {
         name: name ?? this.name,
         document: document ?? this.document,
       );
+
+  /// Returns a structurally independent copy, including nested style, binding,
+  /// and settings collections.
+  CardTemplate deepCopy() => CardTemplate(
+    name: name,
+    document: DesignDocument.fromJson(
+      Map<String, dynamic>.from(
+        jsonDecode(jsonEncode(document.toJson())) as Map,
+      ),
+    ),
+  );
+
+  /// Creates a local experiment whose element identities cannot collide with
+  /// the source document. Persisted template identity is intentionally not
+  /// represented here because the current API exposes one template per school.
+  CardTemplate duplicateWorkingCopy({
+    required String Function(DesignElement element, int index) elementId,
+  }) {
+    final copied = deepCopy().document;
+    return CardTemplate(
+      name: '$name copy',
+      document: copied.copyWith(
+        elements: [
+          for (var i = 0; i < copied.elements.length; i++)
+            copied.elements[i].copyWith(id: elementId(copied.elements[i], i)),
+        ],
+      ),
+    );
+  }
+
   factory CardTemplate.fromApi(Map<String, dynamic> json) => CardTemplate(
     name: json['name'] as String? ?? uploadedDesign.name,
     document: DesignDocument.fromJson(

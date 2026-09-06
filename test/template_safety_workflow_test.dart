@@ -1,0 +1,360 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:idcard_flutter/models/card_template.dart';
+import 'package:idcard_flutter/screens/card_designer_screen.dart';
+import 'package:idcard_flutter/services/api_service.dart';
+import 'package:idcard_flutter/widgets/design_document_view.dart';
+
+const _sourceElement = DesignElement(
+  id: 'source-element',
+  type: DesignElementType.boundText,
+  x: 3,
+  y: 4,
+  width: 20,
+  height: 6,
+  rotation: 17,
+  zIndex: 9,
+  locked: true,
+  visible: false,
+  style: {
+    'color': '#123456',
+    'effects': {
+      'shadow': [1, 2, 3],
+    },
+  },
+  data: {
+    'field': 'full_name',
+    'binding': {'prefix': 'Name: '},
+  },
+);
+
+final _source = CardTemplate(
+  name: 'Known good',
+  document: DesignDocument(
+    canvas: const DesignCanvas(
+      width: 90,
+      height: 60,
+      backgroundColor: '#ABCDEF',
+      backgroundImage: 'background.png',
+    ),
+    elements: const [_sourceElement],
+    settings: const {
+      'snap_enabled': true,
+      'nested': {
+        'values': [1, 2],
+      },
+    },
+  ),
+);
+
+class _Backend {
+  _Backend() {
+    api = ApiService(
+      baseUrl: 'http://test',
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/student-fields')) {
+          return http.Response('[]', 200);
+        }
+        if (request.url.path.endsWith('/profile')) {
+          return http.Response('{}', 404);
+        }
+        if (request.method == 'PUT' &&
+            request.url.path.endsWith('/card-template')) {
+          puts++;
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          if (pendingSave != null) return pendingSave!.future;
+          if (failSave) return http.Response('save failed', 500);
+          return _savedResponse(body);
+        }
+        return http.Response('{}', 404);
+      }),
+    );
+  }
+
+  late final ApiService api;
+  int puts = 0;
+  bool failSave = false;
+  Completer<http.Response>? pendingSave;
+
+  http.Response _savedResponse(Map<String, dynamic> body) => http.Response(
+    jsonEncode({
+      ...body,
+      'uuid': 'server-template',
+      'updated_at': '2026-09-06T00:00:00Z',
+    }),
+    200,
+    headers: {'content-type': 'application/json'},
+  );
+
+  void completePendingSave(CardTemplate template) {
+    pendingSave!.complete(_savedResponse(template.toApi()));
+  }
+}
+
+Future<_Backend> _mount(WidgetTester tester, {CardTemplate? initial}) async {
+  await tester.binding.setSurfaceSize(const Size(1400, 900));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final backend = _Backend();
+  addTearDown(backend.api.dispose);
+  final navigatorKey = GlobalKey<NavigatorState>();
+  await tester.pumpWidget(
+    MaterialApp(
+      navigatorKey: navigatorKey,
+      home: const Scaffold(body: Center(child: Text('Cards screen'))),
+    ),
+  );
+  navigatorKey.currentState!.push(
+    MaterialPageRoute<void>(
+      builder: (_) => CardDesignerScreen(
+        schoolUuid: 'school',
+        api: backend.api,
+        initialTemplate: initial ?? _source,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return backend;
+}
+
+Future<void> _openAction(WidgetTester tester, String label) async {
+  await tester.tap(find.byKey(const Key('designer-template-actions')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _makeDirty(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('add-text')));
+  await tester.pump();
+}
+
+CardTemplate _visibleTemplate(WidgetTester tester) {
+  final view = tester.widget<DesignDocumentView>(
+    find.byKey(const Key('designer-canvas')),
+  );
+  final name = tester
+      .widget<TextField>(find.byKey(const Key('template-name')))
+      .controller!
+      .text;
+  return CardTemplate(name: name, document: view.document);
+}
+
+bool _iconEnabled(WidgetTester tester, String tooltip) =>
+    tester
+        .widget<IconButton>(
+          find.byWidgetPredicate(
+            (widget) => widget is IconButton && widget.tooltip == tooltip,
+          ),
+        )
+        .onPressed !=
+    null;
+
+void main() {
+  test(
+    'duplicate preserves content, regenerates identity, and deep-copies',
+    () {
+      var sequence = 0;
+      final duplicate = _source.duplicateWorkingCopy(
+        elementId: (element, index) => 'fresh-${sequence++}-$index',
+      );
+
+      expect(duplicate.name, 'Known good copy');
+      expect(
+        duplicate.document.canvas.toJson(),
+        _source.document.canvas.toJson(),
+      );
+      expect(duplicate.document.settings, _source.document.settings);
+      expect(duplicate.document.elements.single.id, isNot(_sourceElement.id));
+      expect(
+        duplicate.document.elements.single
+            .copyWith(id: _sourceElement.id)
+            .toJson(),
+        _sourceElement.toJson(),
+      );
+
+      (duplicate.document.elements.single.style['effects'] as Map)['shadow'] = [
+        9,
+      ];
+      (duplicate.document.elements.single.data['binding'] as Map)['prefix'] =
+          'X';
+      (duplicate.document.settings['nested'] as Map)['values'] = [7];
+      expect(((_sourceElement.style['effects'] as Map)['shadow'] as List), [
+        1,
+        2,
+        3,
+      ]);
+      expect((_sourceElement.data['binding'] as Map)['prefix'], 'Name: ');
+      expect((_source.document.settings['nested'] as Map)['values'], [1, 2]);
+    },
+  );
+
+  testWidgets(
+    'duplicate is local, starts clean history, and cannot overwrite source',
+    (tester) async {
+      final backend = await _mount(tester);
+      await _openAction(tester, 'Duplicate design');
+
+      final duplicate = _visibleTemplate(tester);
+      expect(
+        duplicate.document.canvas.toJson(),
+        _source.document.canvas.toJson(),
+      );
+      expect(duplicate.document.elements.single.id, isNot(_sourceElement.id));
+      expect(find.text('Local duplicate • unsaved'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('designer-save')))
+            .onPressed,
+        isNull,
+      );
+      expect(_iconEnabled(tester, 'Undo'), isFalse);
+      expect(backend.puts, 0);
+    },
+  );
+
+  testWidgets('revert restores the exact saved snapshot and is undoable', (
+    tester,
+  ) async {
+    await _mount(tester);
+    await _makeDirty(tester);
+    expect(_visibleTemplate(tester).document.elements.length, 2);
+
+    await _openAction(tester, 'Revert to saved');
+    await tester.tap(find.byKey(const Key('confirm-revert-design')));
+    await tester.pumpAndSettle();
+    expect(_visibleTemplate(tester).toApi(), _source.toApi());
+    expect(find.text('Saved'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Undo'));
+    await tester.pump();
+    expect(_visibleTemplate(tester).document.elements.length, 2);
+    expect(find.text('Unsaved changes'), findsOneWidget);
+  });
+
+  testWidgets('reset uses the canonical default and is one undo transaction', (
+    tester,
+  ) async {
+    await _mount(tester);
+    await _openAction(tester, 'Reset design');
+    await tester.tap(find.text('Reset').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      _visibleTemplate(tester).document.toJson(),
+      CardTemplate.uploadedDesign.document.toJson(),
+    );
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await tester.tap(find.byTooltip('Undo'));
+    await tester.pump();
+    expect(_visibleTemplate(tester).toApi(), _source.toApi());
+    expect(_iconEnabled(tester, 'Undo'), isFalse);
+  });
+
+  testWidgets('unsaved back Cancel stays and repeated pops show one dialog', (
+    tester,
+  ) async {
+    await _mount(tester);
+    await _makeDirty(tester);
+    tester.binding.handlePopRoute();
+    tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('unsaved-cancel')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('unsaved-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('designer-canvas')), findsOneWidget);
+  });
+
+  testWidgets('unsaved back Discard leaves and clean back does not warn', (
+    tester,
+  ) async {
+    await _mount(tester);
+    await _makeDirty(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('unsaved-discard')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cards screen'), findsOneWidget);
+
+    await _mount(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved changes'), findsNothing);
+    expect(find.text('Cards screen'), findsOneWidget);
+  });
+
+  testWidgets('Save and leave waits for success before navigating', (
+    tester,
+  ) async {
+    final backend = await _mount(tester);
+    backend.pendingSave = Completer<http.Response>();
+    await _makeDirty(tester);
+    final submitted = _visibleTemplate(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('unsaved-save-leave')));
+    await tester.pump();
+    expect(find.byKey(const Key('designer-canvas')), findsOneWidget);
+    expect(find.text('Saving…'), findsOneWidget);
+
+    backend.completePendingSave(submitted);
+    await tester.pumpAndSettle();
+    expect(find.text('Cards screen'), findsOneWidget);
+    expect(backend.puts, 1);
+  });
+
+  testWidgets('failed Save and leave stays and preserves the saved snapshot', (
+    tester,
+  ) async {
+    final backend = await _mount(tester);
+    backend.failSave = true;
+    await _makeDirty(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('unsaved-save-leave')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('designer-canvas')), findsOneWidget);
+    expect(find.text('Save failed'), findsOneWidget);
+
+    await _openAction(tester, 'Revert to saved');
+    await tester.tap(find.byKey(const Key('confirm-revert-design')));
+    await tester.pumpAndSettle();
+    expect(_visibleTemplate(tester).toApi(), _source.toApi());
+    expect(find.text('Saved'), findsOneWidget);
+  });
+
+  testWidgets('successful save becomes the authoritative revert snapshot', (
+    tester,
+  ) async {
+    await _mount(tester);
+    await tester.enterText(
+      find.byKey(const Key('template-name')),
+      'Saved revision',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('template-name')),
+      'Later edit',
+    );
+    await tester.pump();
+    await _openAction(tester, 'Revert to saved');
+    await tester.tap(find.byKey(const Key('confirm-revert-design')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('template-name')))
+          .controller!
+          .text,
+      'Saved revision',
+    );
+    expect(find.text('Saved'), findsOneWidget);
+  });
+}

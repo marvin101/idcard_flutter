@@ -2,8 +2,8 @@
 
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 import '../widgets/designer_numeric_field.dart';
 import '../widgets/designer_shortcuts.dart';
@@ -15,6 +15,7 @@ import '../models/card_template.dart';
 import '../models/design_geometry.dart';
 import '../models/school_profile.dart';
 import '../models/student_field.dart';
+import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../widgets/authenticated_app_bar.dart';
 import '../widgets/design_document_view.dart';
@@ -66,6 +67,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   List<StudentFieldDefinition> _customFields = const [];
   double _zoom = 1;
   bool _saving = false;
+  bool _localDuplicate = false;
+  bool _allowPop = false;
+  bool _leaveDialogOpen = false;
   String _saveState = 'Saved';
   String? _canvasError;
   int _idCounter = 0;
@@ -103,7 +107,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   @override
   void initState() {
     super.initState();
-    _template = widget.initialTemplate;
+    _template = widget.initialTemplate.deepCopy();
     _name = TextEditingController(text: _template.name)..addListener(_rename);
     _canvasWidth = TextEditingController(
       text: _document.canvas.width.toStringAsFixed(2),
@@ -114,8 +118,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _canvasBackground = TextEditingController(
       text: _document.canvas.backgroundColor,
     );
-    _history.add(_DesignerSnapshot(_template, _selectedId));
-    _savedTemplate = _template;
+    _history.add(_DesignerSnapshot(_template, _selectedId, false));
+    _savedTemplate = _template.deepCopy();
     _loadAssets();
   }
 
@@ -169,7 +173,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _endGesture();
     _updateUi(() {
       _selectedId = id;
-      _history[_historyIndex] = _DesignerSnapshot(_template, id);
+      _history[_historyIndex] = _DesignerSnapshot(
+        _template,
+        id,
+        _localDuplicate,
+      );
     });
   }
 
@@ -314,8 +322,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   bool _sameDocument(DesignDocument a, DesignDocument b) =>
       identical(a, b) ||
-      (mapEquals(a.canvas.toJson(), b.canvas.toJson()) &&
-          mapEquals(a.settings, b.settings) &&
+      (_sameJson(a.canvas.toJson(), b.canvas.toJson()) &&
+          _sameJson(a.settings, b.settings) &&
           a.elements.length == b.elements.length &&
           Iterable<int>.generate(a.elements.length).every(
             (i) =>
@@ -334,12 +342,39 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       a.zIndex == b.zIndex &&
       a.locked == b.locked &&
       a.visible == b.visible &&
-      mapEquals(a.style, b.style) &&
-      mapEquals(a.data, b.data);
+      _sameJson(a.style, b.style) &&
+      _sameJson(a.data, b.data);
+
+  bool _sameJson(Object? a, Object? b) {
+    if (identical(a, b) || a == b) return true;
+    if (a is List && b is List) {
+      return a.length == b.length &&
+          Iterable<int>.generate(
+            a.length,
+          ).every((index) => _sameJson(a[index], b[index]));
+    }
+    if (a is Map && b is Map) {
+      return a.length == b.length &&
+          a.keys.every(
+            (key) => b.containsKey(key) && _sameJson(a[key], b[key]),
+          );
+    }
+    return false;
+  }
+
+  String get _cleanState => _localDuplicate ? 'Local duplicate' : 'Saved';
+
+  String get _dirtyState =>
+      _localDuplicate ? 'Local duplicate • unsaved' : 'Unsaved changes';
+
+  void _refreshDirtyState() {
+    _dirtyValue = !_sameTemplate(_template, _savedTemplate);
+    _saveState = _dirty ? _dirtyState : _cleanState;
+  }
 
   void _record(CardTemplate next) {
     _history.removeRange(_historyIndex + 1, _history.length);
-    _history.add(_DesignerSnapshot(next, _selectedId));
+    _history.add(_DesignerSnapshot(next, _selectedId, _localDuplicate));
     if (_history.length > 80) _history.removeAt(0);
     _historyIndex = _history.length - 1;
   }
@@ -369,7 +404,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       // Avoid full-document serialization/comparison for every pointer event.
       _dirtyValue =
           _gestureStart != null || !_sameTemplate(next, _savedTemplate);
-      _saveState = _dirty ? 'Unsaved changes' : 'Saved';
+      _saveState = _dirty ? _dirtyState : _cleanState;
     });
   }
 
@@ -389,8 +424,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       _gestureId = null;
       _gestureRemainder = Offset.zero;
       if (!_sameTemplate(start, _template)) _record(_template);
-      _dirtyValue = !_sameTemplate(_template, _savedTemplate);
-      _saveState = _dirty ? 'Unsaved changes' : 'Saved';
+      _refreshDirtyState();
     });
   }
 
@@ -399,13 +433,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       _historyIndex = index;
       _template = _history[index].template;
       _selectedId = _history[index].selectedId;
+      _localDuplicate = _history[index].localDuplicate;
       _syncingName = true;
       _name.text = _template.name;
       _syncingName = false;
       _syncCanvasControllers();
       _canvasError = null;
-      _dirtyValue = !_sameTemplate(_template, _savedTemplate);
-      _saveState = _dirty ? 'Unsaved changes' : 'Saved';
+      _refreshDirtyState();
     });
   }
 
@@ -677,8 +711,19 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     }
   }
 
-  Future<void> _save() async {
-    if (!_dirty || _saving || _name.text.trim().isEmpty) return;
+  Future<bool> _save() async {
+    if (_localDuplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This is a local working copy. The current server supports only one design per school, so it cannot be saved over the source.',
+          ),
+        ),
+      );
+      return false;
+    }
+    if (_saving || _name.text.trim().isEmpty) return false;
+    if (!_dirty) return true;
     _endGesture();
     _commitTemplate(_template.copyWith(name: _name.text.trim()));
     final submitted = _template;
@@ -691,15 +736,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         widget.schoolUuid,
         submitted,
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       _updateUi(() {
-        _savedTemplate = saved;
-        _dirtyValue = !_sameTemplate(_template, saved);
+        _savedTemplate = saved.deepCopy();
         _saving = false;
-        _saveState = _dirty ? 'Unsaved changes' : 'Saved';
+        _refreshDirtyState();
       });
+      return !_dirty;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       _updateUi(() {
         _saving = false;
         _saveState = 'Save failed';
@@ -707,7 +752,73 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unable to save template: $error')),
       );
+      return false;
     }
+  }
+
+  Future<void> _duplicateDesign() async {
+    _endGesture();
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final duplicate = _template.duplicateWorkingCopy(
+      elementId: (element, index) =>
+          '${element.type.wire}-$stamp-${_idCounter++}-$index',
+    );
+    _updateUi(() {
+      _localDuplicate = true;
+      _template = duplicate;
+      _selectedId = null;
+      _syncingName = true;
+      _name.text = duplicate.name;
+      _syncingName = false;
+      _syncCanvasControllers();
+      _canvasError = null;
+      _history
+        ..clear()
+        ..add(_DesignerSnapshot(duplicate, null, true));
+      _historyIndex = 0;
+      _refreshDirtyState();
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Local duplicate created. It is independent, but cannot be saved until the server supports multiple designs per school.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _revertToSaved() async {
+    if (!_dirty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revert to saved design?'),
+        content: const Text(
+          'This discards the current working changes and restores the last successfully saved design. You can still use Undo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm-revert-design'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Revert'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _endGesture();
+    _localDuplicate = false;
+    _selectedId = null;
+    _commitTemplate(_savedTemplate.deepCopy());
+    _syncingName = true;
+    _name.text = _template.name;
+    _syncingName = false;
+    _syncCanvasControllers();
   }
 
   Future<void> _reset() async {
@@ -733,9 +844,60 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     if (confirmed == true) {
       _endGesture();
       _selectedId = null;
-      _commit(CardTemplate.uploadedDesign.document);
+      _commit(CardTemplate.uploadedDesign.deepCopy().document);
       _syncCanvasControllers();
     }
+  }
+
+  Future<bool> _confirmLeave() async {
+    _endGesture();
+    if (!_dirty) return true;
+    if (_leaveDialogOpen) return false;
+    _leaveDialogOpen = true;
+    final action = await showDialog<_LeaveAction>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved changes'),
+        content: Text(
+          _localDuplicate
+              ? 'You have unsaved changes in a local duplicate. This server supports only one design per school, so this copy cannot be saved without overwriting the source.'
+              : 'You have unsaved changes to this card design.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('unsaved-cancel'),
+            onPressed: () => Navigator.pop(context, _LeaveAction.cancel),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('unsaved-discard'),
+            onPressed: () => Navigator.pop(context, _LeaveAction.discard),
+            child: const Text('Discard'),
+          ),
+          FilledButton(
+            key: const Key('unsaved-save-leave'),
+            onPressed: _localDuplicate
+                ? null
+                : () => Navigator.pop(context, _LeaveAction.save),
+            child: const Text('Save and leave'),
+          ),
+        ],
+      ),
+    );
+    _leaveDialogOpen = false;
+    if (!mounted || action == null || action == _LeaveAction.cancel) {
+      return false;
+    }
+    if (action == _LeaveAction.discard) return true;
+    return _save();
+  }
+
+  Future<void> _handlePop(bool didPop) async {
+    if (didPop || _allowPop) return;
+    if (!await _confirmLeave() || !mounted) return;
+    _updateUi(() => _allowPop = true);
+    Navigator.of(context).pop();
   }
 
   Widget _section(Object? Function() select, Widget Function() builder) =>
@@ -802,21 +964,17 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     },
   );
 
-  Widget _guardNavigation(Widget child) => ValueListenableBuilder<int>(
-    valueListenable: _revision,
-    builder: (context, _, child) => PopScope(
-      canPop: !_dirty,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _dirty)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Save or undo your changes before leaving.'),
-            ),
-          );
-      },
-      child: child!,
+  Widget _guardNavigation(Widget child) => AppNavigationGuard(
+    onNavigateAway: _confirmLeave,
+    child: ValueListenableBuilder<int>(
+      valueListenable: _revision,
+      builder: (context, _, child) => PopScope(
+        canPop: _allowPop || !_dirty,
+        onPopInvokedWithResult: (didPop, _) => _handlePop(didPop),
+        child: child!,
+      ),
+      child: child,
     ),
-    child: child,
   );
 
   Widget _editor() => _guardNavigation(
@@ -825,6 +983,46 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       appBar: AuthenticatedAppBar(
         title: const Text('Card designer'),
         actions: [
+          _section(
+            () => (_dirty, _saving, _localDuplicate, _document),
+            () => PopupMenuButton<_TemplateAction>(
+              key: const Key('designer-template-actions'),
+              tooltip: 'Design actions',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) {
+                switch (action) {
+                  case _TemplateAction.duplicate:
+                    _duplicateDesign();
+                  case _TemplateAction.revert:
+                    _revertToSaved();
+                  case _TemplateAction.reset:
+                    _reset();
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: _TemplateAction.duplicate,
+                  enabled: !_saving,
+                  child: const Text('Duplicate design'),
+                ),
+                PopupMenuItem(
+                  value: _TemplateAction.revert,
+                  enabled: _dirty && !_saving,
+                  child: const Text('Revert to saved'),
+                ),
+                PopupMenuItem(
+                  value: _TemplateAction.reset,
+                  enabled:
+                      !_saving &&
+                      !_sameDocument(
+                        _document,
+                        CardTemplate.uploadedDesign.document,
+                      ),
+                  child: const Text('Reset design'),
+                ),
+              ],
+            ),
+          ),
           _section(
             () => (_saveState, _saving, _dirty),
             () => Center(
@@ -840,7 +1038,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             () => (_saveState, _saving, _dirty),
             () => TextButton.icon(
               key: const Key('designer-save'),
-              onPressed: _dirty && !_saving ? _save : null,
+              onPressed: _dirty && !_saving && !_localDuplicate ? _save : null,
               icon: _saving
                   ? const SizedBox.square(
                       dimension: 16,
@@ -1005,18 +1203,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           IconButton(
             onPressed: _selected == null ? null : _duplicate,
             icon: const Icon(Icons.copy_outlined),
-            tooltip: 'Duplicate',
+            tooltip: 'Duplicate element',
           ),
           IconButton(
             onPressed: _selected == null ? null : _remove,
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Delete',
-          ),
-          IconButton(
-            key: const Key('reset-design'),
-            onPressed: _reset,
-            icon: const Icon(Icons.restart_alt),
-            tooltip: 'Reset to default',
           ),
           const VerticalDivider(),
           ...['left', 'hcenter', 'right', 'top', 'vcenter', 'bottom'].map(
@@ -1954,7 +2146,12 @@ class _DesignerSectionState extends State<_DesignerSection> {
 }
 
 class _DesignerSnapshot {
-  const _DesignerSnapshot(this.template, this.selectedId);
+  const _DesignerSnapshot(this.template, this.selectedId, this.localDuplicate);
   final CardTemplate template;
   final String? selectedId;
+  final bool localDuplicate;
 }
+
+enum _TemplateAction { duplicate, revert, reset }
+
+enum _LeaveAction { cancel, discard, save }

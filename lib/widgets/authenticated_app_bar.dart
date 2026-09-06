@@ -73,6 +73,9 @@ class AuthenticatedAppBar extends StatelessWidget
           key: const Key('authenticated-sign-out'),
           tooltip: 'Sign out',
           onPressed: () async {
+            final guard = AppNavigationGuard.maybeOf(context);
+            if (guard != null && !await guard.onNavigateAway()) return;
+            if (!context.mounted) return;
             await context.read<AuthProvider>().logout();
             if (!context.mounted) return;
             AppNavigation.resetToPublicRoot(context);
