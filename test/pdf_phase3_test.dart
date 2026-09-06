@@ -12,6 +12,62 @@ import 'package:idcard_flutter/services/pdf_document_renderer.dart';
 import 'pdf_fidelity_test.dart' as fixture;
 
 void main() {
+  testWidgets(
+    'CardNotoSans representative Flutter weights render from static registration',
+    (tester) async {
+      const samples = <int, FontWeight>{
+        100: FontWeight.w100,
+        400: FontWeight.w400,
+        700: FontWeight.w700,
+        900: FontWeight.w900,
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final entry in samples.entries)
+                  RepaintBoundary(
+                    key: ValueKey('font-weight-${entry.key}'),
+                    child: Text(
+                      'CampusID ${entry.key}',
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        inherit: false,
+                        fontFamily: DesignRenderStyle.fontFamily,
+                        fontSize: 32,
+                        fontWeight: entry.value,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      for (final entry in samples.entries) {
+        final finder = find.text('CampusID ${entry.key}');
+        expect(finder, findsOneWidget);
+
+        final text = tester.widget<Text>(finder);
+
+        expect(text.style?.fontFamily, DesignRenderStyle.fontFamily);
+
+        expect(text.style?.fontWeight, entry.value);
+
+        expect(tester.getSize(finder).width, greaterThan(0));
+        expect(tester.getSize(finder).height, greaterThan(0));
+      }
+
+      expect(tester.takeException(), isNull);
+    },
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   late Map<int, pw.Font> fonts;
   setUpAll(() async {
