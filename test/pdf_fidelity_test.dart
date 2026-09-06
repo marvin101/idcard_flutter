@@ -257,7 +257,13 @@ void main() {
           'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
           null,
         );
-        expect(layoutDesignText(long).length, greaterThan(1));
+        final wrapped = layoutDesignText(long);
+        expect(wrapped.length, greaterThan(1));
+        expect(
+          long.text.startsWith(wrapped.map((line) => line.text).join()),
+          true,
+          reason: 'soft-wrapped PDF lines must advance through the source',
+        );
       }
     },
   );

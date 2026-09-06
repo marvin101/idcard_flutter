@@ -26,24 +26,38 @@ List<DesignTextLine> layoutDesignText(DesignRenderElement node) {
       _ => 0.0,
     };
     final dy = (e.height - math.min(e.height, painter.height)) / 2;
-    return [
-      for (final metric in painter.computeLineMetrics())
+    final lines = <DesignTextLine>[];
+    var offset = 0;
+    TextRange? previousRange;
+    for (final metric in painter.computeLineMetrics()) {
+      var range = painter.getLineBoundary(
+        TextPosition(offset: offset, affinity: TextAffinity.downstream),
+      );
+      while (previousRange != null &&
+          range.start == previousRange.start &&
+          range.end == previousRange.end &&
+          offset < node.text.length) {
+        range = painter.getLineBoundary(
+          TextPosition(offset: ++offset, affinity: TextAffinity.downstream),
+        );
+      }
+      lines.add(
         DesignTextLine(
-          _lineText(painter, node.text, metric),
+          _lineText(node.text, range),
           dx + metric.left,
           dy + metric.baseline,
         ),
-    ];
+      );
+      previousRange = range;
+      offset = range.end.clamp(0, node.text.length);
+    }
+    return lines;
   } finally {
     painter.dispose();
   }
 }
 
-String _lineText(TextPainter painter, String text, LineMetrics metric) {
-  final position = painter.getPositionForOffset(
-    Offset(metric.left, metric.baseline - metric.ascent / 2),
-  );
-  final range = painter.getLineBoundary(position);
+String _lineText(String text, TextRange range) {
   return text
       .substring(range.start, range.end)
       .replaceAll(RegExp(r'[\r\n]+$'), '');
