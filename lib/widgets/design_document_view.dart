@@ -288,12 +288,13 @@ class _InteractiveElementState extends State<_InteractiveElement> {
     if (!widget.interactive || event.buttons != 1 || _pointer != null) {
       return;
     }
+    const resizeHitSize = 12.0;
     final size = context.size!;
     _resizing =
         widget.selected &&
         !widget.element.locked &&
-        event.localPosition.dx >= size.width - 6 &&
-        event.localPosition.dy >= size.height - 6;
+        event.localPosition.dx >= size.width - resizeHitSize &&
+        event.localPosition.dy >= size.height - resizeHitSize;
     widget.onSelect?.call(widget.element.id);
     if (widget.element.locked) return;
     _pointer = event.pointer;

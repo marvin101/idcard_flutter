@@ -124,6 +124,60 @@ Future<void> shortcut(
 }
 
 void main() {
+  for (final zoom in [.5, 1.0, 2.0]) {
+    testWidgets('resize hit boundary and XY dragging at zoom $zoom', (t) async {
+      await mount(t);
+      await select(t);
+      t.widget<Slider>(find.byType(Slider)).onChanged!(zoom);
+      await t.pump();
+      final box = find.byKey(const Key('design-element-a'));
+      final renderBox = t.renderObject<RenderBox>(box);
+      final scale = t.getSize(box).width / live(t).width;
+      // Both coordinates must be inside the internal 12-pixel corner.
+      for (final inset in const [
+        // Stay just inside the boundary after global/local float conversion.
+        Offset(11.99, 11.99),
+        Offset(9, 9),
+        Offset(1, 1),
+        Offset(12.1, 9),
+        Offset(9, 12.1),
+      ]) {
+        final resizing = inset.dx <= 12 && inset.dy <= 12;
+        final pointer = await t.startGesture(
+          renderBox.localToGlobal(
+            Offset(renderBox.size.width, renderBox.size.height) - inset,
+          ),
+          kind: PointerDeviceKind.mouse,
+        );
+        for (var i = 0; i < 3; i++) {
+          await pointer.moveBy(Offset(scale * .4, scale * .2));
+          await t.pump();
+          expect(live(t).x, closeTo(resizing ? 10 : 10 + (i + 1) * .4, .001));
+          expect(live(t).y, closeTo(resizing ? 10 : 10 + (i + 1) * .2, .001));
+          expect(
+            live(t).width,
+            closeTo(resizing ? 30 + (i + 1) * .4 : 30, .001),
+          );
+          expect(
+            live(t).height,
+            closeTo(resizing ? 10 + (i + 1) * .2 : 10, .001),
+          );
+        }
+        await pointer.up();
+        await t.pump();
+        final after = live(t).toJson();
+        await toolbar(t, 'Undo');
+        expect(live(t).toJson(), elementA.toJson());
+        expect(enabled(t, 'Undo'), false);
+        await toolbar(t, 'Redo');
+        expect(live(t).toJson(), after);
+        await toolbar(t, 'Undo');
+      }
+      expect(t.getSize(find.byKey(const Key('resize-a'))), const Size(12, 12));
+      expect(t.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'all property mutations restore model and Properties through history',
     (t) async {
