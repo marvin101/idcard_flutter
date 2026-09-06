@@ -12,6 +12,7 @@ import '../widgets/designer_colour_field.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
+import '../models/design_geometry.dart';
 import '../models/school_profile.dart';
 import '../models/student_field.dart';
 import '../services/api_service.dart';
@@ -172,7 +173,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     });
   }
 
-  void _applyCanvasDimensions() {
+  Future<void> _applyCanvasDimensions() async {
     final width = double.tryParse(_canvasWidth.text.trim());
     final height = double.tryParse(_canvasHeight.text.trim());
     if (width == null ||
@@ -188,31 +189,111 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       });
       return;
     }
-    _updateUi(() => _canvasError = null);
-    _commit(
-      _document.copyWith(
-        canvas: _document.canvas.copyWith(width: width, height: height),
-      ),
+    await _changeCanvasGeometry(
+      _document.canvas.copyWith(width: width, height: height),
     );
   }
 
-  void _setCanvasOrientation(String orientation) {
+  Future<void> _setCanvasOrientation(String orientation) async {
     final canvas = _document.canvas;
     if (orientation == canvas.orientation) return;
     final next = canvas.copyWith(width: canvas.height, height: canvas.width);
-    _canvasWidth.text = next.width.toStringAsFixed(2);
-    _canvasHeight.text = next.height.toStringAsFixed(2);
-    _updateUi(() => _canvasError = null);
-    _commit(_document.copyWith(canvas: next));
+    await _changeCanvasGeometry(next);
   }
 
-  void _setCr80Preset() {
-    _canvasWidth.text = '85.60';
-    _canvasHeight.text = '53.98';
+  Future<void> _setCr80Preset() async {
+    await _changeCanvasGeometry(
+      _document.canvas.copyWith(width: 85.6, height: 53.98),
+    );
+  }
+
+  Future<void> _changeCanvasGeometry(DesignCanvas nextCanvas) async {
+    final current = _document.canvas;
+    if (current.width == nextCanvas.width &&
+        current.height == nextCanvas.height) {
+      _syncCanvasControllers();
+      return;
+    }
+    final strategy = _document.elements.isEmpty
+        ? CanvasResizeStrategy.keepPositions
+        : await _chooseCanvasResizeStrategy(
+            orientationChanged: current.orientation != nextCanvas.orientation,
+          );
+    if (!mounted || strategy == null) {
+      if (mounted) _syncCanvasControllers();
+      return;
+    }
+    final next = resizeDesignDocument(_document, nextCanvas, strategy);
     _updateUi(() => _canvasError = null);
-    _commit(
-      _document.copyWith(
-        canvas: _document.canvas.copyWith(width: 85.6, height: 53.98),
+    _commit(next);
+    _syncCanvasControllers();
+    if (strategy == CanvasResizeStrategy.keepPositions &&
+        hasElementsOutsideCanvas(next)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Some elements extend outside the canvas.'),
+        ),
+      );
+    }
+  }
+
+  Future<CanvasResizeStrategy?> _chooseCanvasResizeStrategy({
+    required bool orientationChanged,
+  }) async {
+    var selected = CanvasResizeStrategy.keepPositions;
+    return showDialog<CanvasResizeStrategy>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            orientationChanged
+                ? 'Change canvas orientation'
+                : 'Change canvas size',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('How should existing elements be adjusted?'),
+              const SizedBox(height: 12),
+              RadioGroup<CanvasResizeStrategy>(
+                groupValue: selected,
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => selected = value);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final strategy in CanvasResizeStrategy.values)
+                      RadioListTile<CanvasResizeStrategy>(
+                        key: ValueKey('canvas-resize-${strategy.name}'),
+                        value: strategy,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(switch (strategy) {
+                          CanvasResizeStrategy.keepPositions =>
+                            'Keep positions',
+                          CanvasResizeStrategy.scaleProportionally =>
+                            'Scale proportionally',
+                          CanvasResizeStrategy.fitToCanvas => 'Fit to canvas',
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('canvas-resize-apply'),
+              onPressed: () => Navigator.pop(context, selected),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1590,7 +1671,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ),
     ),
     const Text(
-      'Canvas resizing keeps every element at its existing millimetre position and size. Content outside the new bounds is clipped.',
+      'When the canvas size changes, choose whether to keep, scale, or fit existing elements.',
       style: TextStyle(color: Colors.black54, fontSize: 12),
     ),
   ];
@@ -1607,9 +1688,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ? _document.canvas.width
           : _document.canvas.height,
       decoration: _propertyDecoration(label),
-      liveEntry: true,
       onChanged: (value) {
-        controller.text = value.clamp(10.1, 2000.0).toStringAsFixed(2);
+        controller.text = value.toString();
         _applyCanvasDimensions();
       },
     ),
