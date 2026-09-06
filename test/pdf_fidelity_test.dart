@@ -79,7 +79,7 @@ DesignDocument fixture(double width, double height, {bool images = true}) {
     canvas: DesignCanvas(
       width: width,
       height: height,
-      backgroundColor: '#FFF6D8',
+      backgroundColor: '#C0FFF6D8',
       backgroundImage: images ? 'background.png' : null,
     ),
     elements: [
@@ -306,11 +306,9 @@ void main() {
     testWidgets(
       'vector PDF fixture ${size.width} x ${size.height} and Flutter baseline parity',
       (t) async {
-        final doc = fixture(size.width, size.height, images: false);
+        final doc = fixture(size.width, size.height);
         final scene = DesignRenderScene(document: doc, bindings: bindings);
-        debugPrint('fixture: font start');
         final fonts = (await t.runAsync(() => DesignFonts.pdfFonts()))!;
-        debugPrint('fixture: fonts ready');
         final image = img.Image(width: 60, height: 30);
         for (var x = 0; x < 60; x++) {
           for (var y = 0; y < 30; y++) {
@@ -326,6 +324,7 @@ void main() {
           final renderer = PdfDocumentRenderer(fonts, {
             'photo.png': memory,
             'logo.png': memory,
+            'background.png': memory,
           });
           pdf.addPage(
             pw.Page(
@@ -337,9 +336,7 @@ void main() {
               build: (_) => renderer.build(scene),
             ),
           );
-          debugPrint('fixture: save start');
           final bytes = (await t.runAsync(() => pdf.save()))!;
-          debugPrint('fixture: saved');
           final source = latin1.decode(bytes);
           expect(source.contains('/FontFile2'), true);
           expect(source.contains('/ToUnicode'), true);
@@ -366,9 +363,12 @@ void main() {
             ),
           );
           await t.pumpAndSettle();
-          debugPrint('fixture: pumped');
           for (final node in scene.elements.where(
-            (n) => n.element.id == 'name' || n.element.id == 'address',
+            (n) => [
+              DesignElementType.text,
+              DesignElementType.boundText,
+              DesignElementType.customFieldText,
+            ].contains(n.element.type),
           )) {
             final text = find.text(node.text);
             final paragraph = t.renderObject<RenderParagraph>(text);

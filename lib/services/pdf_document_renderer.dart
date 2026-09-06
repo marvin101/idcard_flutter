@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart' show BoxFit, Color;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -85,7 +87,12 @@ class PdfDocumentRenderer {
     return pw.Opacity(opacity: opacity, child: child);
   }
 
-  pw.Widget _box(DesignRenderStyle style, Color fill, {pw.Widget? child}) {
+  pw.Widget _box(
+    DesignRenderStyle style,
+    Color fill, {
+    required double radius,
+    pw.Widget? child,
+  }) {
     return pw.Stack(
       children: [
         if (fill.a > 0)
@@ -95,26 +102,54 @@ class PdfDocumentRenderer {
               child: pw.DecoratedBox(
                 decoration: pw.BoxDecoration(
                   color: color(fill),
-                  borderRadius: pw.BorderRadius.circular(mm(style.radius)),
+                  borderRadius: pw.BorderRadius.circular(mm(radius)),
                 ),
               ),
             ),
           ),
 
-        if (child != null) pw.Positioned.fill(child: child),
+        if (child != null)
+          pw.Positioned.fill(
+            // Match Container.decoration.padding in DesignDocumentView.
+            // The border is painted last, independently of content layout.
+            child: pw.Padding(
+              padding: pw.EdgeInsets.all(mm(style.borderWidth)),
+              child: pw.Center(child: child),
+            ),
+          ),
 
         if (style.borderWidth > 0 && style.border.a > 0)
           pw.Positioned.fill(
             child: pw.Opacity(
               opacity: style.border.a,
-              child: pw.DecoratedBox(
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(
-                    color: color(style.border),
-                    width: mm(style.borderWidth),
-                  ),
-                  borderRadius: pw.BorderRadius.circular(mm(style.radius)),
-                ),
+              // Flutter paints an inside border. PDF's BoxBorder strokes are
+              // centered on the edge, losing half their width when clipped.
+              child: pw.CustomPaint(
+                painter: (canvas, size) {
+                  final outerRadius = mm(radius);
+                  final width = mm(style.borderWidth);
+                  canvas.setFillColor(color(style.border));
+                  canvas.drawRRect(
+                    0,
+                    0,
+                    size.x,
+                    size.y,
+                    outerRadius,
+                    outerRadius,
+                  );
+                  if (size.x > 2 * width && size.y > 2 * width) {
+                    final innerRadius = math.max(0.0, outerRadius - width);
+                    canvas.drawRRect(
+                      width,
+                      width,
+                      size.x - 2 * width,
+                      size.y - 2 * width,
+                      innerRadius,
+                      innerRadius,
+                    );
+                  }
+                  canvas.fillPath(evenOdd: true);
+                },
               ),
             ),
           ),
@@ -124,10 +159,14 @@ class PdfDocumentRenderer {
 
   pw.Widget element(DesignRenderElement node) {
     final style = node.style;
+    final radius = math.min(
+      style.radius,
+      math.min(node.element.width, node.element.height) / 2,
+    );
 
     switch (node.element.type) {
       case DesignElementType.rectangle:
-        return _box(style, style.fill);
+        return _box(style, style.fill, radius: radius);
 
       case DesignElementType.line:
         return pw.Center(
@@ -145,11 +184,12 @@ class PdfDocumentRenderer {
         final image = images[node.imageUrl];
 
         return pw.ClipRRect(
-          horizontalRadius: mm(style.radius),
-          verticalRadius: mm(style.radius),
+          horizontalRadius: mm(radius),
+          verticalRadius: mm(radius),
           child: _box(
             style,
             DesignRenderStyle.imageBackground,
+            radius: radius,
             child: image == null
                 ? pw.Center(
                     child: pw.Text(
