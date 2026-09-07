@@ -62,7 +62,11 @@ class _CardDesignerRouteScreenState extends State<CardDesignerRouteScreen> {
         if (snapshot.hasError) {
           return _RouteMessage(
             icon: Icons.error_outline,
-            message: 'Unable to load the card template: ${snapshot.error}',
+            message: _loadFailureMessage(snapshot.error!),
+            actionLabel: 'Retry',
+            onAction: () => setState(() {
+              _template = _loadTemplate(auth.api, school.uuid);
+            }),
           );
         }
         return CardDesignerScreen(
@@ -82,13 +86,33 @@ class _CardDesignerRouteScreenState extends State<CardDesignerRouteScreen> {
       rethrow;
     }
   }
+
+  String _loadFailureMessage(Object error) {
+    if (error is ApiException) {
+      if (error.message.contains('unsupported schema version')) {
+        return 'This saved card template uses an unsupported schema version. It was not replaced.';
+      }
+      if (error.message.contains('invalid card template')) {
+        return 'This saved card template is invalid or corrupt. It was not replaced.';
+      }
+      return 'Unable to load the card template: ${error.message}';
+    }
+    return 'Unable to load the card template. Check your connection and try again.';
+  }
 }
 
 class _RouteMessage extends StatelessWidget {
-  const _RouteMessage({required this.icon, required this.message});
+  const _RouteMessage({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
 
   final IconData icon;
   final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -102,6 +126,14 @@ class _RouteMessage extends StatelessWidget {
             Icon(icon, size: 42),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
+            if (onAction != null) ...[
+              const SizedBox(height: 16),
+              FilledButton(
+                key: const Key('card-template-load-retry'),
+                onPressed: onAction,
+                child: Text(actionLabel ?? 'Retry'),
+              ),
+            ],
           ],
         ),
       ),

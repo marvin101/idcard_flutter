@@ -27,7 +27,10 @@ extension DesignElementTypeWire on DesignElementType {
     'school_logo' => DesignElementType.schoolLogo,
     'rectangle' => DesignElementType.rectangle,
     'line' => DesignElementType.line,
-    _ => DesignElementType.text,
+    'text' => DesignElementType.text,
+    _ => throw const FormatException(
+      'Card-template element type is missing or unsupported.',
+    ),
   };
 }
 
@@ -44,14 +47,27 @@ class DesignCanvas {
   final String orientation, backgroundColor;
   final String? backgroundImage;
   factory DesignCanvas.fromJson(Map<String, dynamic> json) {
-    final width = _number(json['width'], 85.6);
-    final height = _number(json['height'], 53.98);
+    final width = _requiredNumber(json, 'width', 'canvas.width');
+    final height = _requiredNumber(json, 'height', 'canvas.height');
+    final backgroundColor = json['background_color'];
+    if (backgroundColor != null &&
+        (backgroundColor is! String || !_isHex(backgroundColor))) {
+      throw const FormatException(
+        'Card-template canvas.background_color must be a hex color.',
+      );
+    }
+    final backgroundImage = json['background_image'];
+    if (backgroundImage != null && backgroundImage is! String) {
+      throw const FormatException(
+        'Card-template canvas.background_image must be a string or null.',
+      );
+    }
     return DesignCanvas(
       width: width,
       height: height,
       orientation: width >= height ? 'landscape' : 'portrait',
-      backgroundColor: _safeHex(json['background_color'], '#FFFFFF'),
-      backgroundImage: json['background_image'] as String?,
+      backgroundColor: _safeHex(backgroundColor, '#FFFFFF'),
+      backgroundImage: backgroundImage as String?,
     );
   }
 
@@ -103,20 +119,48 @@ class DesignElement {
   final int zIndex;
   final bool locked, visible;
   final Map<String, dynamic> style, data;
-  factory DesignElement.fromJson(Map<String, dynamic> json) => DesignElement(
-    id: json['id'] as String? ?? 'element',
-    type: DesignElementTypeWire.parse(json['type']),
-    x: _number(json['x'], 0),
-    y: _number(json['y'], 0),
-    width: _number(json['width'], 10).clamp(0.5, 2000),
-    height: _number(json['height'], 5).clamp(0.5, 2000),
-    rotation: _number(json['rotation'], 0),
-    zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
-    locked: json['locked'] == true,
-    visible: json['visible'] != false,
-    style: Map<String, dynamic>.from(json['style'] as Map? ?? const {}),
-    data: Map<String, dynamic>.from(json['data'] as Map? ?? const {}),
-  );
+  factory DesignElement.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final zIndex = json['z_index'];
+    final locked = json['locked'];
+    final visible = json['visible'];
+    final style = json['style'] ?? const <String, dynamic>{};
+    final data = json['data'] ?? const <String, dynamic>{};
+    if (id is! String || id.trim().isEmpty) {
+      throw const FormatException(
+        'Card-template element id must be a non-empty string.',
+      );
+    }
+    if (zIndex is! num || !zIndex.isFinite || zIndex.toInt() != zIndex) {
+      throw const FormatException(
+        'Card-template element z_index must be an integer.',
+      );
+    }
+    if (locked is! bool || visible is! bool) {
+      throw const FormatException(
+        'Card-template element locked and visible must be booleans.',
+      );
+    }
+    if (style is! Map || data is! Map) {
+      throw const FormatException(
+        'Card-template element style and data must be objects.',
+      );
+    }
+    return DesignElement(
+      id: id,
+      type: DesignElementTypeWire.parse(json['type']),
+      x: _requiredNumber(json, 'x', 'element.x'),
+      y: _requiredNumber(json, 'y', 'element.y'),
+      width: _requiredNumber(json, 'width', 'element.width'),
+      height: _requiredNumber(json, 'height', 'element.height'),
+      rotation: _requiredNumber(json, 'rotation', 'element.rotation'),
+      zIndex: zIndex.toInt(),
+      locked: locked,
+      visible: visible,
+      style: Map<String, dynamic>.from(style),
+      data: Map<String, dynamic>.from(data),
+    );
+  }
   DesignElement copyWith({
     String? id,
     DesignElementType? type,
@@ -183,21 +227,33 @@ class DesignDocument {
         'Unsupported card-template schema_version: $version',
       );
     }
+    final canvas = json['canvas'];
     final raw = json['elements'];
+    final settings = json['settings'] ?? const <String, dynamic>{};
+    if (canvas is! Map) {
+      throw const FormatException(
+        'Card-template v2 canvas is missing or invalid.',
+      );
+    }
+    if (raw is! List) {
+      throw const FormatException('Card-template v2 elements must be a list.');
+    }
+    if (settings is! Map) {
+      throw const FormatException(
+        'Card-template v2 settings must be an object.',
+      );
+    }
     return DesignDocument(
-      canvas: DesignCanvas.fromJson(
-        Map<String, dynamic>.from(json['canvas'] as Map? ?? const {}),
-      ),
-      elements: raw is List
-          ? raw
-                .whereType<Map>()
-                .map(
-                  (item) =>
-                      DesignElement.fromJson(Map<String, dynamic>.from(item)),
-                )
-                .toList()
-          : const [],
-      settings: Map<String, dynamic>.from(json['settings'] as Map? ?? const {}),
+      canvas: DesignCanvas.fromJson(Map<String, dynamic>.from(canvas)),
+      elements: raw.map((item) {
+        if (item is! Map) {
+          throw const FormatException(
+            'Card-template v2 elements must be objects.',
+          );
+        }
+        return DesignElement.fromJson(Map<String, dynamic>.from(item));
+      }).toList(),
+      settings: Map<String, dynamic>.from(settings),
     );
   }
   DesignDocument copyWith({
@@ -296,12 +352,22 @@ class CardTemplate {
     );
   }
 
-  factory CardTemplate.fromApi(Map<String, dynamic> json) => CardTemplate(
-    name: json['name'] as String? ?? uploadedDesign.name,
-    document: DesignDocument.fromJson(
-      Map<String, dynamic>.from(json['design'] as Map? ?? const {}),
-    ),
-  );
+  factory CardTemplate.fromApi(Map<String, dynamic> json) {
+    final name = json['name'];
+    final design = json['design'];
+    if (name is! String || name.trim().isEmpty) {
+      throw const FormatException('Card-template name is missing or invalid.');
+    }
+    if (design is! Map) {
+      throw const FormatException(
+        'Card-template design is missing or invalid.',
+      );
+    }
+    return CardTemplate(
+      name: name,
+      document: DesignDocument.fromJson(Map<String, dynamic>.from(design)),
+    );
+  }
   Map<String, dynamic> toApi() => {'name': name, 'design': document.toJson()};
 }
 
@@ -512,13 +578,18 @@ DesignDocument legacyDesignDocument(Map<String, dynamic> design) {
   );
 }
 
-double _number(Object? value, double fallback) =>
-    value is num && value.isFinite ? value.toDouble() : fallback;
+double _requiredNumber(Map<String, dynamic> values, String key, String label) {
+  final value = values[key];
+  if (value is! num || !value.isFinite) {
+    throw FormatException('Card-template $label must be a finite number.');
+  }
+  return value.toDouble();
+}
+
+bool _isHex(String value) =>
+    RegExp(r'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$').hasMatch(value);
 String _safeHex(Object? value, String fallback) =>
-    value is String &&
-        RegExp(r'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$').hasMatch(value)
-    ? value.toUpperCase()
-    : fallback;
+    value is String && _isHex(value) ? value.toUpperCase() : fallback;
 Color colorFromHex(Object? value, Color fallback) {
   if (value is! String) return fallback;
   final hex = value.replaceFirst('#', '');

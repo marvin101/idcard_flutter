@@ -427,7 +427,7 @@ class ApiService {
       _uri('/schools/$schoolUuid/card-template'),
       headers: _headers,
     );
-    return CardTemplate.fromApi(_decodeMap(response));
+    return _decodeCardTemplate(response);
   }
 
   Future<CardTemplate> saveCardTemplate(
@@ -439,7 +439,7 @@ class ApiService {
       headers: _headers,
       body: jsonEncode(template.toApi()),
     );
-    return CardTemplate.fromApi(_decodeMap(response));
+    return _decodeCardTemplate(response);
   }
 
   Future<Map<String, dynamic>> createAcademicSession({
@@ -1203,6 +1203,29 @@ class ApiService {
     final decoded = _decode(response);
     if (decoded is Map<String, dynamic>) return decoded;
     throw ApiException(response.statusCode, 'Unexpected server response.');
+  }
+
+  CardTemplate _decodeCardTemplate(http.Response response) {
+    try {
+      return CardTemplate.fromApi(_decodeMap(response));
+    } on ApiException {
+      rethrow;
+    } on FormatException catch (error) {
+      final unsupported = error.message.toString().contains(
+        'Unsupported card-template schema_version',
+      );
+      throw ApiException(
+        response.statusCode,
+        unsupported
+            ? 'The server returned a card template with an unsupported schema version.'
+            : 'The server returned an invalid card template.',
+      );
+    } on TypeError {
+      throw ApiException(
+        response.statusCode,
+        'The server returned an invalid card template.',
+      );
+    }
   }
 
   List<dynamic> _decodeList(http.Response response) {

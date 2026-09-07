@@ -43,6 +43,59 @@ void main() {
     );
   });
 
+  test('v2 documents require canvas and elements instead of defaulting', () {
+    for (final design in [
+      {'schema_version': 2, 'elements': <dynamic>[]},
+      {
+        'schema_version': 2,
+        'canvas': {'width': 85.6, 'height': 53.98},
+      },
+    ]) {
+      expect(
+        () => CardTemplate.fromApi({'name': 'Corrupt', 'design': design}),
+        throwsFormatException,
+      );
+    }
+  });
+
+  test('invalid v2 server field types are rejected', () {
+    expect(
+      () => CardTemplate.fromApi({
+        'name': 'Corrupt',
+        'design': {
+          'schema_version': 2,
+          'canvas': {'width': '85.6', 'height': 53.98},
+          'elements': <dynamic>[],
+        },
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => CardTemplate.fromApi({
+        'name': 'Corrupt',
+        'design': {
+          'schema_version': 2,
+          'canvas': {'width': 85.6, 'height': 53.98},
+          'elements': [
+            {
+              'id': 'bad',
+              'type': 'future_element',
+              'x': 1,
+              'y': 1,
+              'width': 10,
+              'height': 10,
+              'rotation': 0,
+              'z_index': 0,
+              'locked': false,
+              'visible': true,
+            },
+          ],
+        },
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('explicit schema version 1 remains legacy compatible', () {
     final template = CardTemplate.fromApi({
       'name': 'Legacy',

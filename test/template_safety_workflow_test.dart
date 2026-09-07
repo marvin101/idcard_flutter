@@ -69,7 +69,16 @@ class _Backend {
           puts++;
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           if (pendingSave != null) return pendingSave!.future;
-          if (failSave) return http.Response('save failed', 500);
+          if (networkFailure) throw http.ClientException('offline');
+          if (failSave) {
+            return http.Response(
+              failureBody,
+              failureStatus,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          if (malformedSaveResponse) return http.Response('{broken', 200);
+          stored = CardTemplate.fromApi(body);
           return _savedResponse(body);
         }
         return http.Response('{}', 404);
@@ -80,11 +89,18 @@ class _Backend {
   late final ApiService api;
   int puts = 0;
   bool failSave = false;
+  bool networkFailure = false;
+  bool malformedSaveResponse = false;
+  int failureStatus = 500;
+  String failureBody = 'save failed';
+  String? authoritativeName;
+  CardTemplate stored = _source.deepCopy();
   Completer<http.Response>? pendingSave;
 
   http.Response _savedResponse(Map<String, dynamic> body) => http.Response(
     jsonEncode({
       ...body,
+      if (authoritativeName != null) 'name': authoritativeName,
       'uuid': 'server-template',
       'updated_at': '2026-09-06T00:00:00Z',
     }),
@@ -97,11 +113,15 @@ class _Backend {
   }
 }
 
-Future<_Backend> _mount(WidgetTester tester, {CardTemplate? initial}) async {
+Future<_Backend> _mount(
+  WidgetTester tester, {
+  CardTemplate? initial,
+  _Backend? existingBackend,
+}) async {
   await tester.binding.setSurfaceSize(const Size(1400, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final backend = _Backend();
-  addTearDown(backend.api.dispose);
+  final backend = existingBackend ?? _Backend();
+  if (existingBackend == null) addTearDown(backend.api.dispose);
   final navigatorKey = GlobalKey<NavigatorState>();
   await tester.pumpWidget(
     MaterialApp(
@@ -114,7 +134,7 @@ Future<_Backend> _mount(WidgetTester tester, {CardTemplate? initial}) async {
       builder: (_) => CardDesignerScreen(
         schoolUuid: 'school',
         api: backend.api,
-        initialTemplate: initial ?? _source,
+        initialTemplate: initial ?? backend.stored,
       ),
     ),
   );
@@ -402,6 +422,160 @@ void main() {
           .text,
       'Saved revision',
     );
+    expect(find.text('Saved'), findsOneWidget);
+  });
+
+  testWidgets('successful save applies the authoritative server response', (
+    tester,
+  ) async {
+    final backend = await _mount(tester);
+    backend.authoritativeName = 'Server canonical name';
+    await tester.enterText(
+      find.byKey(const Key('template-name')),
+      'Client draft name',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+
+    expect(_visibleTemplate(tester).name, 'Server canonical name');
+    expect(find.text('Saved'), findsOneWidget);
+    expect(_iconEnabled(tester, 'Undo'), isTrue);
+  });
+
+  testWidgets('422 keeps edits dirty and retry succeeds', (tester) async {
+    final backend = await _mount(tester);
+    backend
+      ..failSave = true
+      ..failureStatus = 422
+      ..failureBody = jsonEncode({
+        'detail': [
+          {
+            'loc': ['body', 'design'],
+            'msg': 'Value error, canvas.width must be a number',
+          },
+        ],
+      });
+    await _makeDirty(tester);
+    final edited = _visibleTemplate(tester).toApi();
+
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Validation failed'), findsOneWidget);
+    expect(
+      find.text('Template validation failed: canvas.width must be a number'),
+      findsOneWidget,
+    );
+    expect(_visibleTemplate(tester).toApi(), edited);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('designer-save')))
+          .onPressed,
+      isNotNull,
+    );
+
+    backend.failSave = false;
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved'), findsOneWidget);
+    expect(backend.puts, 2);
+  });
+
+  testWidgets('malformed save response preserves the working document', (
+    tester,
+  ) async {
+    final backend = await _mount(tester);
+    backend.malformedSaveResponse = true;
+    await _makeDirty(tester);
+    final edited = _visibleTemplate(tester).toApi();
+
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Save failed'), findsOneWidget);
+    expect(_visibleTemplate(tester).toApi(), edited);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('designer-save')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await _openAction(tester, 'Revert to saved');
+    await tester.tap(find.byKey(const Key('confirm-revert-design')));
+    await tester.pumpAndSettle();
+    expect(_visibleTemplate(tester).toApi(), _source.toApi());
+  });
+
+  testWidgets('network failure is recoverable without reloading', (
+    tester,
+  ) async {
+    final backend = await _mount(tester);
+    backend.networkFailure = true;
+    await _makeDirty(tester);
+    final edited = _visibleTemplate(tester).toApi();
+
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Save failed'), findsOneWidget);
+    expect(
+      find.text(
+        'Unable to save the template. Check your connection and try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(_visibleTemplate(tester).toApi(), edited);
+
+    backend.networkFailure = false;
+    await tester.enterText(
+      find.byKey(const Key('template-name')),
+      'Edited after failure',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved'), findsOneWidget);
+  });
+
+  testWidgets('saved template is reproduced after reopening', (tester) async {
+    final backend = _Backend();
+    addTearDown(backend.api.dispose);
+    await _mount(tester, existingBackend: backend);
+    await tester.enterText(
+      find.byKey(const Key('template-name')),
+      'Persisted B',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    await _mount(tester, existingBackend: backend);
+    expect(_visibleTemplate(tester).name, 'Persisted B');
+    expect(find.text('Saved'), findsOneWidget);
+  });
+
+  testWidgets('failed save leaves persisted template unchanged on reopen', (
+    tester,
+  ) async {
+    final backend = _Backend()..failSave = true;
+    addTearDown(backend.api.dispose);
+    await _mount(tester, existingBackend: backend);
+    await tester.enterText(
+      find.byKey(const Key('template-name')),
+      'Unpersisted B',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('designer-save')));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('unsaved-discard')));
+    await tester.pumpAndSettle();
+
+    backend.failSave = false;
+    await _mount(tester, existingBackend: backend);
+    expect(_visibleTemplate(tester).toApi(), _source.toApi());
     expect(find.text('Saved'), findsOneWidget);
   });
 }

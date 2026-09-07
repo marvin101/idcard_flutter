@@ -772,7 +772,23 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       );
       if (!mounted) return false;
       _updateUi(() {
-        _savedTemplate = saved.deepCopy();
+        final authoritative = saved.deepCopy();
+        _template = authoritative;
+        _savedTemplate = authoritative.deepCopy();
+        if (!_document.elements.any((element) => element.id == _selectedId)) {
+          _selectedId = null;
+        }
+        _localDuplicate = false;
+        _history[_historyIndex] = _DesignerSnapshot(
+          authoritative,
+          _selectedId,
+          false,
+        );
+        _syncingName = true;
+        _name.text = authoritative.name;
+        _syncingName = false;
+        _syncCanvasControllers();
+        _canvasError = null;
         _saving = false;
         _refreshDirtyState();
       });
@@ -781,13 +797,40 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       if (!mounted) return false;
       _updateUi(() {
         _saving = false;
-        _saveState = 'Save failed';
+        _saveState = error is ApiException && error.statusCode == 422
+            ? 'Validation failed'
+            : 'Save failed';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to save template: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_saveFailureMessage(error))));
       return false;
     }
+  }
+
+  String _saveFailureMessage(Object error) {
+    if (error is ApiException) {
+      final detail = error.message
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .replaceFirst(RegExp(r'^body(?:\.design)?:\s*Value error,\s*'), '')
+          .trim();
+      final concise = detail.length > 180
+          ? '${detail.substring(0, 177)}...'
+          : detail;
+      if (error.statusCode == 422) {
+        return concise.isEmpty
+            ? 'The template could not be saved because it is invalid.'
+            : 'Template validation failed: $concise';
+      }
+      if (concise == 'The server returned an invalid card template.' ||
+          concise.contains('unsupported schema version')) {
+        return '$concise Your edited design is still safe.';
+      }
+      return concise.isEmpty
+          ? 'Unable to save the template. Please try again.'
+          : 'Unable to save the template: $concise';
+    }
+    return 'Unable to save the template. Check your connection and try again.';
   }
 
   Future<void> _duplicateDesign() async {
