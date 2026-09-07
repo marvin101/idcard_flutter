@@ -3,21 +3,76 @@ import 'package:flutter/material.dart';
 import '../app_routes.dart';
 import 'app_router.dart';
 
-class AppNavigationGuard extends InheritedWidget {
+class AppNavigationGuard extends StatefulWidget {
   const AppNavigationGuard({
     super.key,
     required this.onNavigateAway,
-    required super.child,
+    required this.child,
   });
 
   final Future<bool> Function() onNavigateAway;
+  final Widget child;
 
-  static AppNavigationGuard? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AppNavigationGuard>();
+  static AppNavigationGuard? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_AppNavigationGuardScope>()
+      ?.guard;
 
   @override
-  bool updateShouldNotify(AppNavigationGuard oldWidget) =>
-      oldWidget.onNavigateAway != onNavigateAway;
+  State<AppNavigationGuard> createState() => _AppNavigationGuardState();
+}
+
+class _AppNavigationGuardState extends State<AppNavigationGuard> {
+  AppRouterDelegate? _delegate;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final router = Router.maybeOf<Object>(context);
+    final delegate = router?.routerDelegate;
+    final next = delegate is AppRouterDelegate ? delegate : null;
+    if (identical(_delegate, next)) {
+      if (next != null) next.navigationGuard = widget.onNavigateAway;
+      return;
+    }
+    _unregister();
+    _delegate = next;
+    if (next != null) next.navigationGuard = widget.onNavigateAway;
+  }
+
+  @override
+  void didUpdateWidget(AppNavigationGuard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_delegate != null) _delegate!.navigationGuard = widget.onNavigateAway;
+  }
+
+  @override
+  void dispose() {
+    _unregister();
+    super.dispose();
+  }
+
+  void _unregister() {
+    final delegate = _delegate;
+    if (delegate != null &&
+        identical(delegate.navigationGuard, widget.onNavigateAway)) {
+      delegate.navigationGuard = null;
+    }
+    _delegate = null;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _AppNavigationGuardScope(guard: widget, child: widget.child);
+}
+
+class _AppNavigationGuardScope extends InheritedWidget {
+  const _AppNavigationGuardScope({required this.guard, required super.child});
+
+  final AppNavigationGuard guard;
+
+  @override
+  bool updateShouldNotify(_AppNavigationGuardScope oldWidget) =>
+      oldWidget.guard.onNavigateAway != guard.onNavigateAway;
 }
 
 abstract final class AppNavigation {

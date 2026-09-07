@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:idcard_flutter/models/card_template.dart';
+import 'package:idcard_flutter/navigation/app_router.dart';
 import 'package:idcard_flutter/screens/card_designer_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/widgets/design_document_view.dart';
@@ -267,6 +268,52 @@ void main() {
     await tester.tap(find.byKey(const Key('unsaved-cancel')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('designer-canvas')), findsOneWidget);
+  });
+
+  testWidgets('router browser back is guarded', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final backend = _Backend();
+    addTearDown(backend.api.dispose);
+    late final AppRouterDelegate delegate;
+    delegate = AppRouterDelegate(
+      (location, _) => location == '/design'
+          ? CardDesignerScreen(
+              schoolUuid: 'school',
+              api: backend.api,
+              initialTemplate: _source,
+            )
+          : const Scaffold(body: Center(child: Text('Cards route'))),
+    );
+    await delegate.setNewRoutePath(const AppRouteState('/cards'));
+    await tester.pumpWidget(
+      MaterialApp.router(
+        routerDelegate: delegate,
+        routeInformationParser: const AppRouteInformationParser(),
+        routeInformationProvider: PlatformRouteInformationProvider(
+          initialRouteInformation: RouteInformation(uri: Uri.parse('/cards')),
+        ),
+      ),
+    );
+    delegate.pushPage<void>('/design');
+    await tester.pumpAndSettle();
+    await _makeDirty(tester);
+
+    final cancelledPop = tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('unsaved-cancel')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('unsaved-cancel')));
+    await tester.pumpAndSettle();
+    await cancelledPop;
+    expect(delegate.currentLocation, '/design');
+
+    final discardedPop = tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('unsaved-discard')));
+    await tester.pumpAndSettle();
+    await discardedPop;
+    expect(delegate.currentLocation, '/cards');
+    expect(find.text('Cards route'), findsOneWidget);
   });
 
   testWidgets('unsaved back Discard leaves and clean back does not warn', (

@@ -57,6 +57,7 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
   final AppRouteWidgetBuilder _routeBuilder;
   final List<_AppRouteEntry> _entries = [];
   int _nextEntryId = 0;
+  Future<bool> Function()? navigationGuard;
   static const _authenticatedShellPageKey = ValueKey<String>(
     'authenticated-shell-page',
   );
@@ -78,6 +79,14 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
 
   @override
   Future<void> setNewRoutePath(AppRouteState configuration) async {
+    final guard = navigationGuard;
+    if (_entries.isNotEmpty &&
+        currentLocation != configuration.location &&
+        guard != null &&
+        !await guard()) {
+      notifyListeners();
+      return;
+    }
     _replaceWithLocation(configuration.location, configuration.arguments);
   }
 
@@ -110,6 +119,8 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
   @override
   Future<bool> popRoute() async {
     if (_entries.length <= 1) return false;
+    final guard = navigationGuard;
+    if (guard != null && !await guard()) return true;
     popCurrent<void>();
     return true;
   }
