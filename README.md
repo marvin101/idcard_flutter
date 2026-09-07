@@ -4,7 +4,7 @@
 
 **CampusID v0.7.0** is the Excel Grid release. The Flutter package version is `0.7.0+7`, where `+7` is the platform build number.
 
-CampusID remains pre-1.0 while Designer v2, digital identity, advanced print production, and other roadmap modules are still in development.
+CampusID remains pre-1.0 while Designer v2 continues to mature and digital identity, advanced print production, and other roadmap modules are still in development.
 
 ## Overview
 
@@ -50,6 +50,48 @@ forms, templates, audits   and temporary bulk-photo objects
 - Clean web paths through `usePathUrlStrategy()` and Vercel SPA rewrites
 
 PDFs are assembled in the Flutter client from data authorized and returned by the backend.
+
+## Card Designer v2
+
+Designer v2 uses a schema-versioned document, with millimetres as the canonical coordinate system:
+
+```text
+DesignDocument
+  -> DesignBindings
+  -> shared DesignRenderScene / DesignDocumentView
+  -> Designer / Cards preview / PDF
+```
+
+The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, and image selection aligned across outputs and reduces parity drift.
+
+### Editing capabilities
+
+- Schema version 2 documents with portrait, landscape, CR80, and custom canvas sizes.
+- Canvas resize/orientation strategies: **Keep positions**, **Scale proportionally**, and **Fit to canvas**. Keep positions may intentionally leave elements extending beyond the canvas.
+- Element geometry editing with raw-pointer drag/resize input and zoom-correct movement.
+- Undo/redo with each drag or resize stored as one gesture-level history entry.
+- Smart alignment guides, numeric keyboard/wheel stepping, and shortcuts for save, undo/redo, duplicate, delete, deselect, and precise nudging.
+- Colour palette fields with recent colours, plus a responsive warning before editing on small screens.
+- An independent local duplicate working copy, reset to the canonical default, revert to the last successful save, and unsaved-change protection for both in-app navigation and browser/back-stack navigation.
+- Dirty state is computed against a saved snapshot. After a successful save, the server-returned canonical template replaces both the working document and saved snapshot.
+
+### Template persistence and safety
+
+There is one stored template per school, loaded and saved through the existing `/schools/{school_uuid}/card-template` API. A `404` means no template exists and opens the canonical default. A successful save makes the server-returned representation authoritative; a failed save preserves the current working document, the last saved snapshot, and the dirty state.
+
+Missing schema versions and explicit v1 documents remain readable through deterministic in-memory conversion. Malformed or corrupt v2 documents are reported as errors rather than silently replaced with defaults, and explicit unsupported schema versions are rejected.
+
+### PDF fidelity
+
+Flutter preview and PDF export share `DesignRenderScene`, including text bindings, stacking, visibility, image source/fit, colours and opacity, borders, corner radius, and portrait/landscape/custom page geometry. Card text uses the bundled `CardNotoSans` family at all nine weights (100–900); the PDF path also shares Flutter-measured wrapping, alignment, line positions, and clipping to improve text-layout fidelity. Image contain/cover behavior and centered cropping are normalized across renderers.
+
+Devanagari PDF export is currently rejected with a descriptive error because the PDF renderer cannot provide reliable Indic shaping. The design and student data are not modified. See [PDF renderer parity](docs/pdf_renderer_parity.md) for the detailed rendering boundary.
+
+### Client contract and current limits
+
+The v2 client and API contract currently allows canvas width/height greater than 10 mm and at most 2000 mm; at most 250 elements; unique, nonblank element IDs of at most 80 characters; `x`/`y` from 0 to 2000; positive width/height at most 2000; rotation from -360 to 360 degrees; integer z-index with absolute value at most 10000; and template names from 1 to 120 characters after trimming. Element bounds are not required to remain inside the canvas so Keep positions can preserve out-of-canvas geometry.
+
+Concurrent template saves are still last-write-wins: `updated_at` is returned but is not yet used for ETags, revisions, or optimistic concurrency. Rotation-aware visual bounds are not enforced, and background-image URI syntax or reachability is not deeply validated.
 
 ## Roles and UI access
 
@@ -201,7 +243,7 @@ The current Flutter value is `0.7.0+7`: product release `0.7.0`, build number `7
 
 ## Roadmap
 
-- Designer v2
+- Designer v2 concurrency and remaining fidelity hardening
 - QR/barcode and digital identity
 - Advanced print production and Print Basket
 - Teacher and non-teaching staff workflows
