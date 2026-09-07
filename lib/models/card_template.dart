@@ -163,17 +163,26 @@ class DesignElement {
 @immutable
 class DesignDocument {
   const DesignDocument({
-    this.schemaVersion = 2,
     required this.canvas,
     required this.elements,
     this.settings = const {},
-  });
+  }) : schemaVersion = currentSchemaVersion;
+  static const currentSchemaVersion = 2;
+  static const maxElements = 250;
   final int schemaVersion;
   final DesignCanvas canvas;
   final List<DesignElement> elements;
   final Map<String, dynamic> settings;
   factory DesignDocument.fromJson(Map<String, dynamic> json) {
-    if (json['schema_version'] != 2) return legacyDesignDocument(json);
+    final version = json.containsKey('schema_version')
+        ? json['schema_version']
+        : json['version'] ?? 1;
+    if (version == 1) return legacyDesignDocument(json);
+    if (version != currentSchemaVersion) {
+      throw FormatException(
+        'Unsupported card-template schema_version: $version',
+      );
+    }
     final raw = json['elements'];
     return DesignDocument(
       canvas: DesignCanvas.fromJson(
@@ -201,7 +210,7 @@ class DesignDocument {
     settings: settings ?? this.settings,
   );
   Map<String, dynamic> toJson() => {
-    'schema_version': 2,
+    'schema_version': currentSchemaVersion,
     'canvas': canvas.toJson(),
     'elements': elements.map((e) => e.toJson()).toList(),
     'settings': settings,
@@ -211,6 +220,7 @@ class DesignDocument {
 @immutable
 class CardTemplate {
   const CardTemplate({required this.name, required this.document});
+  static const maxNameLength = 120;
   final String name;
   final DesignDocument document;
   static final uploadedDesign = CardTemplate(

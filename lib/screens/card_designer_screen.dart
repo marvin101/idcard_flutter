@@ -193,7 +193,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         width > 2000 ||
         height > 2000) {
       _updateUi(() {
-        _canvasError = 'Width and height must be between 10 and 2000 mm.';
+        _canvasError =
+            'Width and height must be greater than 10 and at most 2000 mm.';
       });
       return;
     }
@@ -474,6 +475,14 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       );
 
   void _add(DesignElementType type, {StudentFieldDefinition? customField}) {
+    if (_document.elements.length >= DesignDocument.maxElements) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A design can contain at most 250 elements.'),
+        ),
+      );
+      return;
+    }
     final id =
         '${type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
     final z = _document.elements.fold<int>(
@@ -596,6 +605,14 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   void _duplicate() {
     final selected = _selected;
     if (selected == null) return;
+    if (_document.elements.length >= DesignDocument.maxElements) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A design can contain at most 250 elements.'),
+        ),
+      );
+      return;
+    }
     final id =
         '${selected.type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
     final copy = selected.copyWith(
@@ -722,10 +739,27 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       );
       return false;
     }
-    if (_saving || _name.text.trim().isEmpty) return false;
+    final name = _name.text.trim();
+    if (_saving || name.isEmpty) return false;
+    if (name.length > CardTemplate.maxNameLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Template name must be 120 characters or fewer.'),
+        ),
+      );
+      return false;
+    }
+    if (_document.elements.length > DesignDocument.maxElements) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A design can contain at most 250 elements.'),
+        ),
+      );
+      return false;
+    }
     if (!_dirty) return true;
     _endGesture();
-    _commitTemplate(_template.copyWith(name: _name.text.trim()));
+    _commitTemplate(_template.copyWith(name: name));
     final submitted = _template;
     _updateUi(() {
       _saving = true;

@@ -33,6 +33,26 @@ void main() {
     expect(template.toApi()['design']['schema_version'], 2);
   });
 
+  test('explicit unsupported schema versions are not treated as legacy', () {
+    expect(
+      () => CardTemplate.fromApi({
+        'name': 'Future',
+        'design': {'schema_version': 3},
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('explicit schema version 1 remains legacy compatible', () {
+    final template = CardTemplate.fromApi({
+      'name': 'Legacy',
+      'design': {'schema_version': 1, 'school_title': 'Legacy School'},
+    });
+
+    expect(template.schoolTitle, 'Legacy School');
+    expect(template.document.settings['migrated_from_v1'], isTrue);
+  });
+
   test('v2 geometry and custom UUID bindings survive serialization', () {
     final source = CardTemplate(
       name: 'V2',
