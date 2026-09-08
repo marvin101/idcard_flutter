@@ -52,11 +52,13 @@ class PdfService {
     String? schoolLogoUrl,
     SchoolProfile? schoolProfile,
     String? assetBaseUrl,
+    void Function(int completed, int total)? onCardPrepared,
   }) async {
     final pdf = pw.Document();
     final fonts = await DesignFonts.pdfFonts();
     final images = <String, pw.MemoryImage?>{};
-    for (final card in cards) {
+    for (var index = 0; index < cards.length; index++) {
+      final card = cards[index];
       final scene = DesignRenderScene(
         document: template.document,
         bindings: DesignBindings(
@@ -88,6 +90,11 @@ class PdfService {
           build: (_) => renderer.build(scene),
         ),
       );
+      onCardPrepared?.call(index + 1, cards.length);
+      if ((index + 1) % 25 == 0) {
+        // Keep the application responsive while preparing large local PDFs.
+        await Future<void>.delayed(Duration.zero);
+      }
     }
     return pdf.save();
   }

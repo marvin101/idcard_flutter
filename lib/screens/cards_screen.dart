@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../app_routes.dart';
 import '../models/academic_session.dart';
 import '../models/api_student.dart';
+import '../models/bulk_card_export.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../navigation/app_navigation.dart';
@@ -22,6 +23,17 @@ import 'package:printing/printing.dart';
 import '../services/pdf_service.dart';
 import 'bulk_pdf_filter_dialog.dart';
 
+typedef BulkPdfAction =
+    Future<void> Function({
+      required List<PdfCardData> cards,
+      required String schoolName,
+      required CardTemplate template,
+      required String? schoolLogoUrl,
+      required SchoolProfile? schoolProfile,
+      required String? assetBaseUrl,
+      required void Function(int completed, int total) onCardPrepared,
+    });
+
 class CardsScreen extends StatefulWidget {
   const CardsScreen({
     super.key,
@@ -33,6 +45,7 @@ class CardsScreen extends StatefulWidget {
     required this.canPrint,
     this.canVerify = false,
     this.canMarkPrinted = false,
+    this.bulkPdfAction,
   });
 
   final String schoolUuid;
@@ -43,6 +56,7 @@ class CardsScreen extends StatefulWidget {
   final bool canPrint;
   final bool canVerify;
   final bool canMarkPrinted;
+  final BulkPdfAction? bulkPdfAction;
 
   @override
   State<CardsScreen> createState() => _CardsScreenState();
@@ -60,6 +74,7 @@ class _CardsScreenState extends State<CardsScreen> {
   bool _loadingStudents = false;
   bool _loadingMore = false;
   bool _exportingBulk = false;
+  String? _bulkExportStatus;
   bool _hasMore = true;
 
   String? _error;
@@ -648,33 +663,22 @@ class _CardsScreenState extends State<CardsScreen> {
         initialSessionUuid: _selectedSessionUuid,
         initialClassUuid: _selectedClassUuid,
         initialSectionUuid: _selectedSectionUuid,
+        selectedStudentCount: _selectedStudentUuids.length,
+        verificationStatus: _verificationStatus,
+        printed: _printed,
       ),
     );
     if (filter == null || !mounted) return;
 
-    setState(() => _exportingBulk = true);
+    setState(() {
+      _exportingBulk = true;
+      _bulkExportStatus = 'Preparing cards…';
+    });
     try {
-      const pageSize = 200;
-      var offset = 0;
-      final students = <ApiStudent>[];
-      while (true) {
-        final page = await widget.api.getStudentsPage(
-          schoolUuid: widget.schoolUuid,
-          limit: pageSize,
-          offset: offset,
-          search: filter.search,
-          sessionUuid: filter.sessionUuid,
-          classUuid: filter.classUuid,
-          sectionUuid: filter.sectionUuid,
-          createdFrom: filter.createdFrom,
-          createdTo: filter.createdTo,
-          verificationStatus: _verificationStatus,
-          printed: _printed,
-        );
-        students.addAll(page.items);
-        if (!page.hasMore || page.items.isEmpty) break;
-        offset += page.items.length;
-      }
+      final loaded = filter.scope == BulkCardExportScope.selectedStudents
+          ? await _loadSelectedStudents()
+          : await _loadBulkStudents(filter);
+      final students = loaded.students;
 
       if (students.isEmpty) {
         throw const ApiException(
@@ -683,39 +687,282 @@ class _CardsScreenState extends State<CardsScreen> {
         );
       }
 
-      final bytes = await PdfService.generateStudentCards(
-        cards: students
-            .map(
-              (student) => PdfCardData(
-                student: student,
-                sessionName: _sessionName(student),
-                className: _className(student),
-                sectionName: _sectionName(student),
-                photoUrl: _photoUrl(student),
-              ),
-            )
-            .toList(),
+      final inspection = BulkExportInspection.inspect(
+        students: students,
+        template: _cardTemplate,
         schoolName: widget.schoolName,
         schoolProfile: _schoolProfile,
-        assetBaseUrl: widget.api.baseUrl,
-        template: _cardTemplate,
-        schoolLogoUrl: _schoolLogoUrl,
+        sessionName: _sessionName,
+        className: _className,
+        sectionName: _sectionName,
+        photoUrl: _photoUrl,
       );
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename:
-            'id-cards-${widget.schoolName.replaceAll(' ', '-').toLowerCase()}.pdf',
+      final confirmed = await _confirmBulkExport(
+        filter: filter,
+        students: students,
+        inspection: inspection,
+        expectedTotal: loaded.expectedTotal,
       );
-    } catch (e) {
+      if (confirmed != true || !mounted) return;
+
+      setState(
+        () => _bulkExportStatus = 'Generating PDF… 0/${students.length}',
+      );
+
+      final cards = students
+          .map(
+            (student) => PdfCardData(
+              student: student,
+              sessionName: _sessionName(student),
+              className: _className(student),
+              sectionName: _sectionName(student),
+              photoUrl: _photoUrl(student),
+            ),
+          )
+          .toList();
+      void onCardPrepared(int completed, int total) {
+        if (mounted) {
+          setState(
+            () => _bulkExportStatus = 'Generating PDF… $completed/$total',
+          );
+        }
+      }
+
+      if (widget.bulkPdfAction case final action?) {
+        await action(
+          cards: cards,
+          schoolName: widget.schoolName,
+          template: _cardTemplate,
+          schoolLogoUrl: _schoolLogoUrl,
+          schoolProfile: _schoolProfile,
+          assetBaseUrl: widget.api.baseUrl,
+          onCardPrepared: onCardPrepared,
+        );
+      } else {
+        final bytes = await PdfService.generateStudentCards(
+          cards: cards,
+          schoolName: widget.schoolName,
+          schoolProfile: _schoolProfile,
+          assetBaseUrl: widget.api.baseUrl,
+          template: _cardTemplate,
+          schoolLogoUrl: _schoolLogoUrl,
+          onCardPrepared: onCardPrepared,
+        );
+        if (mounted) setState(() => _bulkExportStatus = 'Opening download…');
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename:
+              'id-cards-${widget.schoolName.replaceAll(' ', '-').toLowerCase()}.pdf',
+        );
+      }
+    } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unable to download ID cards: $e')),
+          SnackBar(content: Text('Unable to download ID cards: ${e.message}')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to download ID cards. Your filters and selection were kept; please try again.',
+            ),
+          ),
         );
       }
     } finally {
-      if (mounted) setState(() => _exportingBulk = false);
+      if (mounted) {
+        setState(() {
+          _exportingBulk = false;
+          _bulkExportStatus = null;
+        });
+      }
     }
   }
+
+  Future<_LoadedBulkStudents> _loadBulkStudents(BulkPdfFilter filter) async {
+    const pageSize = 200;
+    var offset = 0;
+    int? expectedTotal;
+    final studentsByUuid = <String, ApiStudent>{};
+    while (true) {
+      final page = await widget.api.getStudentsPage(
+        schoolUuid: widget.schoolUuid,
+        limit: pageSize,
+        offset: offset,
+        search: filter.search,
+        sessionUuid: filter.sessionUuid,
+        classUuid: filter.classUuid,
+        sectionUuid: filter.sectionUuid,
+        createdFrom: filter.createdFrom,
+        createdTo: filter.createdTo,
+        verificationStatus: _verificationStatus,
+        printed: _printed,
+      );
+      expectedTotal ??= page.total;
+      for (final student in page.items) {
+        studentsByUuid.putIfAbsent(student.uuid, () => student);
+      }
+      if (!page.hasMore || page.items.isEmpty) break;
+      offset += page.items.length;
+    }
+    return _LoadedBulkStudents(
+      students: studentsByUuid.values.toList(),
+      expectedTotal: expectedTotal,
+    );
+  }
+
+  Future<_LoadedBulkStudents> _loadSelectedStudents() async {
+    final selected = _students
+        .where((student) => _selectedStudentUuids.contains(student.uuid))
+        .toList();
+    final refreshed = <ApiStudent>[];
+    const requestBatchSize = 20;
+    for (var start = 0; start < selected.length; start += requestBatchSize) {
+      final end = math.min(start + requestBatchSize, selected.length);
+      final batch = await Future.wait(
+        selected
+            .sublist(start, end)
+            .map((student) => _refreshSelectedStudent(student.uuid)),
+      );
+      refreshed.addAll(batch.whereType<ApiStudent>());
+    }
+    return _LoadedBulkStudents(
+      students: refreshed,
+      expectedTotal: selected.length,
+    );
+  }
+
+  Future<ApiStudent?> _refreshSelectedStudent(String studentUuid) async {
+    try {
+      return await widget.api.getStudent(
+        schoolUuid: widget.schoolUuid,
+        studentUuid: studentUuid,
+      );
+    } on ApiException catch (error) {
+      if (error.statusCode != 404) rethrow;
+      // A student removed after selection is omitted and disclosed by the
+      // expected-versus-found count in the confirmation dialog.
+      return null;
+    }
+  }
+
+  Future<bool?> _confirmBulkExport({
+    required BulkPdfFilter filter,
+    required List<ApiStudent> students,
+    required BulkExportInspection inspection,
+    required int expectedTotal,
+  }) => showDialog<bool>(
+    context: context,
+    builder: (context) {
+      final canvas = _cardTemplate.document.canvas;
+      final scope = filter.scope == BulkCardExportScope.selectedStudents
+          ? 'Selected students only'
+          : 'All students matching filters';
+      return AlertDialog(
+        key: const Key('bulk-export-confirmation'),
+        title: const Text('Review PDF export'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Scope: $scope', key: const Key('bulk-scope-summary')),
+                Text('Session: ${_sessionLabel(filter.sessionUuid)}'),
+                Text('Class: ${_classLabel(filter.classUuid)}'),
+                Text('Section: ${_sectionLabel(filter.sectionUuid)}'),
+                if (_verificationStatus != null)
+                  Text(
+                    'Verification: ${_verificationStatus!.replaceAll('_', ' ')}',
+                  ),
+                if (_printed != null)
+                  Text(
+                    'Print status: ${_printed! ? 'Printed' : 'Not printed'}',
+                  ),
+                Text(
+                  'Students/cards: ${students.length}',
+                  key: const Key('bulk-student-count'),
+                ),
+                Text('Pages: ${students.length} (one card per page)'),
+                Text('Template: ${_cardTemplate.name}'),
+                Text(
+                  'Card: ${canvas.orientation}, '
+                  '${canvas.width.toStringAsFixed(2)} × '
+                  '${canvas.height.toStringAsFixed(2)} mm',
+                ),
+                if (students.length != expectedTotal) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Student data changed while this export was prepared. '
+                    'Expected $expectedTotal but found ${students.length}; only the cards listed above will be exported.',
+                    key: const Key('bulk-stale-count-warning'),
+                    style: const TextStyle(color: AppColors.danger),
+                  ),
+                ],
+                if (inspection.warnings.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Warnings',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  ...inspection.warnings.map(
+                    (issue) => Text(
+                      '• ${issue.studentCount} student(s): ${issue.message.toLowerCase()}',
+                    ),
+                  ),
+                ],
+                if (inspection.blockingIssues.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ...inspection.blockingIssues.map(
+                    (issue) => Text(
+                      '• ${issue.studentCount} student(s): ${issue.message}',
+                      style: const TextStyle(color: AppColors.danger),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            key: const Key('bulk-export-confirm'),
+            onPressed: inspection.canContinue
+                ? () => Navigator.pop(context, true)
+                : null,
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Generate PDF'),
+          ),
+        ],
+      );
+    },
+  );
+
+  String _sessionLabel(String? uuid) => uuid == null
+      ? 'All sessions'
+      : _sessions
+                .where((item) => item.uuid == uuid)
+                .map((item) => item.name)
+                .firstOrNull ??
+            'Selected session';
+
+  String _classLabel(String? uuid) => uuid == null
+      ? 'All classes'
+      : _classes
+                .where((item) => item.uuid == uuid)
+                .map((item) => item.name)
+                .firstOrNull ??
+            'Selected class';
+
+  String _sectionLabel(String? uuid) =>
+      uuid == null ? 'All sections' : _sectionNames[uuid] ?? 'Selected section';
 
   // ------------------------------------------------------------
   // Build
@@ -730,6 +977,7 @@ class _CardsScreenState extends State<CardsScreen> {
         actions: [
           if (widget.canPrint)
             IconButton(
+              key: const Key('bulk-export-action'),
               tooltip: 'Download filtered cards as PDF',
               onPressed: _exportingBulk ? null : _downloadFilteredCards,
               icon: _exportingBulk
@@ -796,6 +1044,16 @@ class _CardsScreenState extends State<CardsScreen> {
                       ),
                     ),
 
+                    if (_bulkExportStatus != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          _bulkExportStatus!,
+                          key: const Key('bulk-export-status'),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+
                     if (widget.canVerify && selection.verifyIneligibleCount > 0)
                       Text(
                         '${selection.verifyIneligibleCount} of ${selection.selectedCount} selected '
@@ -831,6 +1089,16 @@ class _CardsScreenState extends State<CardsScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+
+                    if (_selectedStudentUuids.isNotEmpty)
+                      Text(
+                        '${_selectedStudentUuids.length} selected. Selection resets when search or filters change.',
+                        key: const Key('cards-selection-scope-note'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
 
                     const SizedBox(height: 14),
 
@@ -1175,4 +1443,14 @@ class _CardsScreenState extends State<CardsScreen> {
       },
     );
   }
+}
+
+class _LoadedBulkStudents {
+  const _LoadedBulkStudents({
+    required this.students,
+    required this.expectedTotal,
+  });
+
+  final List<ApiStudent> students;
+  final int expectedTotal;
 }

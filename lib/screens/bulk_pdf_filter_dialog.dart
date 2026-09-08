@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../models/academic_session.dart';
+import '../models/bulk_card_export.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../services/api_service.dart';
 
 class BulkPdfFilter {
   const BulkPdfFilter({
+    this.scope = BulkCardExportScope.matchingFilters,
     this.search,
     this.sessionUuid,
     this.classUuid,
@@ -15,6 +17,7 @@ class BulkPdfFilter {
     this.createdTo,
   });
 
+  final BulkCardExportScope scope;
   final String? search;
   final String? sessionUuid;
   final String? classUuid;
@@ -34,6 +37,9 @@ class BulkPdfFilterDialog extends StatefulWidget {
     this.initialSessionUuid,
     this.initialClassUuid,
     this.initialSectionUuid,
+    this.selectedStudentCount = 0,
+    this.verificationStatus,
+    this.printed,
   });
 
   final String schoolUuid;
@@ -44,6 +50,9 @@ class BulkPdfFilterDialog extends StatefulWidget {
   final String? initialSessionUuid;
   final String? initialClassUuid;
   final String? initialSectionUuid;
+  final int selectedStudentCount;
+  final String? verificationStatus;
+  final bool? printed;
 
   @override
   State<BulkPdfFilterDialog> createState() => _BulkPdfFilterDialogState();
@@ -58,6 +67,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
   DateTime? _createdTo;
   List<SchoolSection> _sections = const [];
   bool _loadingSections = false;
+  late BulkCardExportScope _scope;
 
   @override
   void initState() {
@@ -66,6 +76,9 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     _sessionUuid = widget.initialSessionUuid;
     _classUuid = widget.initialClassUuid;
     _sectionUuid = widget.initialSectionUuid;
+    _scope = widget.selectedStudentCount > 0
+        ? BulkCardExportScope.selectedStudents
+        : BulkCardExportScope.matchingFilters;
     if (_classUuid != null) _loadSections(_classUuid!);
   }
 
@@ -124,6 +137,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     }
     Navigator.of(context).pop(
       BulkPdfFilter(
+        scope: _scope,
         search: _search.text.trim().isEmpty ? null : _search.text.trim(),
         sessionUuid: _sessionUuid,
         classUuid: _classUuid,
@@ -144,11 +158,35 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Choose the student set. Empty fields include all matching students.',
+              'Choose the exact student set. Your current Cards filters are copied here and will not be changed.',
             ),
+            if (widget.selectedStudentCount > 0) ...[
+              const SizedBox(height: 12),
+              RadioGroup<BulkCardExportScope>(
+                groupValue: _scope,
+                onChanged: (value) => setState(() => _scope = value!),
+                child: Column(
+                  children: [
+                    RadioListTile<BulkCardExportScope>(
+                      key: const Key('bulk-scope-selected'),
+                      value: BulkCardExportScope.selectedStudents,
+                      title: Text(
+                        'Selected students only (${widget.selectedStudentCount})',
+                      ),
+                    ),
+                    const RadioListTile<BulkCardExportScope>(
+                      key: Key('bulk-scope-filtered'),
+                      value: BulkCardExportScope.matchingFilters,
+                      title: Text('All students matching filters'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             TextField(
               controller: _search,
+              enabled: _scope == BulkCardExportScope.matchingFilters,
               decoration: const InputDecoration(
                 labelText: 'Student name, admission no. or roll no.',
                 border: OutlineInputBorder(),
@@ -167,6 +205,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                   )
                   .toList(),
               onChanged: (value) => setState(() => _sessionUuid = value),
+              enabled: _scope == BulkCardExportScope.matchingFilters,
             ),
             const SizedBox(height: 12),
             _dropdown(
@@ -188,6 +227,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                 });
                 if (value != null) _loadSections(value);
               },
+              enabled: _scope == BulkCardExportScope.matchingFilters,
             ),
             const SizedBox(height: 12),
             _dropdown(
@@ -201,10 +241,29 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                     ),
                   )
                   .toList(),
-              onChanged: _classUuid == null || _loadingSections
+              onChanged:
+                  _scope != BulkCardExportScope.matchingFilters ||
+                      _classUuid == null ||
+                      _loadingSections
                   ? null
                   : (value) => setState(() => _sectionUuid = value),
             ),
+            if (widget.verificationStatus != null ||
+                widget.printed != null) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  [
+                    if (widget.verificationStatus != null)
+                      'Verification: ${widget.verificationStatus!.replaceAll('_', ' ')}',
+                    if (widget.printed != null)
+                      'Print status: ${widget.printed! ? 'Printed' : 'Not printed'}',
+                  ].join('  •  '),
+                  key: const Key('bulk-inherited-lifecycle-filters'),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
@@ -213,6 +272,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                     'Entry date from',
                     _createdFrom,
                     () => _pickDate(from: true),
+                    enabled: _scope == BulkCardExportScope.matchingFilters,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -221,6 +281,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                     'Entry date till',
                     _createdTo,
                     () => _pickDate(from: false),
+                    enabled: _scope == BulkCardExportScope.matchingFilters,
                   ),
                 ),
               ],
@@ -247,6 +308,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     required String? value,
     required List<DropdownMenuItem<String>> items,
     required ValueChanged<String?>? onChanged,
+    bool enabled = true,
   }) => DropdownButtonFormField<String>(
     initialValue: value,
     isExpanded: true,
@@ -258,15 +320,19 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
       const DropdownMenuItem(value: null, child: Text('All')),
       ...items,
     ],
-    onChanged: onChanged,
+    onChanged: enabled ? onChanged : null,
   );
 
-  Widget _dateButton(String label, DateTime? value, VoidCallback onPressed) =>
-      OutlinedButton(
-        onPressed: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Column(children: [Text(label), Text(_dateLabel(value))]),
-        ),
-      );
+  Widget _dateButton(
+    String label,
+    DateTime? value,
+    VoidCallback onPressed, {
+    bool enabled = true,
+  }) => OutlinedButton(
+    onPressed: enabled ? onPressed : null,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(children: [Text(label), Text(_dateLabel(value))]),
+    ),
+  );
 }
