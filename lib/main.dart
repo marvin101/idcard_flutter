@@ -28,6 +28,7 @@ import 'screens/student_import_screen.dart';
 import 'screens/student_history_screen.dart';
 import 'screens/public_form_management_screen.dart';
 import 'screens/public_student_form_screen.dart';
+import 'screens/public_design_screen.dart';
 import 'screens/student_screen.dart';
 import 'screens/student_grid_screen.dart';
 import 'theme/app_theme.dart';
@@ -112,6 +113,10 @@ class _MyAppState extends State<MyApp> {
       AppRoutes.register => _RegisterRoute(),
       _ when AppRoutes.isPublicForm(routeName) => PublicStudentFormScreen(
         token: AppRoutes.publicFormToken(routeName)!,
+        api: ApiService(),
+      ),
+      _ when AppRoutes.isPublicDesign(routeName) => PublicDesignScreen(
+        token: AppRoutes.publicDesignToken(routeName)!,
         api: ApiService(),
       ),
       _ when AppRoutes.isProtected(routeName) => _AuthenticatedRoute(

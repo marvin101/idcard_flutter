@@ -10,6 +10,7 @@ abstract final class AppRoutes {
   static const studentFields = '/students/fields';
   static const publicForms = '/public-forms';
   static const publicFormPrefix = '/public/forms/';
+  static const publicDesignPrefix = '/public/designs/';
   static const studentImport = '/students/import';
   static const bulkPhotoImport = '/students/photos/import';
   static const studentHistoryPrefix = '/students/';
@@ -54,6 +55,17 @@ abstract final class AppRoutes {
       routeName.length > publicFormPrefix.length;
   static String? publicFormToken(String? routeName) => isPublicForm(routeName)
       ? Uri.decodeComponent(routeName!.substring(publicFormPrefix.length))
+      : null;
+
+  static String publicDesign(String token) =>
+      '$publicDesignPrefix${Uri.encodeComponent(token)}';
+  static bool isPublicDesign(String? routeName) =>
+      routeName != null &&
+      routeName.startsWith(publicDesignPrefix) &&
+      routeName.length > publicDesignPrefix.length;
+  static String? publicDesignToken(String? routeName) =>
+      isPublicDesign(routeName)
+      ? Uri.decodeComponent(routeName!.substring(publicDesignPrefix.length))
       : null;
 
   static String studentHistory(String studentUuid) =>

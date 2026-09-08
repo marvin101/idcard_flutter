@@ -91,7 +91,7 @@ Devanagari PDF export is currently rejected with a descriptive error because the
 
 The v2 client and API contract currently allows canvas width/height greater than 10 mm and at most 2000 mm; at most 250 elements; unique, nonblank element IDs of at most 80 characters; `x`/`y` from 0 to 2000; positive width/height at most 2000; rotation from -360 to 360 degrees; integer z-index with absolute value at most 10000; and template names from 1 to 120 characters after trimming. Element bounds are not required to remain inside the canvas so Keep positions can preserve out-of-canvas geometry.
 
-Concurrent template saves are still last-write-wins: `updated_at` is returned but is not yet used for ETags, revisions, or optimistic concurrency. Rotation-aware visual bounds are not enforced, and background-image URI syntax or reachability is not deeply validated.
+Concurrent template saves use `updated_at` as an optimistic-concurrency token and return a conflict for stale editors. Rotation-aware visual bounds are not enforced, and background-image URI syntax or reachability is not deeply validated.
 
 ## Roles and UI access
 
@@ -121,6 +121,7 @@ Representative routes:
 | `/students/fields` | Dynamic student-field administration |
 | `/public-forms` | Authenticated Public Form management |
 | `/public/forms/<token>` | Anonymous branded student submission |
+| `/public/designs/<token>` | Anonymous read-only saved-design preview with sample student data |
 | `/school-profile` | School profile and logo |
 | `/academic-sessions` | Academic sessions |
 | `/classes-sections` | Classes and sections |
@@ -128,7 +129,9 @@ Representative routes:
 | `/design` | Current Card Designer |
 | `/cards` | Card preview and PDF workflows |
 
-The `/public/forms/<token>` route is intentionally outside `AuthenticatedShell`. Protected routes are resolved through the authenticated shell and role/module checks.
+The `/public/forms/<token>` and `/public/designs/<token>` routes are intentionally outside `AuthenticatedShell`. Public design links expose only the saved design and public school-profile bindings, rendered with local sample student values. Protected routes are resolved through the authenticated shell and role/module checks.
+
+School and platform administrators can manage the revocable design-preview link from the Card Designer. The preview reuses `DesignDocumentView`, so it stays aligned with normal card rendering and never loads a real student record.
 
 ## Technology
 

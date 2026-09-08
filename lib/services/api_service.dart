@@ -16,6 +16,7 @@ import '../models/school_profile.dart';
 import '../models/student_field.dart';
 import '../models/student_import.dart';
 import '../models/public_form.dart';
+import '../models/public_design.dart';
 import '../models/student_grid.dart';
 
 /// Local SQLite service retained for the existing student repository.
@@ -192,6 +193,43 @@ class ApiService {
       _uri('/public/forms/${Uri.encodeComponent(token)}'),
     );
     return PublicFormView.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicDesignView> getPublicDesign(String token) async {
+    final response = await _client.get(
+      _uri('/public/designs/${Uri.encodeComponent(token)}'),
+    );
+    return PublicDesignView.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicDesignShare> getPublicDesignShare(String schoolUuid) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/card-template/public-share'),
+      headers: _headers,
+    );
+    return PublicDesignShare.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicDesignShare> updatePublicDesignShare({
+    required String schoolUuid,
+    required bool enabled,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/card-template/public-share'),
+      headers: _headers,
+      body: jsonEncode({'enabled': enabled}),
+    );
+    return PublicDesignShare.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicDesignShare> regeneratePublicDesignShare(
+    String schoolUuid,
+  ) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/card-template/public-share/regenerate-link'),
+      headers: _headers,
+    );
+    return PublicDesignShare.fromJson(_decodeMap(response));
   }
 
   Future<String> submitPublicForm({

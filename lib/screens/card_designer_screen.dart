@@ -19,6 +19,7 @@ import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../widgets/authenticated_app_bar.dart';
 import '../widgets/design_document_view.dart';
+import '../widgets/public_design_share_button.dart';
 
 class CardDesignerScreen extends StatefulWidget {
   const CardDesignerScreen({
@@ -26,6 +27,7 @@ class CardDesignerScreen extends StatefulWidget {
     required this.schoolUuid,
     required this.api,
     required this.initialTemplate,
+    this.canManagePublicShare = false,
   });
   // Logical pixels; shared by the entry warning and editor layout.
   static const minimumEditorWidth = 600.0;
@@ -37,6 +39,7 @@ class CardDesignerScreen extends StatefulWidget {
   final String schoolUuid;
   final ApiService api;
   final CardTemplate initialTemplate;
+  final bool canManagePublicShare;
   @override
   State<CardDesignerScreen> createState() => _CardDesignerScreenState();
 }
@@ -1067,7 +1070,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         }
         return _guardNavigation(
           Scaffold(
-            appBar: const AuthenticatedAppBar(title: Text('Card designer')),
+            appBar: AuthenticatedAppBar(
+              title: const Text('Card designer'),
+              actions: [
+                if (widget.canManagePublicShare)
+                  PublicDesignShareButton(
+                    schoolUuid: widget.schoolUuid,
+                    api: widget.api,
+                  ),
+              ],
+            ),
             body: Center(
               child: SingleChildScrollView(
                 child: Padding(
@@ -1124,6 +1136,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       appBar: AuthenticatedAppBar(
         title: const Text('Card designer'),
         actions: [
+          if (widget.canManagePublicShare)
+            PublicDesignShareButton(
+              schoolUuid: widget.schoolUuid,
+              api: widget.api,
+            ),
           _section(
             () => (_dirty, _saving, _localDuplicate, _document),
             () => PopupMenuButton<_TemplateAction>(

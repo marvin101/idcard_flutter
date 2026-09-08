@@ -73,6 +73,7 @@ class _CardDesignerRouteScreenState extends State<CardDesignerRouteScreen> {
           schoolUuid: school.uuid,
           api: auth.api,
           initialTemplate: snapshot.data!,
+          canManagePublicShare: auth.canManageSchoolProfile,
         );
       },
     );
