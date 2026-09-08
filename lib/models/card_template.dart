@@ -275,10 +275,15 @@ class DesignDocument {
 
 @immutable
 class CardTemplate {
-  const CardTemplate({required this.name, required this.document});
+  const CardTemplate({
+    required this.name,
+    required this.document,
+    this.updatedAt,
+  });
   static const maxNameLength = 120;
   final String name;
   final DesignDocument document;
+  final DateTime? updatedAt;
   static final uploadedDesign = CardTemplate(
     name: 'Uploaded blue school card',
     document: legacyDesignDocument(const {
@@ -321,12 +326,14 @@ class CardTemplate {
       CardTemplate(
         name: name ?? this.name,
         document: document ?? this.document,
+        updatedAt: updatedAt,
       );
 
   /// Returns a structurally independent copy, including nested style, binding,
   /// and settings collections.
   CardTemplate deepCopy() => CardTemplate(
     name: name,
+    updatedAt: updatedAt,
     document: DesignDocument.fromJson(
       Map<String, dynamic>.from(
         jsonDecode(jsonEncode(document.toJson())) as Map,
@@ -355,6 +362,7 @@ class CardTemplate {
   factory CardTemplate.fromApi(Map<String, dynamic> json) {
     final name = json['name'];
     final design = json['design'];
+    final rawUpdatedAt = json['updated_at'];
     if (name is! String || name.trim().isEmpty) {
       throw const FormatException('Card-template name is missing or invalid.');
     }
@@ -363,12 +371,31 @@ class CardTemplate {
         'Card-template design is missing or invalid.',
       );
     }
+    final updatedAt = switch (rawUpdatedAt) {
+      null => null,
+      String value => DateTime.tryParse(value),
+      _ => null,
+    };
+    final hasTimezone =
+        rawUpdatedAt is String &&
+        RegExp(r'(?:Z|[+-]\d{2}:\d{2})$').hasMatch(rawUpdatedAt);
+    if (rawUpdatedAt != null && (updatedAt == null || !hasTimezone)) {
+      throw const FormatException(
+        'Card-template updated_at is missing or invalid.',
+      );
+    }
     return CardTemplate(
       name: name,
       document: DesignDocument.fromJson(Map<String, dynamic>.from(design)),
+      updatedAt: updatedAt?.toUtc(),
     );
   }
-  Map<String, dynamic> toApi() => {'name': name, 'design': document.toJson()};
+  Map<String, dynamic> toApi({DateTime? expectedUpdatedAt}) => {
+    'name': name,
+    'design': document.toJson(),
+    if (expectedUpdatedAt != null)
+      'expected_updated_at': expectedUpdatedAt.toUtc().toIso8601String(),
+  };
 }
 
 DesignDocument legacyDesignDocument(Map<String, dynamic> design) {

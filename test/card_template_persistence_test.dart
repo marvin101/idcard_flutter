@@ -31,10 +31,95 @@ void main() {
     addTearDown(api.dispose);
 
     expect((await api.getCardTemplate('school')).name, 'Persisted');
+    expect(
+      (await api.getCardTemplate('school')).updatedAt,
+      DateTime.utc(2026, 9, 7),
+    );
     legacy = true;
     final loaded = await api.getCardTemplate('school');
     expect(loaded.name, 'Legacy');
     expect(loaded.document.settings['migrated_from_v1'], isTrue);
+  });
+
+  test(
+    'GET accepts a missing legacy token but rejects a malformed token',
+    () async {
+      var body = _validTemplate()..remove('updated_at');
+      final api = ApiService(
+        baseUrl: 'http://test',
+        client: MockClient((_) async => http.Response(jsonEncode(body), 200)),
+      );
+      addTearDown(api.dispose);
+
+      expect((await api.getCardTemplate('school')).updatedAt, isNull);
+      for (final invalid in ['not-a-timestamp', '2026-09-08T04:05:06.123456']) {
+        body = {..._validTemplate(), 'updated_at': invalid};
+        await expectLater(
+          api.getCardTemplate('school'),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.message,
+              'message',
+              'The server returned an invalid card template.',
+            ),
+          ),
+        );
+      }
+    },
+  );
+
+  test('PUT sends the expected token and adopts the response token', () async {
+    Map<String, dynamic>? requestBody;
+    final api = ApiService(
+      baseUrl: 'http://test',
+      client: MockClient((request) async {
+        requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            ..._validTemplate(name: 'Saved'),
+            'updated_at': '2026-09-08T04:05:06.123456Z',
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.dispose);
+    final expected = DateTime.utc(2026, 9, 7, 1, 2, 3, 456, 789);
+
+    final saved = await api.saveCardTemplate(
+      'school',
+      CardTemplate.uploadedDesign,
+      expectedUpdatedAt: expected,
+    );
+
+    expect(requestBody?['expected_updated_at'], '2026-09-07T01:02:03.456789Z');
+    expect(saved.updatedAt, DateTime.utc(2026, 9, 8, 4, 5, 6, 123, 456));
+  });
+
+  test('failed PUT cannot replace the caller-owned token', () async {
+    final originalToken = DateTime.utc(2026, 9, 7);
+    final template = CardTemplate(
+      name: 'Draft',
+      document: CardTemplate.uploadedDesign.document,
+      updatedAt: originalToken,
+    );
+    final api = ApiService(
+      baseUrl: 'http://test',
+      client: MockClient(
+        (_) async => http.Response(jsonEncode({'detail': 'Conflict'}), 409),
+      ),
+    );
+    addTearDown(api.dispose);
+
+    await expectLater(
+      api.saveCardTemplate(
+        'school',
+        template,
+        expectedUpdatedAt: template.updatedAt,
+      ),
+      throwsA(isA<ApiException>()),
+    );
+    expect(template.updatedAt, same(originalToken));
   });
 
   test('GET distinguishes missing templates from invalid responses', () async {

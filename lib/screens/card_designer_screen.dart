@@ -769,6 +769,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       final saved = await widget.api.saveCardTemplate(
         widget.schoolUuid,
         submitted,
+        expectedUpdatedAt: _savedTemplate.updatedAt,
       );
       if (!mounted) return false;
       _updateUi(() {
@@ -795,15 +796,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return !_dirty;
     } catch (error) {
       if (!mounted) return false;
+      final conflict = error is ApiException && error.statusCode == 409;
       _updateUi(() {
         _saving = false;
-        _saveState = error is ApiException && error.statusCode == 422
+        _saveState = conflict
+            ? 'Conflict'
+            : error is ApiException && error.statusCode == 422
             ? 'Validation failed'
             : 'Save failed';
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_saveFailureMessage(error))));
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_saveFailureMessage(error)),
+          duration: conflict
+              ? const Duration(seconds: 15)
+              : const Duration(seconds: 4),
+          action: conflict
+              ? SnackBarAction(
+                  key: const Key('reload-latest-template'),
+                  label: 'Reload latest',
+                  onPressed: _reloadLatest,
+                )
+              : null,
+        ),
+      );
       return false;
     }
   }
@@ -822,6 +840,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             ? 'The template could not be saved because it is invalid.'
             : 'Template validation failed: $concise';
       }
+      if (error.statusCode == 409) {
+        return 'Someone else saved this template after you loaded it. Your edits are still here. Reload the latest version to replace them.';
+      }
       if (concise == 'The server returned an invalid card template.' ||
           concise.contains('unsupported schema version')) {
         return '$concise Your edited design is still safe.';
@@ -831,6 +852,49 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           : 'Unable to save the template: $concise';
     }
     return 'Unable to save the template. Check your connection and try again.';
+  }
+
+  Future<void> _reloadLatest() async {
+    if (_saving) return;
+    _updateUi(() {
+      _saving = true;
+      _saveState = 'Reloading…';
+    });
+    try {
+      final loaded = await widget.api.getCardTemplate(widget.schoolUuid);
+      if (!mounted) return;
+      final authoritative = loaded.deepCopy();
+      _updateUi(() {
+        _template = authoritative;
+        _savedTemplate = authoritative.deepCopy();
+        _selectedId = null;
+        _localDuplicate = false;
+        _history
+          ..clear()
+          ..add(_DesignerSnapshot(authoritative, null, false));
+        _historyIndex = 0;
+        _syncingName = true;
+        _name.text = authoritative.name;
+        _syncingName = false;
+        _syncCanvasControllers();
+        _canvasError = null;
+        _saving = false;
+        _refreshDirtyState();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _updateUi(() {
+        _saving = false;
+        _saveState = 'Reload failed';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to reload the latest template. Your edits are still safe.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _duplicateDesign() async {

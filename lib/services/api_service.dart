@@ -432,12 +432,13 @@ class ApiService {
 
   Future<CardTemplate> saveCardTemplate(
     String schoolUuid,
-    CardTemplate template,
-  ) async {
+    CardTemplate template, {
+    DateTime? expectedUpdatedAt,
+  }) async {
     final response = await _client.put(
       _uri('/schools/$schoolUuid/card-template'),
       headers: _headers,
-      body: jsonEncode(template.toApi()),
+      body: jsonEncode(template.toApi(expectedUpdatedAt: expectedUpdatedAt)),
     );
     return _decodeCardTemplate(response);
   }

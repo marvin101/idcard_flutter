@@ -36,6 +36,7 @@ const _sourceElement = DesignElement(
 
 final _source = CardTemplate(
   name: 'Known good',
+  updatedAt: DateTime.utc(2026, 9, 6),
   document: DesignDocument(
     canvas: const DesignCanvas(
       width: 90,
@@ -68,6 +69,7 @@ class _Backend {
             request.url.path.endsWith('/card-template')) {
           puts++;
           final body = jsonDecode(request.body) as Map<String, dynamic>;
+          lastExpectedToken = body['expected_updated_at'] as String?;
           if (pendingSave != null) return pendingSave!.future;
           if (networkFailure) throw http.ClientException('offline');
           if (failSave) {
@@ -78,8 +80,20 @@ class _Backend {
             );
           }
           if (malformedSaveResponse) return http.Response('{broken', 200);
-          stored = CardTemplate.fromApi(body);
-          return _savedResponse(body);
+          token = token.add(const Duration(microseconds: 1));
+          stored = CardTemplate(
+            name: body['name'] as String,
+            document: DesignDocument.fromJson(
+              Map<String, dynamic>.from(body['design'] as Map),
+            ),
+            updatedAt: token,
+          );
+          return _savedResponse(body, token);
+        }
+        if (request.method == 'GET' &&
+            request.url.path.endsWith('/card-template')) {
+          gets++;
+          return _savedResponse(stored.toApi(), token);
         }
         return http.Response('{}', 404);
       }),
@@ -88,28 +102,40 @@ class _Backend {
 
   late final ApiService api;
   int puts = 0;
+  int gets = 0;
   bool failSave = false;
   bool networkFailure = false;
   bool malformedSaveResponse = false;
   int failureStatus = 500;
   String failureBody = 'save failed';
   String? authoritativeName;
+  String? lastExpectedToken;
+  DateTime token = DateTime.utc(2026, 9, 6);
   CardTemplate stored = _source.deepCopy();
   Completer<http.Response>? pendingSave;
 
-  http.Response _savedResponse(Map<String, dynamic> body) => http.Response(
+  http.Response _savedResponse(
+    Map<String, dynamic> body,
+    DateTime responseToken,
+  ) => http.Response(
     jsonEncode({
       ...body,
       if (authoritativeName != null) 'name': authoritativeName,
       'uuid': 'server-template',
-      'updated_at': '2026-09-06T00:00:00Z',
+      'updated_at': responseToken.toIso8601String(),
     }),
     200,
     headers: {'content-type': 'application/json'},
   );
 
   void completePendingSave(CardTemplate template) {
-    pendingSave!.complete(_savedResponse(template.toApi()));
+    token = token.add(const Duration(microseconds: 1));
+    stored = CardTemplate(
+      name: template.name,
+      document: template.document,
+      updatedAt: token,
+    );
+    pendingSave!.complete(_savedResponse(template.toApi(), token));
   }
 }
 
@@ -185,6 +211,7 @@ void main() {
       );
 
       expect(duplicate.name, 'Known good copy');
+      expect(duplicate.updatedAt, isNull);
       expect(
         duplicate.document.canvas.toJson(),
         _source.document.canvas.toJson(),
@@ -479,6 +506,90 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Saved'), findsOneWidget);
     expect(backend.puts, 2);
+  });
+
+  testWidgets(
+    '409 preserves edits and token, then Reload latest resets coherent history',
+    (tester) async {
+      final backend = await _mount(tester);
+      backend
+        ..failSave = true
+        ..failureStatus = 409
+        ..failureBody = jsonEncode({
+          'detail': 'This card template changed after it was loaded.',
+        });
+      await _makeDirty(tester);
+      final edited = _visibleTemplate(tester).toApi();
+
+      await tester.tap(find.byKey(const Key('designer-save')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Conflict'), findsOneWidget);
+      expect(_visibleTemplate(tester).toApi(), edited);
+      expect(
+        backend.lastExpectedToken,
+        DateTime.utc(2026, 9, 6).toIso8601String(),
+      );
+      expect(find.byKey(const Key('reload-latest-template')), findsOneWidget);
+
+      backend
+        ..token = DateTime.utc(2026, 9, 8)
+        ..stored = CardTemplate(
+          name: 'Latest server design',
+          document: CardTemplate.uploadedDesign.document,
+          updatedAt: DateTime.utc(2026, 9, 8),
+        );
+      await tester.tap(find.byKey(const Key('reload-latest-template')));
+      await tester.pumpAndSettle();
+
+      expect(_visibleTemplate(tester).name, 'Latest server design');
+      expect(find.text('Saved'), findsOneWidget);
+      expect(_iconEnabled(tester, 'Undo'), isFalse);
+      expect(backend.gets, 1);
+
+      backend.failSave = false;
+      await tester.enterText(
+        find.byKey(const Key('template-name')),
+        'Edit from latest',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('designer-save')));
+      await tester.pumpAndSettle();
+      expect(
+        backend.lastExpectedToken,
+        DateTime.utc(2026, 9, 8).toIso8601String(),
+      );
+    },
+  );
+
+  testWidgets('409 blocks Save and leave and keeps the editor dirty', (
+    tester,
+  ) async {
+    final backend = await _mount(tester);
+    backend
+      ..failSave = true
+      ..failureStatus = 409
+      ..failureBody = jsonEncode({
+        'detail': 'This card template changed after it was loaded.',
+      });
+    await _makeDirty(tester);
+    final edited = _visibleTemplate(tester).toApi();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('unsaved-save-leave')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.byKey(const Key('designer-canvas')), findsOneWidget);
+    expect(find.text('Conflict'), findsOneWidget);
+    expect(_visibleTemplate(tester).toApi(), edited);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('designer-save')))
+          .onPressed,
+      isNotNull,
+    );
   });
 
   testWidgets('malformed save response preserves the working document', (
