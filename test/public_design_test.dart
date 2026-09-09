@@ -8,6 +8,7 @@ import 'package:idcard_flutter/app_routes.dart';
 import 'package:idcard_flutter/models/card_template.dart';
 import 'package:idcard_flutter/models/public_design.dart';
 import 'package:idcard_flutter/models/school_profile.dart';
+import 'package:idcard_flutter/navigation/app_router.dart';
 import 'package:idcard_flutter/screens/public_design_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/widgets/authenticated_shell.dart';
@@ -75,6 +76,19 @@ void main() {
     expect(AppRoutes.isPublicDesign(route), isTrue);
     expect(AppRoutes.publicDesignToken(route), 'opaque/token');
     expect(AppRoutes.isProtected(route), isFalse);
+  });
+
+  test('route parser preserves direct and hash public design links', () async {
+    const parser = AppRouteInformationParser();
+    final direct = await parser.parseRouteInformation(
+      RouteInformation(uri: Uri.parse('/public/designs/opaque-token')),
+    );
+    final hash = await parser.parseRouteInformation(
+      RouteInformation(uri: Uri.parse('/#/public/designs/opaque-token')),
+    );
+
+    expect(direct.location, '/public/designs/opaque-token');
+    expect(hash.location, '/public/designs/opaque-token');
   });
 
   test(

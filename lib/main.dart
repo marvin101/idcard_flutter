@@ -306,7 +306,12 @@ class _AuthenticatedRoute extends StatelessWidget {
         icon: Icons.lock_outline,
       ),
     };
-    return AuthenticatedShell(child: page);
+    return AuthenticatedShell(
+      child: KeyedSubtree(
+        key: ValueKey('school-${school.uuid}-$routeName'),
+        child: page,
+      ),
+    );
   }
 }
 

@@ -115,6 +115,34 @@ class _FakeApi extends ApiService {
       );
 }
 
+class _SchoolSwitchApi extends _FakeApi {
+  final requestedSchools = <String>[];
+
+  @override
+  Future<List<ApiStudent>> getStudents({
+    required String schoolUuid,
+    String? admissionNo,
+    String? sessionUuid,
+    String? classUuid,
+    String? sectionUuid,
+    String? verificationStatus,
+    bool? printed,
+  }) async {
+    requestedSchools.add(schoolUuid);
+    return [
+      ApiStudent(
+        uuid: 'student-$schoolUuid',
+        sessionUuid: 'session-$schoolUuid',
+        classUuid: 'class-$schoolUuid',
+        sectionUuid: 'section-$schoolUuid',
+        admissionNo: 'A-$schoolUuid',
+        fullName: 'Student $schoolUuid',
+        isActive: true,
+      ),
+    ];
+  }
+}
+
 class _FakeAuthProvider extends AuthProvider {
   _FakeAuthProvider._(
     this.role,
@@ -129,9 +157,17 @@ class _FakeAuthProvider extends AuthProvider {
     bool hasSelectedSchool = true,
   }) => _FakeAuthProvider._(role, authenticated, hasSelectedSchool, _FakeApi());
 
+  factory _FakeAuthProvider.withApi(
+    String role,
+    _FakeApi api, {
+    bool authenticated = true,
+    bool hasSelectedSchool = true,
+  }) => _FakeAuthProvider._(role, authenticated, hasSelectedSchool, api);
+
   final String role;
   bool _authenticated;
   final bool _hasSelectedSchool;
+  SchoolSummary _school = school;
 
   static const school = SchoolSummary(
     uuid: 'school-1',
@@ -166,7 +202,7 @@ class _FakeAuthProvider extends AuthProvider {
   );
 
   @override
-  SchoolSummary? get selectedSchool => _hasSelectedSchool ? school : null;
+  SchoolSummary? get selectedSchool => _hasSelectedSchool ? _school : null;
 
   @override
   List<SchoolSummary> get schools => const [school];
@@ -174,11 +210,17 @@ class _FakeAuthProvider extends AuthProvider {
   @override
   SchoolAccess? get selectedSchoolAccess => _hasSelectedSchool
       ? SchoolAccess(
-          schoolUuid: school.uuid,
-          schoolName: school.name,
+          schoolUuid: _school.uuid,
+          schoolName: _school.name,
           role: role,
         )
       : null;
+
+  @override
+  Future<void> selectSchool(SchoolSummary school) async {
+    _school = school;
+    notifyListeners();
+  }
 }
 
 String _reportedLocation(BuildContext context) {
@@ -193,16 +235,24 @@ void main() {
     String role = 'school_admin',
     bool authenticated = true,
     bool hasSelectedSchool = true,
+    _FakeApi? api,
   }) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-    final auth = _FakeAuthProvider(
-      role,
-      authenticated: authenticated,
-      hasSelectedSchool: hasSelectedSchool,
-    );
+    final auth = api == null
+        ? _FakeAuthProvider(
+            role,
+            authenticated: authenticated,
+            hasSelectedSchool: hasSelectedSchool,
+          )
+        : _FakeAuthProvider.withApi(
+            role,
+            api,
+            authenticated: authenticated,
+            hasSelectedSchool: hasSelectedSchool,
+          );
     await tester.pumpWidget(
       MyApp(authProvider: auth, initialRoute: initialRoute),
     );
@@ -386,6 +436,32 @@ void main() {
     await tester.tap(cards);
     await tester.pumpAndSettle();
     expect(identical(auth.selectedSchool, selectedBefore), isTrue);
+  });
+
+  testWidgets('school switch recreates scoped screens and drops stale data', (
+    tester,
+  ) async {
+    final api = _SchoolSwitchApi();
+    final auth = await pumpApp(
+      tester,
+      initialRoute: AppRoutes.students,
+      api: api,
+    );
+    expect(find.text('Student school-1'), findsOneWidget);
+
+    await auth.selectSchool(
+      const SchoolSummary(
+        uuid: 'school-2',
+        code: 'SCH2',
+        name: 'Second School',
+        isActive: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(api.requestedSchools, containsAllInOrder(['school-1', 'school-2']));
+    expect(find.text('Student school-1'), findsNothing);
+    expect(find.text('Student school-2'), findsOneWidget);
   });
 
   testWidgets('unauthorized modules are hidden', (tester) async {
