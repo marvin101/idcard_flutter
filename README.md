@@ -62,7 +62,7 @@ DesignDocument
   -> Designer / Cards preview / PDF
 ```
 
-The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, and image selection aligned across outputs and reduces parity drift.
+The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. QR codes can contain fixed text or bind to system/custom student fields, with configurable correction level, foreground/background colours, and quiet zone.
 
 ### Editing capabilities
 
@@ -247,7 +247,7 @@ The current Flutter value is `0.7.0+7`: product release `0.7.0`, build number `7
 ## Roadmap
 
 - Designer v2 concurrency and remaining fidelity hardening
-- QR/barcode and digital identity
+- Barcodes and digital identity (QR-code elements are implemented)
 - Advanced print production and Print Basket
 - Teacher and non-teaching staff workflows
 - School collaboration

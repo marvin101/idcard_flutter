@@ -55,6 +55,7 @@ class DesignRenderElement {
 class DesignRenderStyle {
   DesignRenderStyle(DesignElement e)
     : color = colorFromHex(e.style['color'], Colors.black),
+      qrBackground = colorFromHex(e.style['background_color'], Colors.white),
       fill = colorFromHex(e.style['fill_color'], Colors.transparent),
       border = colorFromHex(e.style['border_color'], Colors.transparent),
       borderWidth = _number(
@@ -69,6 +70,10 @@ class DesignRenderStyle {
               100) *
           100,
       maxLines = math.max(1, (e.style['max_lines'] as num?)?.toInt() ?? 2),
+      quietZone = _number(e.style['quiet_zone'], 1, 0),
+      errorCorrection = e.style['error_correction'] is String
+          ? e.style['error_correction'] as String
+          : 'medium',
       alignment = switch (e.style['alignment']) {
         'center' => TextAlign.center,
         'right' => TextAlign.right,
@@ -77,8 +82,9 @@ class DesignRenderStyle {
       fit = e.style['fit'] == 'contain' ? BoxFit.contain : BoxFit.cover;
   static const fontFamily = 'CardNotoSans';
   static const imageBackground = Color(0xffeef1f5);
-  final Color color, fill, border;
-  final double borderWidth, radius, fontSize;
+  final Color color, qrBackground, fill, border;
+  final double borderWidth, radius, fontSize, quietZone;
+  final String errorCorrection;
   final int weight, maxLines;
   final TextAlign alignment;
   final BoxFit fit;

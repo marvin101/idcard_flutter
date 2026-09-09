@@ -26,7 +26,12 @@ class DesignBindings {
     if (element.type == DesignElementType.text) {
       return data['text'] as String? ?? 'Text';
     }
-    if (element.type == DesignElementType.customFieldText) {
+    if (element.type == DesignElementType.qrCode && data['text'] is String) {
+      return data['text'] as String;
+    }
+    if (element.type == DesignElementType.customFieldText ||
+        (element.type == DesignElementType.qrCode &&
+            data['field_uuid'] is String)) {
       return student.customFields
               .where((field) => field.fieldUuid == data['field_uuid'])
               .map((field) => field.value)
@@ -74,6 +79,8 @@ class DesignBindings {
           ? data['fallback'] as String? ??
                 data['label'] as String? ??
                 'Custom field'
+          : element.type == DesignElementType.qrCode
+          ? data['fallback'] as String? ?? 'QR data'
           : data['fallback'] as String? ?? 'Student field';
     }
     return '${data['prefix'] ?? ''}$value${data['suffix'] ?? ''}';

@@ -1,6 +1,7 @@
 import 'api_student.dart';
 import 'card_template.dart';
 import 'design_bindings.dart';
+import 'design_qr.dart';
 import 'school_profile.dart';
 
 enum BulkCardExportScope { matchingFilters, selectedStudents }
@@ -34,6 +35,7 @@ class BulkExportInspection {
     SchoolProfile? schoolProfile,
   }) {
     final warningCounts = <String, int>{};
+    final blockingCounts = <String, int>{};
     final visible = template.document.elements.where(
       (element) => element.visible,
     );
@@ -43,7 +45,13 @@ class BulkExportInspection {
     final boundElements = visible.where(
       (element) =>
           element.type == DesignElementType.boundText ||
-          element.type == DesignElementType.customFieldText,
+          element.type == DesignElementType.customFieldText ||
+          (element.type == DesignElementType.qrCode &&
+              (element.data.containsKey('field') ||
+                  element.data.containsKey('field_uuid'))),
+    );
+    final qrElements = visible.where(
+      (element) => element.type == DesignElementType.qrCode,
     );
 
     for (final student in students) {
@@ -77,7 +85,9 @@ class BulkExportInspection {
             (element.data['fallback'] as String?)?.trim().isNotEmpty == true) {
           continue;
         }
-        final label = element.type == DesignElementType.customFieldText
+        final label =
+            element.type == DesignElementType.customFieldText ||
+                element.data.containsKey('field_uuid')
             ? (element.data['label'] as String? ?? 'custom field')
             : _fieldLabel(element.data['field'] as String?);
         missingForStudent.add(label);
@@ -85,6 +95,15 @@ class BulkExportInspection {
       for (final label in missingForStudent) {
         warningCounts.update(
           'Missing $label',
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
+      }
+      if (qrElements.any(
+        (element) => !isDesignQrDataSupported(bindings.text(element)),
+      )) {
+        blockingCounts.update(
+          'QR content exceeds 1000 UTF-8 bytes',
           (value) => value + 1,
           ifAbsent: () => 1,
         );
@@ -98,7 +117,12 @@ class BulkExportInspection {
                 BulkExportIssue(message: entry.key, studentCount: entry.value),
           )
           .toList(),
-      blockingIssues: const [],
+      blockingIssues: blockingCounts.entries
+          .map(
+            (entry) =>
+                BulkExportIssue(message: entry.key, studentCount: entry.value),
+          )
+          .toList(),
     );
   }
 

@@ -495,13 +495,23 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     final isImage =
         type == DesignElementType.studentPhoto ||
         type == DesignElementType.schoolLogo;
+    final isQr = type == DesignElementType.qrCode;
     final element = DesignElement(
       id: id,
       type: type,
-      x: (_document.canvas.width - (isImage ? 20 : 30)) / 2,
-      y: (_document.canvas.height - (isImage ? 22 : 6)) / 2,
-      width: isImage ? 20 : 30,
-      height: isImage
+      x: (_document.canvas.width - (isImage || isQr ? 20 : 30)) / 2,
+      y:
+          (_document.canvas.height -
+              (isQr
+                  ? 20
+                  : isImage
+                  ? 22
+                  : 6)) /
+          2,
+      width: isImage || isQr ? 20 : 30,
+      height: isQr
+          ? 20
+          : isImage
           ? 22
           : type == DesignElementType.line
           ? 1
@@ -521,6 +531,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           'border_width': 0.5,
           'corner_radius': 1.0,
         },
+        DesignElementType.qrCode => {
+          'color': '#000000',
+          'background_color': '#FFFFFF',
+          'quiet_zone': 1.0,
+          'error_correction': 'medium',
+        },
         _ => {
           'font_size': 3.5,
           'font_weight': 400,
@@ -539,6 +555,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           'label': customField.label,
           'fallback': customField.label,
         },
+        DesignElementType.qrCode => {'text': 'CAMPUS-ID'},
         _ => const {},
       },
     );
@@ -584,7 +601,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       var width = (element.width + dw).clamp(2.0, maxW);
       var height = (element.height + dh).clamp(1.0, maxH);
       if (element.type == DesignElementType.studentPhoto ||
-          element.type == DesignElementType.schoolLogo) {
+          element.type == DesignElementType.schoolLogo ||
+          element.type == DesignElementType.qrCode) {
         final ratio = element.width / element.height;
         height = (width / ratio).clamp(1.0, maxH);
         width = (height * ratio).clamp(2.0, maxW);
@@ -1347,6 +1365,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             () => _add(DesignElementType.line),
             key: 'add-line',
           ),
+          _tool(
+            Icons.qr_code_2,
+            'QR code',
+            () => _add(DesignElementType.qrCode),
+            key: 'add-qr-code',
+          ),
           const VerticalDivider(),
           IconButton(
             onPressed: _canUndo ? _undo : null,
@@ -1601,6 +1625,53 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ? (e.data['text'] as String? ?? 'Text')
       : e.type.wire.replaceAll('_', ' ');
 
+  String _qrSource(DesignElement element) {
+    if (element.data['field_uuid'] is String) return 'custom_field';
+    if (element.data['field'] is String) return 'system_field';
+    return 'static';
+  }
+
+  Map<String, dynamic> _qrDataForSource(DesignElement element, String source) {
+    final prefix = element.data['prefix'] as String?;
+    final suffix = element.data['suffix'] as String?;
+    late final Map<String, dynamic> data;
+    if (source == 'system_field') {
+      data = {
+        'field': 'admission_no',
+        'fallback': _systemFields['admission_no'],
+      };
+    } else if (source == 'custom_field') {
+      final field = _customFields.where((field) => field.isActive).firstOrNull;
+      data = field == null
+          ? {'text': 'CAMPUS-ID'}
+          : {
+              'field_uuid': field.uuid,
+              'label': field.label,
+              'fallback': field.label,
+            };
+    } else {
+      data = {'text': 'CAMPUS-ID'};
+    }
+    if (prefix != null) data['prefix'] = prefix;
+    if (suffix != null) data['suffix'] = suffix;
+    return data;
+  }
+
+  List<DropdownMenuItem<String>> _qrCustomFieldItems(DesignElement element) {
+    final selected = element.data['field_uuid'] as String?;
+    final fields = _customFields.where((field) => field.isActive).toList();
+    return [
+      if (selected != null && !fields.any((field) => field.uuid == selected))
+        DropdownMenuItem(
+          value: selected,
+          enabled: false,
+          child: const Text('Unavailable custom field'),
+        ),
+      for (final field in fields)
+        DropdownMenuItem(value: field.uuid, child: Text(field.label)),
+    ];
+  }
+
   Widget _inspector() {
     final e = _selected;
     // Resolve by identity at event time; callbacks must not replace newer edits
@@ -1747,6 +1818,174 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       );
                   },
                 ),
+              if (e.type == DesignElementType.qrCode) ...[
+                _dropdownProperty<String>(
+                  key: ValueKey('qr-source-${e.id}'),
+                  label: 'QR content source',
+                  value: _qrSource(e),
+                  items: [
+                    const DropdownMenuItem(
+                      value: 'static',
+                      child: Text('Static text'),
+                    ),
+                    const DropdownMenuItem(
+                      value: 'system_field',
+                      child: Text('Student or school field'),
+                    ),
+                    if (e.data['field_uuid'] is String ||
+                        _customFields.any((field) => field.isActive))
+                      const DropdownMenuItem(
+                        value: 'custom_field',
+                        child: Text('Custom student field'),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      update(
+                        (e) => e.copyWith(data: _qrDataForSource(e, value)),
+                      );
+                    }
+                  },
+                ),
+                if (_qrSource(e) == 'static')
+                  _textProperty(
+                    'QR content',
+                    e.data['text'] as String? ?? '',
+                    (value) => update(
+                      (e) => e.copyWith(data: {...e.data, 'text': value}),
+                    ),
+                  ),
+                if (_qrSource(e) == 'system_field')
+                  _dropdownProperty<String>(
+                    key: ValueKey('qr-system-field-${e.id}'),
+                    label: 'QR field',
+                    value: e.data['field'] as String? ?? 'admission_no',
+                    items: _systemFields.entries
+                        .map(
+                          (entry) => DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        update(
+                          (e) => e.copyWith(
+                            data: {
+                              ...e.data,
+                              'field': value,
+                              'fallback': _systemFields[value],
+                            },
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                if (_qrSource(e) == 'custom_field')
+                  _dropdownProperty<String>(
+                    key: ValueKey('qr-custom-field-${e.id}'),
+                    label: 'QR custom field',
+                    value: e.data['field_uuid'] as String,
+                    items: _qrCustomFieldItems(e),
+                    onChanged: (value) {
+                      final field = _customFields
+                          .where((field) => field.uuid == value)
+                          .firstOrNull;
+                      if (field != null) {
+                        update(
+                          (e) => e.copyWith(
+                            data: {
+                              ...e.data,
+                              'field_uuid': field.uuid,
+                              'label': field.label,
+                              'fallback': field.label,
+                            },
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                _textProperty(
+                  'QR prefix',
+                  e.data['prefix'] as String? ?? '',
+                  (value) => update(
+                    (e) => e.copyWith(data: {...e.data, 'prefix': value}),
+                  ),
+                ),
+                _textProperty(
+                  'QR suffix',
+                  e.data['suffix'] as String? ?? '',
+                  (value) => update(
+                    (e) => e.copyWith(data: {...e.data, 'suffix': value}),
+                  ),
+                ),
+                _dropdownProperty<String>(
+                  key: ValueKey('qr-correction-${e.id}'),
+                  label: 'Error correction',
+                  value: e.style['error_correction'] as String? ?? 'medium',
+                  items: const [
+                    DropdownMenuItem(value: 'low', child: Text('Low · 7%')),
+                    DropdownMenuItem(
+                      value: 'medium',
+                      child: Text('Medium · 15%'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'quartile',
+                      child: Text('Quartile · 25%'),
+                    ),
+                    DropdownMenuItem(value: 'high', child: Text('High · 30%')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      update(
+                        (e) => e.copyWith(
+                          style: {...e.style, 'error_correction': value},
+                        ),
+                      );
+                    }
+                  },
+                ),
+                _colourProperty(
+                  'QR foreground',
+                  e.style['color'] as String? ?? '#000000',
+                  (value) {
+                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                      update(
+                        (e) => e.copyWith(
+                          style: {...e.style, 'color': value.toUpperCase()},
+                        ),
+                      );
+                    }
+                  },
+                ),
+                _colourProperty(
+                  'QR background',
+                  e.style['background_color'] as String? ?? '#FFFFFF',
+                  (value) {
+                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                      update(
+                        (e) => e.copyWith(
+                          style: {
+                            ...e.style,
+                            'background_color': value.toUpperCase(),
+                          },
+                        ),
+                      );
+                    }
+                  },
+                ),
+                _numberField(
+                  'Quiet zone (mm)',
+                  (e.style['quiet_zone'] as num?)?.toDouble() ?? 1,
+                  (value) => update(
+                    (e) => e.copyWith(
+                      style: {...e.style, 'quiet_zone': value.clamp(0, 5)},
+                    ),
+                  ),
+                  wide: true,
+                ),
+              ],
               if ({
                 DesignElementType.text,
                 DesignElementType.boundText,

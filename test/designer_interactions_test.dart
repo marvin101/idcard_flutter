@@ -494,6 +494,22 @@ void main() {
     },
   );
 
+  testWidgets('QR tool adds a square code with editable defaults', (t) async {
+    await mount(t);
+    await t.tap(find.byKey(const Key('add-qr-code')));
+    await t.pump();
+
+    final qr = view(t).document.elements.last;
+    expect(qr.type, DesignElementType.qrCode);
+    expect(qr.width, 20);
+    expect(qr.height, 20);
+    expect(qr.data['text'], 'CAMPUS-ID');
+    expect(qr.style['error_correction'], 'medium');
+    expect(find.byKey(const Key('design-qr-code')), findsOneWidget);
+    expect(field('qr-content'), findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
+
   testWidgets(
     'small screens warn, continue once, and mobile uses an information state',
     (t) async {

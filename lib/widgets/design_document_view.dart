@@ -7,6 +7,7 @@ import '../models/card_template.dart';
 import '../models/design_bindings.dart';
 import '../models/design_render_scene.dart';
 import '../models/school_profile.dart';
+import 'design_qr_code.dart';
 
 class DesignDocumentView extends StatelessWidget {
   const DesignDocumentView({
@@ -219,6 +220,15 @@ class DesignDocumentView extends StatelessWidget {
                     );
                   },
                 ),
+        );
+
+      case DesignElementType.qrCode:
+        return DesignQrCode(
+          data: node.text,
+          color: style.color,
+          backgroundColor: style.qrBackground,
+          quietZone: style.quietZone * scale,
+          errorCorrection: style.errorCorrection,
         );
 
       case DesignElementType.text:

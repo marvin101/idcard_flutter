@@ -10,6 +10,7 @@ enum DesignElementType {
   schoolLogo,
   rectangle,
   line,
+  qrCode,
 }
 
 extension DesignElementTypeWire on DesignElementType {
@@ -18,6 +19,7 @@ extension DesignElementTypeWire on DesignElementType {
     DesignElementType.customFieldText => 'custom_field_text',
     DesignElementType.studentPhoto => 'student_photo',
     DesignElementType.schoolLogo => 'school_logo',
+    DesignElementType.qrCode => 'qr_code',
     _ => name,
   };
   static DesignElementType parse(Object? value) => switch (value) {
@@ -27,6 +29,7 @@ extension DesignElementTypeWire on DesignElementType {
     'school_logo' => DesignElementType.schoolLogo,
     'rectangle' => DesignElementType.rectangle,
     'line' => DesignElementType.line,
+    'qr_code' => DesignElementType.qrCode,
     'text' => DesignElementType.text,
     _ => throw const FormatException(
       'Card-template element type is missing or unsupported.',

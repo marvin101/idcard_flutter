@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models/card_template.dart';
 import '../models/design_render_scene.dart';
+import '../models/design_qr.dart';
 import '../models/design_text_layout.dart';
 import 'design_fonts.dart';
 
@@ -210,6 +211,19 @@ class PdfDocumentRenderer {
                         : pw.BoxFit.cover,
                   ),
           ),
+        );
+
+      case DesignElementType.qrCode:
+        if (!isDesignQrDataSupported(node.text)) {
+          return pw.Container(color: color(style.qrBackground));
+        }
+        return pw.BarcodeWidget(
+          data: node.text,
+          barcode: designQrBarcode(style.errorCorrection),
+          color: color(style.color),
+          backgroundColor: color(style.qrBackground),
+          padding: pw.EdgeInsets.all(mm(style.quietZone)),
+          drawText: false,
         );
 
       case DesignElementType.text:

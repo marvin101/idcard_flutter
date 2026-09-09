@@ -40,6 +40,7 @@ dependencies:
   image: ^4.5.4
   http_parser: ^4.1.2
   pdf: ^3.11.3
+  barcode: ^2.2.9
   printing: ^5.14.2
   file_picker: ^10.3.3
 

@@ -12,6 +12,9 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 - Added Designer v2 with a millimetre-based visual canvas, element tools, layers, inspector, alignment, keyboard editing, and undo/redo.
 - Added editable canvas presets, custom physical dimensions, orientation, background, grid, and snapping controls.
+- Added QR-code elements with static, system-field, or custom-field content,
+  configurable error correction and colours, shared preview/PDF rendering, and
+  bulk-export preflight validation.
 
 ### Changed
 

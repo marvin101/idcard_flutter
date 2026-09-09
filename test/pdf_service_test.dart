@@ -103,6 +103,22 @@ void main() {
             zIndex: 5,
             style: {'color': '#242C61', 'border_width': 0.5},
           ),
+          DesignElement(
+            id: 'qr',
+            type: DesignElementType.qrCode,
+            x: 62,
+            y: 32,
+            width: 16,
+            height: 16,
+            zIndex: 6,
+            data: {'field': 'admission_no', 'prefix': 'ID:'},
+            style: {
+              'color': '#000000',
+              'background_color': '#FFFFFF',
+              'quiet_zone': 1,
+              'error_correction': 'medium',
+            },
+          ),
         ],
       ),
     );

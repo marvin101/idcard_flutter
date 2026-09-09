@@ -162,6 +162,60 @@ void main() {
     );
   });
 
+  test('preflight validates bound QR data before PDF generation', () {
+    final template = bulkTemplate.copyWith(
+      document: bulkTemplate.document.copyWith(
+        elements: const [
+          DesignElement(
+            id: 'qr',
+            type: DesignElementType.qrCode,
+            x: 4,
+            y: 4,
+            width: 20,
+            height: 20,
+            data: {'field': 'father_name'},
+          ),
+        ],
+      ),
+    );
+
+    final missing = BulkExportInspection.inspect(
+      students: [student(1, admissionNo: '')],
+      template: template,
+      schoolName: 'Bulk School',
+      sessionName: (_) => null,
+      className: (_) => null,
+      sectionName: (_) => null,
+    );
+    expect(
+      missing.warnings.map((issue) => issue.message),
+      contains("Missing father's name"),
+    );
+
+    final oversized = template.copyWith(
+      document: template.document.copyWith(
+        elements: [
+          template.document.elements.single.copyWith(
+            data: {'text': List.filled(501, '€').join()},
+          ),
+        ],
+      ),
+    );
+    final blocked = BulkExportInspection.inspect(
+      students: [student(1)],
+      template: oversized,
+      schoolName: 'Bulk School',
+      sessionName: (_) => null,
+      className: (_) => null,
+      sectionName: (_) => null,
+    );
+    expect(blocked.canContinue, isFalse);
+    expect(
+      blocked.blockingIssues.single.message,
+      'QR content exceeds 1000 UTF-8 bytes',
+    );
+  });
+
   test('PDF emits exactly one stable page per distinct student', () async {
     final cards = [
       student(1, name: 'Same Name'),

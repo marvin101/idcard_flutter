@@ -133,6 +133,38 @@ void main() {
     );
   });
 
+  test('QR elements preserve their data and rendering options', () {
+    const element = DesignElement(
+      id: 'qr',
+      type: DesignElementType.qrCode,
+      x: 4,
+      y: 5,
+      width: 20,
+      height: 20,
+      data: {'field': 'admission_no', 'prefix': 'ID:'},
+      style: {
+        'color': '#112233',
+        'background_color': '#FFFFFF',
+        'quiet_zone': 2,
+        'error_correction': 'high',
+      },
+    );
+    final source = CardTemplate(
+      name: 'QR',
+      document: const DesignDocument(
+        canvas: DesignCanvas(),
+        elements: [element],
+      ),
+    );
+
+    final decoded = CardTemplate.fromApi(source.toApi());
+    final qr = decoded.document.elements.single;
+    expect(qr.type, DesignElementType.qrCode);
+    expect(qr.data, element.data);
+    expect(qr.style, element.style);
+    expect(qr.toJson()['type'], 'qr_code');
+  });
+
   test(
     'custom canvas dimensions reload with orientation derived from size',
     () {
