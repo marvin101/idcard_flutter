@@ -92,6 +92,15 @@ class BulkExportInspection {
             : _fieldLabel(element.data['field'] as String?);
         missingForStudent.add(label);
       }
+      for (final element in qrElements.where(
+        (element) => element.data['fields'] is List,
+      )) {
+        for (final field in bindings.qrFieldValues(element)) {
+          if (field.rawValue.trim().isEmpty && field.value.trim().isEmpty) {
+            missingForStudent.add(field.label);
+          }
+        }
+      }
       for (final label in missingForStudent) {
         warningCounts.update(
           'Missing $label',

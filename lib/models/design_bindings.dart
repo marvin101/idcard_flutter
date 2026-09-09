@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'api_student.dart';
 import 'card_template.dart';
 import 'school_profile.dart';
@@ -29,9 +31,11 @@ class DesignBindings {
     if (element.type == DesignElementType.qrCode && data['text'] is String) {
       return data['text'] as String;
     }
-    if (element.type == DesignElementType.customFieldText ||
-        (element.type == DesignElementType.qrCode &&
-            data['field_uuid'] is String)) {
+    return _rawBinding(data);
+  }
+
+  String _rawBinding(Map<String, dynamic> data) {
+    if (data['field_uuid'] is String) {
       return student.customFields
               .where((field) => field.fieldUuid == data['field_uuid'])
               .map((field) => field.value)
@@ -71,8 +75,37 @@ class DesignBindings {
     };
   }
 
+  List<DesignQrFieldValue> qrFieldValues(DesignElement element) {
+    final fields = element.data['fields'];
+    if (element.type != DesignElementType.qrCode || fields is! List) {
+      return const [];
+    }
+    return fields.whereType<Map>().map((source) {
+      final binding = Map<String, dynamic>.from(source);
+      final field = binding['field'] as String?;
+      final fieldUuid = binding['field_uuid'] as String?;
+      final key = field ?? 'custom:$fieldUuid';
+      final label = binding['label'] as String? ?? field ?? 'Custom field';
+      final raw = _rawBinding(binding);
+      final fallback = binding['fallback'] as String? ?? '';
+      return DesignQrFieldValue(
+        key: key,
+        label: label,
+        rawValue: raw,
+        value: raw.isEmpty ? fallback : raw,
+      );
+    }).toList();
+  }
+
   String text(DesignElement element) {
     final data = element.data;
+    if (element.type == DesignElementType.qrCode && data['fields'] is List) {
+      final values = qrFieldValues(element);
+      final payload = data['format'] == 'labeled_text'
+          ? values.map((entry) => '${entry.label}: ${entry.value}').join('\n')
+          : jsonEncode({for (final entry in values) entry.key: entry.value});
+      return '${data['prefix'] ?? ''}$payload${data['suffix'] ?? ''}';
+    }
     var value = rawValue(element);
     if (value.isEmpty && element.type != DesignElementType.text) {
       value = element.type == DesignElementType.customFieldText
@@ -89,6 +122,20 @@ class DesignBindings {
   static String _date(DateTime? value) => value == null
       ? ''
       : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+}
+
+class DesignQrFieldValue {
+  const DesignQrFieldValue({
+    required this.key,
+    required this.label,
+    required this.rawValue,
+    required this.value,
+  });
+
+  final String key;
+  final String label;
+  final String rawValue;
+  final String value;
 }
 
 String? resolveDesignAssetUrl(String? path, String? baseUrl) {

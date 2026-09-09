@@ -216,6 +216,44 @@ void main() {
     );
   });
 
+  test('preflight reports missing values inside multi-field QR payloads', () {
+    final template = bulkTemplate.copyWith(
+      document: bulkTemplate.document.copyWith(
+        elements: const [
+          DesignElement(
+            id: 'qr',
+            type: DesignElementType.qrCode,
+            x: 4,
+            y: 4,
+            width: 20,
+            height: 20,
+            data: {
+              'fields': [
+                {'field': 'full_name', 'label': 'Full name'},
+                {'field': 'father_name', 'label': "Father's name"},
+              ],
+              'format': 'json',
+            },
+          ),
+        ],
+      ),
+    );
+
+    final inspection = BulkExportInspection.inspect(
+      students: [student(1)],
+      template: template,
+      schoolName: 'Bulk School',
+      sessionName: (_) => null,
+      className: (_) => null,
+      sectionName: (_) => null,
+    );
+
+    expect(
+      inspection.warnings.map((issue) => issue.message),
+      contains("Missing Father's name"),
+    );
+  });
+
   test('PDF emits exactly one stable page per distinct student', () async {
     final cards = [
       student(1, name: 'Same Name'),

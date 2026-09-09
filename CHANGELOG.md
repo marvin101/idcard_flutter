@@ -15,6 +15,8 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 - Added QR-code elements with static, system-field, or custom-field content,
   configurable error correction and colours, shared preview/PDF rendering, and
   bulk-export preflight validation.
+- Added multi-field QR selection for student, academic, school, and custom data,
+  with stable scoped JSON or human-readable labeled-text payloads.
 
 ### Changed
 

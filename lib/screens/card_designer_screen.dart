@@ -1626,6 +1626,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       : e.type.wire.replaceAll('_', ' ');
 
   String _qrSource(DesignElement element) {
+    if (element.data['fields'] is List) return 'multiple_fields';
     if (element.data['field_uuid'] is String) return 'custom_field';
     if (element.data['field'] is String) return 'system_field';
     return 'static';
@@ -1635,7 +1636,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     final prefix = element.data['prefix'] as String?;
     final suffix = element.data['suffix'] as String?;
     late final Map<String, dynamic> data;
-    if (source == 'system_field') {
+    if (source == 'multiple_fields') {
+      data = {
+        'fields': [
+          {'field': 'full_name', 'label': _systemFields['full_name']},
+          {'field': 'admission_no', 'label': _systemFields['admission_no']},
+        ],
+        'format': 'json',
+      };
+    } else if (source == 'system_field') {
       data = {
         'field': 'admission_no',
         'fallback': _systemFields['admission_no'],
@@ -1652,9 +1661,42 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     } else {
       data = {'text': 'CAMPUS-ID'};
     }
-    if (prefix != null) data['prefix'] = prefix;
-    if (suffix != null) data['suffix'] = suffix;
+    if (source != 'multiple_fields') {
+      if (prefix != null) data['prefix'] = prefix;
+      if (suffix != null) data['suffix'] = suffix;
+    }
     return data;
+  }
+
+  List<Map<String, dynamic>> _qrFields(DesignElement element) =>
+      (element.data['fields'] as List? ?? const [])
+          .whereType<Map>()
+          .map((field) => Map<String, dynamic>.from(field))
+          .toList();
+
+  bool _hasQrField(DesignElement element, {String? field, String? fieldUuid}) =>
+      _qrFields(element).any(
+        (item) => item['field'] == field && item['field_uuid'] == fieldUuid,
+      );
+
+  Map<String, dynamic> _toggleQrField(
+    DesignElement element, {
+    String? field,
+    String? fieldUuid,
+    required String label,
+    required bool selected,
+  }) {
+    final fields = _qrFields(element);
+    bool matches(Map<String, dynamic> item) =>
+        item['field'] == field && item['field_uuid'] == fieldUuid;
+    if (selected) {
+      if (fields.length < 20 && !fields.any(matches)) {
+        fields.add({'field': ?field, 'field_uuid': ?fieldUuid, 'label': label});
+      }
+    } else {
+      fields.removeWhere(matches);
+    }
+    return {...element.data, 'fields': fields};
   }
 
   List<DropdownMenuItem<String>> _qrCustomFieldItems(DesignElement element) {
@@ -1832,6 +1874,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       value: 'system_field',
                       child: Text('Student or school field'),
                     ),
+                    const DropdownMenuItem(
+                      value: 'multiple_fields',
+                      child: Text('Multiple fields'),
+                    ),
                     if (e.data['field_uuid'] is String ||
                         _customFields.any((field) => field.isActive))
                       const DropdownMenuItem(
@@ -1906,20 +1952,137 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       }
                     },
                   ),
-                _textProperty(
-                  'QR prefix',
-                  e.data['prefix'] as String? ?? '',
-                  (value) => update(
-                    (e) => e.copyWith(data: {...e.data, 'prefix': value}),
+                if (_qrSource(e) == 'multiple_fields') ...[
+                  _dropdownProperty<String>(
+                    key: ValueKey('qr-format-${e.id}'),
+                    label: 'Payload format',
+                    value: e.data['format'] as String? ?? 'json',
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'json',
+                        child: Text('Structured JSON'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'labeled_text',
+                        child: Text('Labeled text'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        update(
+                          (e) => e.copyWith(
+                            data: {
+                              ...e.data,
+                              'format': value,
+                              if (value == 'json') ...{
+                                'prefix': '',
+                                'suffix': '',
+                              },
+                            },
+                          ),
+                        );
+                      }
+                    },
                   ),
-                ),
-                _textProperty(
-                  'QR suffix',
-                  e.data['suffix'] as String? ?? '',
-                  (value) => update(
-                    (e) => e.copyWith(data: {...e.data, 'suffix': value}),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 4),
+                    child: Text(
+                      'Fields (${_qrFields(e).length}/20)',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
-                ),
+                  Text(
+                    e.data['format'] == 'labeled_text'
+                        ? 'Each selected value is encoded as a labeled line.'
+                        : 'System keys stay stable; custom keys use custom:<field UUID>.',
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  for (final group in _qrSystemFieldGroups.entries) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        group.key,
+                        style: const TextStyle(color: Colors.black54),
+                      ),
+                    ),
+                    for (final fieldKey in group.value)
+                      CheckboxListTile(
+                        key: Key('qr-field-$fieldKey'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(_systemFields[fieldKey]!),
+                        value: _hasQrField(e, field: fieldKey),
+                        onChanged:
+                            (_hasQrField(e, field: fieldKey) &&
+                                    _qrFields(e).length == 1) ||
+                                (!_hasQrField(e, field: fieldKey) &&
+                                    _qrFields(e).length >= 20)
+                            ? null
+                            : (selected) => update(
+                                (e) => e.copyWith(
+                                  data: _toggleQrField(
+                                    e,
+                                    field: fieldKey,
+                                    label: _systemFields[fieldKey]!,
+                                    selected: selected ?? false,
+                                  ),
+                                ),
+                              ),
+                      ),
+                  ],
+                  if (_customFields.any((field) => field.isActive)) ...[
+                    const Divider(),
+                    const Text(
+                      'Custom student fields',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    for (final field in _customFields.where(
+                      (field) => field.isActive,
+                    ))
+                      CheckboxListTile(
+                        key: Key('qr-custom-field-${field.uuid}'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(field.label),
+                        value: _hasQrField(e, fieldUuid: field.uuid),
+                        onChanged:
+                            (_hasQrField(e, fieldUuid: field.uuid) &&
+                                    _qrFields(e).length == 1) ||
+                                (!_hasQrField(e, fieldUuid: field.uuid) &&
+                                    _qrFields(e).length >= 20)
+                            ? null
+                            : (selected) => update(
+                                (e) => e.copyWith(
+                                  data: _toggleQrField(
+                                    e,
+                                    fieldUuid: field.uuid,
+                                    label: field.label,
+                                    selected: selected ?? false,
+                                  ),
+                                ),
+                              ),
+                      ),
+                  ],
+                ],
+                if (_qrSource(e) != 'multiple_fields' ||
+                    e.data['format'] == 'labeled_text') ...[
+                  _textProperty(
+                    'QR prefix',
+                    e.data['prefix'] as String? ?? '',
+                    (value) => update(
+                      (e) => e.copyWith(data: {...e.data, 'prefix': value}),
+                    ),
+                  ),
+                  _textProperty(
+                    'QR suffix',
+                    e.data['suffix'] as String? ?? '',
+                    (value) => update(
+                      (e) => e.copyWith(data: {...e.data, 'suffix': value}),
+                    ),
+                  ),
+                ],
                 _dropdownProperty<String>(
                   key: ValueKey('qr-correction-${e.id}'),
                   label: 'Error correction',
@@ -2465,6 +2628,38 @@ const _systemFields = <String, String>{
   'school_country': 'School country',
   'school_postal_code': 'School postal code',
   'principal_name': 'Principal name',
+};
+
+const _qrSystemFieldGroups = <String, List<String>>{
+  'Student fields': [
+    'full_name',
+    'admission_no',
+    'roll_no',
+    'stream',
+    'father_name',
+    'mother_name',
+    'dob',
+    'gender',
+    'blood_group',
+    'mobile',
+    'aadhaar',
+    'address',
+  ],
+  'Academic fields': ['session', 'class', 'section'],
+  'School fields': [
+    'school_name',
+    'school_address',
+    'school_code',
+    'school_phone',
+    'school_email',
+    'school_website',
+    'school_city',
+    'school_district',
+    'school_state',
+    'school_country',
+    'school_postal_code',
+    'principal_name',
+  ],
 };
 
 class _GridPainter extends CustomPainter {

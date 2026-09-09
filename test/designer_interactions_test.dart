@@ -507,6 +507,34 @@ void main() {
     expect(qr.style['error_correction'], 'medium');
     expect(find.byKey(const Key('design-qr-code')), findsOneWidget);
     expect(field('qr-content'), findsOneWidget);
+
+    final source = find.descendant(
+      of: find.byKey(Key('qr-source-${qr.id}')),
+      matching: find.byType(DropdownButtonFormField<String>),
+    );
+    t.widget<DropdownButtonFormField<String>>(source).onChanged!(
+      'multiple_fields',
+    );
+    await t.pump();
+    final multi = view(t).document.elements.last;
+    expect(multi.data['format'], 'json');
+    expect(multi.data['fields'], hasLength(2));
+    expect(find.byKey(const Key('qr-field-full_name')), findsOneWidget);
+    expect(find.byKey(const Key('qr-field-admission_no')), findsOneWidget);
+
+    t
+        .widget<CheckboxListTile>(find.byKey(const Key('qr-field-full_name')))
+        .onChanged!(false);
+    await t.pump();
+    expect(view(t).document.elements.last.data['fields'], hasLength(1));
+    expect(
+      t
+          .widget<CheckboxListTile>(
+            find.byKey(const Key('qr-field-admission_no')),
+          )
+          .onChanged,
+      isNull,
+    );
     expect(t.takeException(), isNull);
   });
 

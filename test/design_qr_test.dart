@@ -53,6 +53,48 @@ void main() {
     expect(bindings.text(customQr), 'Blue');
   });
 
+  test('multi-field QR bindings produce scoped JSON and labeled text', () {
+    const bindings = DesignBindings(
+      student: _student,
+      className: 'X',
+      schoolName: 'Parity School',
+    );
+    const fields = [
+      {'field': 'full_name', 'label': 'Full name'},
+      {'field': 'admission_no', 'label': 'Admission number'},
+      {'field': 'class', 'label': 'Class'},
+      {'field_uuid': 'house', 'label': 'House'},
+    ];
+    const jsonQr = DesignElement(
+      id: 'json',
+      type: DesignElementType.qrCode,
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 20,
+      data: {'fields': fields, 'format': 'json'},
+    );
+    const textQr = DesignElement(
+      id: 'text',
+      type: DesignElementType.qrCode,
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 20,
+      data: {'fields': fields, 'format': 'labeled_text'},
+    );
+
+    expect(
+      bindings.text(jsonQr),
+      '{"full_name":"Asha Singh","admission_no":"ADM-42",'
+      '"class":"X","custom:house":"Blue"}',
+    );
+    expect(
+      bindings.text(textQr),
+      'Full name: Asha Singh\nAdmission number: ADM-42\nClass: X\nHouse: Blue',
+    );
+  });
+
   testWidgets('QR widget paints valid data for every correction level', (
     tester,
   ) async {

@@ -62,7 +62,7 @@ DesignDocument
   -> Designer / Cards preview / PDF
 ```
 
-The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. QR codes can contain fixed text or bind to system/custom student fields, with configurable correction level, foreground/background colours, and quiet zone.
+The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. QR codes can contain fixed text, bind to one field, or combine up to 20 student, academic, school, and custom fields as structured JSON or labeled text, with configurable correction level, foreground/background colours, and quiet zone.
 
 ### Editing capabilities
 
