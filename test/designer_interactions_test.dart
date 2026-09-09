@@ -503,10 +503,10 @@ void main() {
     expect(qr.type, DesignElementType.qrCode);
     expect(qr.width, 20);
     expect(qr.height, 20);
-    expect(qr.data['text'], 'CAMPUS-ID');
+    expect(qr.data['field'], 'verification_url');
     expect(qr.style['error_correction'], 'medium');
     expect(find.byKey(const Key('design-qr-code')), findsOneWidget);
-    expect(field('qr-content'), findsOneWidget);
+    expect(find.text('Verification link (recommended)'), findsOneWidget);
 
     final source = find.descendant(
       of: find.byKey(Key('qr-source-${qr.id}')),

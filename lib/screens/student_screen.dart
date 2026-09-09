@@ -9,6 +9,7 @@ import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
+import '../widgets/student_verification_link_dialog.dart';
 import '../widgets/student_lifecycle_badge.dart';
 
 class StudentsScreen extends StatefulWidget {
@@ -909,11 +910,24 @@ class _StudentsScreenState extends State<StudentsScreen> {
                           context,
                           AppRoutes.studentHistory(student.uuid),
                         );
+                      } else if (value == 'verification_link') {
+                        showStudentVerificationLinkDialog(
+                          context: context,
+                          api: widget.api,
+                          schoolUuid: widget.schoolUuid,
+                          studentUuid: student.uuid,
+                          studentName: student.fullName,
+                        );
                       }
                     },
                     itemBuilder: (_) => [
                       if (widget.canEdit)
                         const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      if (widget.canDelete)
+                        const PopupMenuItem(
+                          value: 'verification_link',
+                          child: Text('Verification link'),
+                        ),
                       if (widget.canDelete)
                         const PopupMenuItem(
                           value: 'delete',

@@ -4,11 +4,11 @@
 
 **CampusID v0.7.0** is the Excel Grid release. The Flutter package version is `0.7.0+7`, where `+7` is the platform build number.
 
-CampusID remains pre-1.0 while Designer v2 continues to mature and digital identity, advanced print production, and other roadmap modules are still in development.
+CampusID remains pre-1.0 while Designer v2, secure digital verification, advanced print production, and other roadmap modules continue to mature. The verification-link work is currently documented under **Unreleased** and does not change the published `0.7.0+7` package version.
 
 ## Overview
 
-This repository contains the CampusID Flutter client, with Flutter Web deployed to Vercel. It provides the authenticated school-management, student, card-design, and PDF user interface plus the anonymous Public Form route.
+This repository contains the CampusID Flutter client, with Flutter Web deployed to Vercel. It provides the authenticated school-management, student, card-design, and PDF user interface plus anonymous Public Form, design-preview, and student-verification routes.
 
 The Flutter application never connects directly to PostgreSQL and is not the security boundary. All protected data and authorization decisions flow through the FastAPI backend.
 
@@ -47,6 +47,7 @@ forms, templates, audits   and temporary bulk-photo objects
 - Current Card Designer at `/design`
 - Card preview plus individual and filtered/bulk PDF output
 - Platform user and school-assignment administration
+- Revocable QR-based student verification with school-scoped disclosure and an anonymous `/verify/<token>` page
 - Clean web paths through `usePathUrlStrategy()` and Vercel SPA rewrites
 
 PDFs are assembled in the Flutter client from data authorized and returned by the backend.
@@ -63,6 +64,16 @@ DesignDocument
 ```
 
 The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. QR codes can contain fixed text, bind to one field, or combine up to 20 student, academic, school, and custom fields as structured JSON or labeled text, with configurable correction level, foreground/background colours, and quiet zone.
+
+New QR elements default to **Verification link (recommended)**. This source encodes the student's opaque `/verify/<token>` URL instead of embedding PII in the QR payload. Existing QR modes remain available for compatibility. The verification-link binding cannot be selected as visible bound text or mixed into a multi-field payload.
+
+## Public student verification
+
+- School and platform administrators use the shield action in Designer to enable verification and choose the fields disclosed after scanning.
+- Eligible public fields are limited to full name, admission/roll number, stream, academic session, class, section, and photo. Contact details, address, Aadhaar, parent details, audit data, and internal IDs are not selectable.
+- The student action menu exposes **Verification link** to copy, disable/re-enable, or regenerate an individual link. Regeneration invalidates the QR on previously printed cards, so the UI explicitly warns that the card must be reprinted.
+- `/verify/<token>` is outside the authenticated shell and makes an anonymous API request without a bearer header. It shows school identity, the current verification state, and only the school-approved fields.
+- Invalid, disabled, revoked, and inactive links share the same generic unavailable state. The backend remains the authorization, disclosure, throttling, and revocation boundary.
 
 ### Editing capabilities
 
@@ -97,8 +108,8 @@ Concurrent template saves use `updated_at` as an optimistic-concurrency token an
 
 | Role | Current UI access |
 | --- | --- |
-| Platform Admin | All active schools, users/assignments, school and academic setup, student/lifecycle/import/grid workflows, Public Forms, Card Designer, cards, and printing |
-| School Admin | Assigned school(s); school and academic setup, ordinary Teacher/Staff assignments, student/lifecycle/import/grid workflows, Public Forms, Card Designer, cards, and printing |
+| Platform Admin | All active schools, users/assignments, school and academic setup, student/lifecycle/import/grid workflows, Public Forms, public-verification controls, Card Designer, cards, and printing |
+| School Admin | Assigned school(s); school and academic setup, ordinary Teacher/Staff assignments, student/lifecycle/import/grid workflows, Public Forms, public-verification controls, Card Designer, cards, and printing |
 | Card Operator | Assigned school(s); read-only school profile, students, imports, Excel Grid, cards, photos, and printing |
 | Teacher / Staff | Assigned-school read access to school profile and academic structures; no current student/card workflow |
 
@@ -122,6 +133,7 @@ Representative routes:
 | `/public-forms` | Authenticated Public Form management |
 | `/public/forms/<token>` | Anonymous branded student submission |
 | `/public/designs/<token>` | Anonymous read-only saved-design preview with sample student data |
+| `/verify/<token>` | Anonymous school-controlled student verification |
 | `/school-profile` | School profile and logo |
 | `/academic-sessions` | Academic sessions |
 | `/classes-sections` | Classes and sections |
@@ -129,7 +141,7 @@ Representative routes:
 | `/design` | Current Card Designer |
 | `/cards` | Card preview and PDF workflows |
 
-The `/public/forms/<token>` and `/public/designs/<token>` routes are intentionally outside `AuthenticatedShell`. Public design links expose only the saved design and public school-profile bindings, rendered with local sample student values. Protected routes are resolved through the authenticated shell and role/module checks.
+The `/public/forms/<token>`, `/public/designs/<token>`, and `/verify/<token>` routes are intentionally outside `AuthenticatedShell`. Public design links expose only the saved design and public school-profile bindings, rendered with local sample student values. Verification links expose only the backend-approved school/student verification response. Protected routes are resolved through the authenticated shell and role/module checks.
 
 School and platform administrators can manage the revocable design-preview link from the Card Designer. The preview reuses `DesignDocumentView`, so it stays aligned with normal card rendering and never loads a real student record.
 
@@ -213,7 +225,7 @@ A `403` is treated as an authorization error and does not log the user out.
 
 ## Testing
 
-The current suite covers application scaling/shell behavior, authentication bootstrap/login/autofill/session expiry/access revocation, navigation and module visibility, registration school selection, school profiles and assignments, dynamic student fields, bulk Excel import, bulk photos, lifecycle/history/print permissions, Public Forms, Card Designer models, and the Excel Grid.
+The current suite covers application scaling/shell behavior, authentication bootstrap/login/autofill/session expiry/access revocation, navigation and module visibility, registration school selection, school profiles and assignments, dynamic student fields, bulk Excel import, bulk photos, lifecycle/history/print permissions, Public Forms, public design sharing, anonymous student verification, Card Designer models, and the Excel Grid.
 
 ```powershell
 flutter analyze
@@ -236,7 +248,9 @@ Copying `vercel.json` into `build/web` ensures the deployed static directory con
 
 Current production alias: `https://idcard-flutter-web.vercel.app`
 
-After deployment, verify direct navigation and browser refresh on protected and public clean paths, then smoke-test sign-in, school switching, role-specific navigation, students/photos, lifecycle, Public Forms, grid saves, Card Designer, and PDFs.
+After deployment, verify direct navigation and browser refresh on protected and public clean paths, including `/verify/<token>`. Then smoke-test sign-in, school switching, role-specific navigation, students/photos, lifecycle, Public Forms, grid saves, Card Designer, verification disclosure/revocation, and PDFs.
+
+Deploy the backend migration and API before publishing this Flutter build. Render must set `PUBLIC_APP_URL=https://idcard-flutter-web.vercel.app` (or the approved canonical alias), otherwise generated student QR links will point at the wrong frontend origin.
 
 ## Versioning
 
@@ -246,9 +260,9 @@ The current Flutter value is `0.7.0+7`: product release `0.7.0`, build number `7
 
 ## Roadmap
 
-- Designer v2 concurrency and remaining fidelity hardening
-- Barcodes and digital identity (QR-code elements are implemented)
 - Advanced print production and Print Basket
+- Barcode formats and advanced signed/time-bounded digital credentials
+- Designer v2 remaining fidelity and contract hardening
 - Teacher and non-teaching staff workflows
 - School collaboration
 - Photo Studio

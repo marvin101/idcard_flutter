@@ -71,6 +71,7 @@ class DesignBindings {
       'school_country' => schoolProfile?.country ?? '',
       'school_postal_code' => schoolProfile?.postalCode ?? '',
       'principal_name' => schoolProfile?.principalName ?? '',
+      'verification_url' => student.verificationUrl ?? '',
       _ => '',
     };
   }
@@ -107,7 +108,12 @@ class DesignBindings {
       return '${data['prefix'] ?? ''}$payload${data['suffix'] ?? ''}';
     }
     var value = rawValue(element);
-    if (value.isEmpty && element.type != DesignElementType.text) {
+    final isVerificationQr =
+        element.type == DesignElementType.qrCode &&
+        data['field'] == 'verification_url';
+    if (value.isEmpty &&
+        element.type != DesignElementType.text &&
+        !isVerificationQr) {
       value = element.type == DesignElementType.customFieldText
           ? data['fallback'] as String? ??
                 data['label'] as String? ??

@@ -20,6 +20,7 @@ import '../services/api_service.dart';
 import '../widgets/authenticated_app_bar.dart';
 import '../widgets/design_document_view.dart';
 import '../widgets/public_design_share_button.dart';
+import '../widgets/public_verification_settings_button.dart';
 
 class CardDesignerScreen extends StatefulWidget {
   const CardDesignerScreen({
@@ -93,6 +94,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     mobile: '9693836200',
     aadhaar: '216232301889',
     address: 'Basai Toli, Sundi, Ranchi',
+    verificationUrl:
+        'https://idcard-flutter-web.vercel.app/verify/sample-verification-token',
     isActive: true,
   );
 
@@ -555,7 +558,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           'label': customField.label,
           'fallback': customField.label,
         },
-        DesignElementType.qrCode => {'text': 'CAMPUS-ID'},
+        DesignElementType.qrCode => {'field': 'verification_url'},
         _ => const {},
       },
     );
@@ -1092,6 +1095,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               title: const Text('Card designer'),
               actions: [
                 if (widget.canManagePublicShare)
+                  PublicVerificationSettingsButton(
+                    schoolUuid: widget.schoolUuid,
+                    api: widget.api,
+                  ),
+                if (widget.canManagePublicShare)
                   PublicDesignShareButton(
                     schoolUuid: widget.schoolUuid,
                     api: widget.api,
@@ -1154,6 +1162,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       appBar: AuthenticatedAppBar(
         title: const Text('Card designer'),
         actions: [
+          if (widget.canManagePublicShare)
+            PublicVerificationSettingsButton(
+              schoolUuid: widget.schoolUuid,
+              api: widget.api,
+            ),
           if (widget.canManagePublicShare)
             PublicDesignShareButton(
               schoolUuid: widget.schoolUuid,
@@ -1628,6 +1641,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   String _qrSource(DesignElement element) {
     if (element.data['fields'] is List) return 'multiple_fields';
     if (element.data['field_uuid'] is String) return 'custom_field';
+    if (element.data['field'] == 'verification_url') {
+      return 'verification_link';
+    }
     if (element.data['field'] is String) return 'system_field';
     return 'static';
   }
@@ -1636,7 +1652,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     final prefix = element.data['prefix'] as String?;
     final suffix = element.data['suffix'] as String?;
     late final Map<String, dynamic> data;
-    if (source == 'multiple_fields') {
+    if (source == 'verification_link') {
+      data = {'field': 'verification_url'};
+    } else if (source == 'multiple_fields') {
       data = {
         'fields': [
           {'field': 'full_name', 'label': _systemFields['full_name']},
@@ -1867,6 +1885,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   value: _qrSource(e),
                   items: [
                     const DropdownMenuItem(
+                      value: 'verification_link',
+                      child: Text('Verification link (recommended)'),
+                    ),
+                    const DropdownMenuItem(
                       value: 'static',
                       child: Text('Static text'),
                     ),
@@ -2066,8 +2088,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       ),
                   ],
                 ],
-                if (_qrSource(e) != 'multiple_fields' ||
-                    e.data['format'] == 'labeled_text') ...[
+                if (_qrSource(e) != 'verification_link' &&
+                    (_qrSource(e) != 'multiple_fields' ||
+                        e.data['format'] == 'labeled_text')) ...[
                   _textProperty(
                     'QR prefix',
                     e.data['prefix'] as String? ?? '',

@@ -17,6 +17,13 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
   bulk-export preflight validation.
 - Added multi-field QR selection for student, academic, school, and custom data,
   with stable scoped JSON or human-readable labeled-text payloads.
+- Added a recommended verification-link QR source, a school-controlled public
+  verification page, disclosure settings, and per-student revoke/regenerate controls.
+
+### Security
+
+- Verification QR codes encode opaque capability URLs instead of student PII;
+  anonymous pages render only the backend-approved school disclosure response.
 
 ### Changed
 

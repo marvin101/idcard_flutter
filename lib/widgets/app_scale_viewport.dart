@@ -85,4 +85,3 @@ class _AppScaleViewportState extends State<AppScaleViewport> {
     );
   }
 }
-

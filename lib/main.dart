@@ -29,6 +29,7 @@ import 'screens/student_history_screen.dart';
 import 'screens/public_form_management_screen.dart';
 import 'screens/public_student_form_screen.dart';
 import 'screens/public_design_screen.dart';
+import 'screens/public_student_verification_screen.dart';
 import 'screens/student_screen.dart';
 import 'screens/student_grid_screen.dart';
 import 'theme/app_theme.dart';
@@ -119,6 +120,11 @@ class _MyAppState extends State<MyApp> {
         token: AppRoutes.publicDesignToken(routeName)!,
         api: ApiService(),
       ),
+      _ when AppRoutes.isPublicVerification(routeName) =>
+        PublicStudentVerificationScreen(
+          token: AppRoutes.publicVerificationToken(routeName)!,
+          api: ApiService(),
+        ),
       _ when AppRoutes.isProtected(routeName) => _AuthenticatedRoute(
         routeName: routeName,
         arguments: arguments,

@@ -36,6 +36,8 @@ class ApiStudent {
   final String? printedByUserUuid;
   final String? printedByName;
   final int printCount;
+  final String? verificationUrl;
+  final bool publicVerificationEnabled;
 
   const ApiStudent({
     required this.uuid,
@@ -67,6 +69,8 @@ class ApiStudent {
     this.printedByUserUuid,
     this.printedByName,
     this.printCount = 0,
+    this.verificationUrl,
+    this.publicVerificationEnabled = true,
   });
 
   bool get isVerified => verificationStatus == 'verified';
@@ -108,6 +112,9 @@ class ApiStudent {
       printedByUserUuid: json['printed_by_user_uuid'] as String?,
       printedByName: json['printed_by_name'] as String?,
       printCount: (json['print_count'] as num?)?.toInt() ?? 0,
+      verificationUrl: json['verification_url'] as String?,
+      publicVerificationEnabled:
+          json['public_verification_enabled'] as bool? ?? true,
       customFields: (json['custom_fields'] as List<dynamic>? ?? const [])
           .map(
             (item) =>
@@ -186,6 +193,9 @@ class StudentAuditEvent {
     'marked_printed' => 'Card Marked Printed',
     'reprinted' => 'Card Reprint Recorded',
     'student_deactivated' => 'Student Deactivated',
+    'public_verification_enabled' => 'Verification Link Enabled',
+    'public_verification_disabled' => 'Verification Link Disabled',
+    'public_verification_link_regenerated' => 'Verification Link Regenerated',
     _ => _words(eventType),
   };
 
@@ -207,6 +217,7 @@ class StudentAuditEvent {
       'section_id': 'Section',
       'is_active': 'Active status',
       'photo_path': 'Photo',
+      'public_verification_enabled': 'Public verification link',
     };
     if (labels.containsKey(field)) return labels[field];
     if (field.startsWith('custom_fields.')) {
@@ -227,6 +238,8 @@ class StudentAuditEvent {
       'student_photo_replaced' => 'The student photo was replaced',
       'student_photo_removed' => 'The student photo was removed',
       'student_deactivated' => 'The student record was deactivated',
+      'public_verification_link_regenerated' =>
+        'The public verification link was regenerated',
       _ => 'Student record event',
     };
   }

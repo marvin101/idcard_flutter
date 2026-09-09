@@ -33,4 +33,3 @@ class DisplayScaleProvider extends ChangeNotifier {
     setScale(1.0);
   }
 }
-

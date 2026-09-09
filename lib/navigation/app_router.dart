@@ -41,6 +41,7 @@ class AppRouteInformationParser extends RouteInformationParser<AppRouteState> {
         normalized == AppRoutes.support ||
         AppRoutes.isPublicForm(normalized) ||
         AppRoutes.isPublicDesign(normalized) ||
+        AppRoutes.isPublicVerification(normalized) ||
         AppRoutes.isProtected(normalized)) {
       return normalized;
     }

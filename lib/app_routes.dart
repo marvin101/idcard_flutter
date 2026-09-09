@@ -11,6 +11,7 @@ abstract final class AppRoutes {
   static const publicForms = '/public-forms';
   static const publicFormPrefix = '/public/forms/';
   static const publicDesignPrefix = '/public/designs/';
+  static const publicVerificationPrefix = '/verify/';
   static const studentImport = '/students/import';
   static const bulkPhotoImport = '/students/photos/import';
   static const studentHistoryPrefix = '/students/';
@@ -66,6 +67,19 @@ abstract final class AppRoutes {
   static String? publicDesignToken(String? routeName) =>
       isPublicDesign(routeName)
       ? Uri.decodeComponent(routeName!.substring(publicDesignPrefix.length))
+      : null;
+
+  static String publicVerification(String token) =>
+      '$publicVerificationPrefix${Uri.encodeComponent(token)}';
+  static bool isPublicVerification(String? routeName) =>
+      routeName != null &&
+      routeName.startsWith(publicVerificationPrefix) &&
+      routeName.length > publicVerificationPrefix.length;
+  static String? publicVerificationToken(String? routeName) =>
+      isPublicVerification(routeName)
+      ? Uri.decodeComponent(
+          routeName!.substring(publicVerificationPrefix.length),
+        )
       : null;
 
   static String studentHistory(String studentUuid) =>
