@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:idcard_flutter/models/api_student.dart';
 import 'package:idcard_flutter/models/card_template.dart';
+import 'package:idcard_flutter/services/api_service.dart';
+import 'package:idcard_flutter/widgets/id_card_preview.dart';
 import 'package:idcard_flutter/widgets/template_card.dart';
 
 void main() {
@@ -14,6 +16,45 @@ void main() {
     expect(decoded.maskAadhaar, isTrue);
     expect(decoded.document.schemaVersion, 2);
     expect(decoded.toApi()['design']['schema_version'], 2);
+  });
+
+  test('optional back design survives an API round trip', () {
+    final source = CardTemplate(
+      name: 'Duplex',
+      document: const DesignDocument(canvas: DesignCanvas(), elements: []),
+      backDocument: const DesignDocument(
+        canvas: DesignCanvas(backgroundColor: '#EEEEEE'),
+        elements: [
+          DesignElement(
+            id: 'back-label',
+            type: DesignElementType.text,
+            x: 5,
+            y: 5,
+            width: 30,
+            height: 8,
+            data: {'text': 'BACK'},
+          ),
+        ],
+      ),
+    );
+
+    final decoded = CardTemplate.fromApi(source.toApi());
+    expect(decoded.hasBackDesign, isTrue);
+    expect(decoded.backDocument!.elements.single.data['text'], 'BACK');
+    expect(decoded.toApi()['back_design'], isA<Map<String, dynamic>>());
+  });
+
+  test('front and back canvas dimensions must match', () {
+    final payload = CardTemplate(
+      name: 'Mismatched',
+      document: const DesignDocument(canvas: DesignCanvas(), elements: []),
+      backDocument: const DesignDocument(
+        canvas: DesignCanvas(width: 90),
+        elements: [],
+      ),
+    ).toApi();
+
+    expect(() => CardTemplate.fromApi(payload), throwsFormatException);
   });
 
   test('legacy v1 settings normalize deterministically to v2 elements', () {
@@ -230,5 +271,63 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('two-sided card preview can flip between front and back', (
+    tester,
+  ) async {
+    final api = ApiService(baseUrl: 'http://test');
+    addTearDown(api.dispose);
+    final student = ApiStudent(
+      uuid: 'duplex-student',
+      sessionUuid: 'session',
+      classUuid: 'class',
+      sectionUuid: 'section',
+      admissionNo: 'A-1',
+      fullName: 'Student',
+      isActive: true,
+    );
+    DesignDocument side(String label) => DesignDocument(
+      canvas: const DesignCanvas(),
+      elements: [
+        DesignElement(
+          id: label,
+          type: DesignElementType.text,
+          x: 5,
+          y: 5,
+          width: 30,
+          height: 8,
+          data: {'text': label},
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 500,
+            child: IdCardPreview(
+              student: student,
+              schoolName: 'School',
+              api: api,
+              template: CardTemplate(
+                name: 'Duplex',
+                document: side('FRONT SIDE'),
+                backDocument: side('BACK SIDE'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('FRONT SIDE'), findsOneWidget);
+    expect(find.text('BACK SIDE'), findsNothing);
+    await tester.tap(
+      find.byKey(const Key('preview-side-toggle-duplex-student')),
+    );
+    await tester.pump();
+    expect(find.text('FRONT SIDE'), findsNothing);
+    expect(find.text('BACK SIDE'), findsOneWidget);
   });
 }

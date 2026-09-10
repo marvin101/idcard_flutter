@@ -8,6 +8,71 @@ import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/widgets/design_document_view.dart';
 
 void main() {
+  testWidgets('designer edits front and back as independent documents', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = ApiService(
+      baseUrl: 'http://test',
+      client: MockClient(
+        (request) async => http.Response(
+          request.url.path.endsWith('/student-fields') ? '[]' : '{}',
+          request.url.path.endsWith('/student-fields') ? 200 : 404,
+        ),
+      ),
+    );
+    addTearDown(api.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CardDesignerScreen(
+          schoolUuid: 'school',
+          api: api,
+          initialTemplate: const CardTemplate(
+            name: 'Duplex',
+            document: DesignDocument(
+              canvas: DesignCanvas(),
+              elements: [
+                DesignElement(
+                  id: 'front-only',
+                  type: DesignElementType.text,
+                  x: 2,
+                  y: 2,
+                  width: 20,
+                  height: 5,
+                  data: {'text': 'Front'},
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final switcher = tester.widget<SegmentedButton<bool>>(
+      find.byKey(const Key('designer-side-switcher')),
+    );
+    switcher.onSelectionChanged!({true});
+    await tester.pump();
+    DesignDocumentView canvas() => tester.widget<DesignDocumentView>(
+      find.byKey(const Key('designer-canvas')),
+    );
+    expect(canvas().document.elements, isEmpty);
+
+    tester.widget<TextButton>(find.byKey(const Key('add-text'))).onPressed!();
+    await tester.pump();
+    expect(canvas().document.elements, hasLength(1));
+
+    tester
+        .widget<SegmentedButton<bool>>(
+          find.byKey(const Key('designer-side-switcher')),
+        )
+        .onSelectionChanged!({false});
+    await tester.pump();
+    expect(canvas().document.elements.single.id, 'front-only');
+  });
+
   testWidgets('selection, edits, history and gestures share the live model', (
     tester,
   ) async {

@@ -72,6 +72,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   double _zoom = 1;
   bool _saving = false;
   bool _localDuplicate = false;
+  bool _editingBack = false;
   bool _allowPop = false;
   bool _leaveDialogOpen = false;
   String _saveState = 'Saved';
@@ -99,7 +100,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     isActive: true,
   );
 
-  DesignDocument get _document => _template.document;
+  DesignDocument get _document => _editingBack
+      ? (_template.backDocument ?? _template.document)
+      : _template.document;
   DesignElement? get _selected => _document.elements
       .where((element) => element.id == _selectedId)
       .firstOrNull;
@@ -239,8 +242,25 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
     final next = resizeDesignDocument(_document, nextCanvas, strategy);
+    final otherDocument = _editingBack
+        ? _template.document
+        : _template.backDocument;
+    final resizedOther = otherDocument == null
+        ? null
+        : resizeDesignDocument(
+            otherDocument,
+            otherDocument.canvas.copyWith(
+              width: nextCanvas.width,
+              height: nextCanvas.height,
+            ),
+            strategy,
+          );
     _updateUi(() => _canvasError = null);
-    _commit(next);
+    _commitTemplate(
+      _editingBack
+          ? _template.copyWith(document: resizedOther, backDocument: next)
+          : _template.copyWith(document: next, backDocument: resizedOther),
+    );
     _syncCanvasControllers();
     if (strategy == CanvasResizeStrategy.keepPositions &&
         hasElementsOutsideCanvas(next)) {
@@ -323,9 +343,17 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _canvasBackground.text = _document.canvas.backgroundColor;
   }
 
-  bool _sameTemplate(CardTemplate a, CardTemplate b) =>
-      identical(a, b) ||
-      (a.name == b.name && _sameDocument(a.document, b.document));
+  bool _sameTemplate(CardTemplate a, CardTemplate b) {
+    if (identical(a, b)) return true;
+    final sameBack =
+        a.backDocument == null && b.backDocument == null ||
+        a.backDocument != null &&
+            b.backDocument != null &&
+            _sameDocument(a.backDocument!, b.backDocument!);
+    return a.name == b.name &&
+        _sameDocument(a.document, b.document) &&
+        sameBack;
+  }
 
   bool _sameDocument(DesignDocument a, DesignDocument b) =>
       identical(a, b) ||
@@ -391,7 +419,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     String? selectedId,
     bool gestureUpdate = false,
   }) => _commitTemplate(
-    _template.copyWith(document: next),
+    _editingBack
+        ? _template.copyWith(backDocument: next)
+        : _template.copyWith(document: next),
     selectedId: selectedId,
     gestureUpdate: gestureUpdate,
   );
@@ -439,6 +469,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _updateUi(() {
       _historyIndex = index;
       _template = _history[index].template;
+      if (_editingBack && !_template.hasBackDesign) _editingBack = false;
       _selectedId = _history[index].selectedId;
       _localDuplicate = _history[index].localDuplicate;
       _syncingName = true;
@@ -448,6 +479,50 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       _canvasError = null;
       _refreshDirtyState();
     });
+  }
+
+  void _switchSide(bool showBack) {
+    if (_editingBack == showBack) return;
+    _endGesture();
+    if (showBack && !_template.hasBackDesign) {
+      _commitTemplate(_template.withBlankBack());
+    }
+    _updateUi(() {
+      _editingBack = showBack;
+      _selectedId = null;
+      _syncCanvasControllers();
+      _canvasError = null;
+    });
+  }
+
+  Future<void> _removeBackDesign() async {
+    if (!_template.hasBackDesign) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove back design?'),
+        content: const Text(
+          'This removes the complete back side from this template. You can still use Undo before saving.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm-remove-back-design'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove back'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _endGesture();
+    _selectedId = null;
+    _editingBack = false;
+    _commitTemplate(_template.copyWith(clearBackDocument: true));
+    _syncCanvasControllers();
   }
 
   void _undo() {
@@ -773,7 +848,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       );
       return false;
     }
-    if (_document.elements.length > DesignDocument.maxElements) {
+    if (_template.document.elements.length > DesignDocument.maxElements ||
+        (_template.backDocument?.elements.length ?? 0) >
+            DesignDocument.maxElements) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('A design can contain at most 250 elements.'),
@@ -987,12 +1064,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   Future<void> _reset() async {
+    final side = _editingBack ? 'back side' : 'front side';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset card design?'),
-        content: const Text(
-          'This replaces the current canvas with the default template. You can still use Undo before saving.',
+        title: Text('Reset $side?'),
+        content: Text(
+          _editingBack
+              ? 'This clears every element from the back side. You can still use Undo before saving.'
+              : 'This replaces the front side with the default template. You can still use Undo before saving.',
         ),
         actions: [
           TextButton(
@@ -1009,7 +1089,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     if (confirmed == true) {
       _endGesture();
       _selectedId = null;
-      _commit(CardTemplate.uploadedDesign.deepCopy().document);
+      _commit(
+        _editingBack
+            ? _template.withBlankBack().backDocument!.copyWith(
+                elements: const [],
+              )
+            : CardTemplate.uploadedDesign.deepCopy().document,
+      );
       _syncCanvasControllers();
     }
   }
@@ -1173,7 +1259,17 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               api: widget.api,
             ),
           _section(
-            () => (_dirty, _saving, _localDuplicate, _document),
+            () => (_editingBack, _template.hasBackDesign),
+            _sideSwitcher,
+          ),
+          _section(
+            () => (
+              _dirty,
+              _saving,
+              _localDuplicate,
+              _document,
+              _template.hasBackDesign,
+            ),
             () => PopupMenuButton<_TemplateAction>(
               key: const Key('designer-template-actions'),
               tooltip: 'Design actions',
@@ -1186,6 +1282,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     _revertToSaved();
                   case _TemplateAction.reset:
                     _reset();
+                  case _TemplateAction.removeBack:
+                    _removeBackDesign();
                 }
               },
               itemBuilder: (context) => [
@@ -1209,6 +1307,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       ),
                   child: const Text('Reset design'),
                 ),
+                if (_template.hasBackDesign)
+                  PopupMenuItem(
+                    value: _TemplateAction.removeBack,
+                    enabled: !_saving,
+                    child: const Text('Remove back design'),
+                  ),
               ],
             ),
           ),
@@ -1421,6 +1525,43 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             ),
           ),
         ],
+      ),
+    ),
+  );
+
+  Widget _sideSwitcher() => Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      child: SegmentedButton<bool>(
+        key: const Key('designer-side-switcher'),
+        segments: [
+          const ButtonSegment(
+            value: false,
+            icon: Icon(Icons.looks_one_outlined),
+            label: Text('Front'),
+          ),
+          ButtonSegment(
+            value: true,
+            icon: Icon(
+              _template.hasBackDesign
+                  ? Icons.flip_to_back_outlined
+                  : Icons.add_box_outlined,
+            ),
+            label: const Text('Back'),
+          ),
+        ],
+        selected: {_editingBack},
+        showSelectedIcon: false,
+        style: ButtonStyle(
+          foregroundColor: const WidgetStatePropertyAll(Colors.white),
+          side: const WidgetStatePropertyAll(BorderSide(color: Colors.white54)),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? Colors.white24
+                : Colors.transparent,
+          ),
+        ),
+        onSelectionChanged: (selection) => _switchSide(selection.first),
       ),
     ),
   );
@@ -2767,6 +2908,6 @@ class _DesignerSnapshot {
   final bool localDuplicate;
 }
 
-enum _TemplateAction { duplicate, revert, reset }
+enum _TemplateAction { duplicate, revert, reset, removeBack }
 
 enum _LeaveAction { cancel, discard, save }

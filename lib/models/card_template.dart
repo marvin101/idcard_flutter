@@ -281,11 +281,13 @@ class CardTemplate {
   const CardTemplate({
     required this.name,
     required this.document,
+    this.backDocument,
     this.updatedAt,
   });
   static const maxNameLength = 120;
   final String name;
   final DesignDocument document;
+  final DesignDocument? backDocument;
   final DateTime? updatedAt;
   static final uploadedDesign = CardTemplate(
     name: 'Uploaded blue school card',
@@ -325,12 +327,19 @@ class CardTemplate {
   bool get showAddress => document.settings['show_address'] != false;
   bool get maskAadhaar => document.settings['mask_aadhaar'] != false;
   bool get roundedPhoto => document.settings['rounded_photo'] != false;
-  CardTemplate copyWith({String? name, DesignDocument? document}) =>
-      CardTemplate(
-        name: name ?? this.name,
-        document: document ?? this.document,
-        updatedAt: updatedAt,
-      );
+  bool get hasBackDesign => backDocument != null;
+
+  CardTemplate copyWith({
+    String? name,
+    DesignDocument? document,
+    DesignDocument? backDocument,
+    bool clearBackDocument = false,
+  }) => CardTemplate(
+    name: name ?? this.name,
+    document: document ?? this.document,
+    backDocument: clearBackDocument ? null : backDocument ?? this.backDocument,
+    updatedAt: updatedAt,
+  );
 
   /// Returns a structurally independent copy, including nested style, binding,
   /// and settings collections.
@@ -342,6 +351,13 @@ class CardTemplate {
         jsonDecode(jsonEncode(document.toJson())) as Map,
       ),
     ),
+    backDocument: backDocument == null
+        ? null
+        : DesignDocument.fromJson(
+            Map<String, dynamic>.from(
+              jsonDecode(jsonEncode(backDocument!.toJson())) as Map,
+            ),
+          ),
   );
 
   /// Creates a local experiment whose element identities cannot collide with
@@ -350,7 +366,9 @@ class CardTemplate {
   CardTemplate duplicateWorkingCopy({
     required String Function(DesignElement element, int index) elementId,
   }) {
-    final copied = deepCopy().document;
+    final deepCopied = deepCopy();
+    final copied = deepCopied.document;
+    final copiedBack = deepCopied.backDocument;
     return CardTemplate(
       name: '$name copy',
       document: copied.copyWith(
@@ -359,12 +377,21 @@ class CardTemplate {
             copied.elements[i].copyWith(id: elementId(copied.elements[i], i)),
         ],
       ),
+      backDocument: copiedBack?.copyWith(
+        elements: [
+          for (var i = 0; i < copiedBack.elements.length; i++)
+            copiedBack.elements[i].copyWith(
+              id: elementId(copiedBack.elements[i], copied.elements.length + i),
+            ),
+        ],
+      ),
     );
   }
 
   factory CardTemplate.fromApi(Map<String, dynamic> json) {
     final name = json['name'];
     final design = json['design'];
+    final backDesign = json['back_design'];
     final rawUpdatedAt = json['updated_at'];
     if (name is! String || name.trim().isEmpty) {
       throw const FormatException('Card-template name is missing or invalid.');
@@ -372,6 +399,11 @@ class CardTemplate {
     if (design is! Map) {
       throw const FormatException(
         'Card-template design is missing or invalid.',
+      );
+    }
+    if (backDesign != null && backDesign is! Map) {
+      throw const FormatException(
+        'Card-template back_design must be an object or null.',
       );
     }
     final updatedAt = switch (rawUpdatedAt) {
@@ -387,18 +419,49 @@ class CardTemplate {
         'Card-template updated_at is missing or invalid.',
       );
     }
+    final frontDocument = DesignDocument.fromJson(
+      Map<String, dynamic>.from(design),
+    );
+    final parsedBack = backDesign == null
+        ? null
+        : DesignDocument.fromJson(Map<String, dynamic>.from(backDesign));
+    if (parsedBack != null &&
+        ((parsedBack.canvas.width - frontDocument.canvas.width).abs() > .001 ||
+            (parsedBack.canvas.height - frontDocument.canvas.height).abs() >
+                .001)) {
+      throw const FormatException(
+        'Card-template front and back canvas dimensions must match.',
+      );
+    }
     return CardTemplate(
       name: name,
-      document: DesignDocument.fromJson(Map<String, dynamic>.from(design)),
+      document: frontDocument,
+      backDocument: parsedBack,
       updatedAt: updatedAt?.toUtc(),
     );
   }
   Map<String, dynamic> toApi({DateTime? expectedUpdatedAt}) => {
     'name': name,
     'design': document.toJson(),
+    'back_design': backDocument?.toJson(),
     if (expectedUpdatedAt != null)
       'expected_updated_at': expectedUpdatedAt.toUtc().toIso8601String(),
   };
+
+  CardTemplate withBlankBack() => backDocument != null
+      ? this
+      : copyWith(
+          backDocument: DesignDocument(
+            canvas: DesignCanvas(
+              width: document.canvas.width,
+              height: document.canvas.height,
+              orientation: document.canvas.orientation,
+              backgroundColor: '#FFFFFF',
+            ),
+            elements: const [],
+            settings: Map<String, dynamic>.from(document.settings),
+          ),
+        );
 }
 
 DesignDocument legacyDesignDocument(Map<String, dynamic> design) {

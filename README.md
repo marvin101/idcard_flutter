@@ -64,7 +64,7 @@ DesignDocument
   -> Designer / Cards preview / PDF
 ```
 
-The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. QR codes can contain fixed text, bind to one field, or combine up to 20 student, academic, school, and custom fields as structured JSON or labeled text, with configurable correction level, foreground/background colours, and quiet zone.
+The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. Templates may include an optional back document: Designer exposes independent Front/Back editing and Cards can flip each preview between sides. Both canvases keep matching physical dimensions. PDF export remains front-only in this initial duplex slice. QR codes can contain fixed text, bind to one field, or combine up to 20 student, academic, school, and custom fields as structured JSON or labeled text, with configurable correction level, foreground/background colours, and quiet zone.
 
 New QR elements default to **Verification link (recommended)**. This source encodes the student's opaque `/verify/<token>` URL instead of embedding PII in the QR payload. Existing QR modes remain available for compatibility. The verification-link binding cannot be selected as visible bound text or mixed into a multi-field payload.
 
@@ -89,7 +89,7 @@ New QR elements default to **Verification link (recommended)**. This source enco
 
 ### Template persistence and safety
 
-There is one stored template per school, loaded and saved through the existing `/schools/{school_uuid}/card-template` API. A `404` means no template exists and opens the canonical default. A successful save makes the server-returned representation authoritative; a failed save preserves the current working document, the last saved snapshot, and the dirty state.
+There is one stored template per school, loaded and saved through the existing `/schools/{school_uuid}/card-template` API. The required `design` is the front and optional `back_design` is the back; removing the back sends an explicit null. A `404` means no template exists and opens the canonical default. A successful save makes the server-returned representation authoritative; a failed save preserves the current working document, the last saved snapshot, and the dirty state.
 
 Missing schema versions and explicit v1 documents remain readable through deterministic in-memory conversion. Malformed or corrupt v2 documents are reported as errors rather than silently replaced with defaults, and explicit unsupported schema versions are rejected.
 
@@ -261,7 +261,7 @@ The current Flutter value is `0.8.0+8`: product release `0.8.0`, build number `8
 
 ## Roadmap
 
-- Advanced print production and Print Basket (working-set, export, and front-side sheet-imposition slices complete; duplex remains)
+- Advanced print production and Print Basket (working-set, front-side sheet imposition, and duplex design/preview slices complete; duplex PDF output remains)
 - Barcode formats and advanced signed/time-bounded digital credentials
 - Designer v2 remaining fidelity and contract hardening
 - Teacher and non-teaching staff workflows

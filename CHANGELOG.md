@@ -10,6 +10,8 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 ### Added
 
+- Added optional two-sided card templates with independent Front/Back editing,
+  undoable back-side creation/removal, and a per-card preview flip control.
 - Added the first Advanced Print Production slice: a Print Basket that keeps
   selected cards across search and filter changes, supports review/removal/clear
   actions, and exports through the existing PDF preflight workflow.
@@ -19,6 +21,8 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 ### Changed
 
+- Canvas size and orientation changes now keep both card sides physically
+  aligned. Existing PDF export remains front-only for this initial duplex slice.
 - Card selection is now available to print-capable roles even when they do not
   have student verification or print-lifecycle permissions.
 

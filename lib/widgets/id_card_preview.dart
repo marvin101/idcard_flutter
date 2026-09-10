@@ -52,7 +52,7 @@ class IdCardPreview extends StatelessWidget {
       ),
       child: Column(
         children: [
-          TemplateCard(
+          _TwoSidedTemplateCard(
             student: student,
             template: template,
             sessionName: sessionName,
@@ -62,7 +62,7 @@ class IdCardPreview extends StatelessWidget {
             logoUrl: logoUrl,
             schoolName: schoolName,
             schoolProfile: schoolProfile,
-            assetBaseUrl: api.baseUrl,
+            api: api,
           ),
           SizedBox(
             height: actionsHeight,
@@ -159,6 +159,86 @@ class IdCardPreview extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TwoSidedTemplateCard extends StatefulWidget {
+  const _TwoSidedTemplateCard({
+    required this.student,
+    required this.schoolName,
+    required this.api,
+    required this.template,
+    this.sessionName,
+    this.className,
+    this.sectionName,
+    this.photoUrl,
+    this.logoUrl,
+    this.schoolProfile,
+  });
+
+  final ApiStudent student;
+  final String schoolName;
+  final ApiService api;
+  final CardTemplate template;
+  final String? sessionName, className, sectionName, photoUrl, logoUrl;
+  final SchoolProfile? schoolProfile;
+
+  @override
+  State<_TwoSidedTemplateCard> createState() => _TwoSidedTemplateCardState();
+}
+
+class _TwoSidedTemplateCardState extends State<_TwoSidedTemplateCard> {
+  bool _showBack = false;
+
+  @override
+  void didUpdateWidget(covariant _TwoSidedTemplateCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.template.hasBackDesign) _showBack = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleTemplate = _showBack
+        ? widget.template.copyWith(document: widget.template.backDocument)
+        : widget.template;
+    return Stack(
+      children: [
+        TemplateCard(
+          student: widget.student,
+          template: visibleTemplate,
+          sessionName: widget.sessionName,
+          photoUrl: widget.photoUrl,
+          className: widget.className,
+          sectionName: widget.sectionName,
+          logoUrl: widget.logoUrl,
+          schoolName: widget.schoolName,
+          schoolProfile: widget.schoolProfile,
+          assetBaseUrl: widget.api.baseUrl,
+        ),
+        if (widget.template.hasBackDesign)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Material(
+              color: Colors.white.withValues(alpha: .9),
+              shape: const CircleBorder(),
+              elevation: 1,
+              child: IconButton(
+                key: Key('preview-side-toggle-${widget.student.uuid}'),
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                tooltip: _showBack ? 'Show front' : 'Show back',
+                onPressed: () => setState(() => _showBack = !_showBack),
+                icon: Icon(
+                  _showBack
+                      ? Icons.flip_to_front_outlined
+                      : Icons.flip_to_back_outlined,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
