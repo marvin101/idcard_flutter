@@ -7,7 +7,7 @@ tokens, capability URLs, or secrets.
 
 ## Candidate validation
 
-- [ ] Backend and Flutter use the same intended product version; unreleased verification work has not been presented as an already published release.
+- [ ] Backend reports `0.8.0`, Flutter reports `0.8.0+8`, and both changelogs contain the dated `0.8.0` release notes.
 - [ ] `flutter pub get`, `flutter analyze`, and `flutter test` pass.
 - [ ] A production build succeeds with the approved API origin:
 

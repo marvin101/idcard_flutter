@@ -2,9 +2,9 @@
 
 ## Current release
 
-**CampusID v0.7.0** is the Excel Grid release. The Flutter package version is `0.7.0+7`, where `+7` is the platform build number.
+**CampusID v0.8.0** is the Designer v2 and secure student-verification release. The Flutter package version is `0.8.0+8`, where `+8` is the platform build number.
 
-CampusID remains pre-1.0 while Designer v2, secure digital verification, advanced print production, and other roadmap modules continue to mature. The verification-link work is currently documented under **Unreleased** and does not change the published `0.7.0+7` package version.
+CampusID remains pre-1.0 while advanced print production, Designer fidelity, and other roadmap modules continue to mature. Version 0.8.0 adds Designer v2, flexible QR payloads, and revocable school-controlled student verification.
 
 ## Overview
 
@@ -256,7 +256,7 @@ Deploy the backend migration and API before publishing this Flutter build. Rende
 
 CampusID follows Semantic Versioning: `MAJOR.MINOR.PATCH`. Backend and Flutter currently share one product version. `pubspec.yaml` adds Flutter's platform build number after `+`.
 
-The current Flutter value is `0.7.0+7`: product release `0.7.0`, build number `7`. The 0.6.x milestone represented Public Forms; 0.7.0 is the Excel Grid release. Pre-1.0 minor releases may still introduce substantial product changes.
+The current Flutter value is `0.8.0+8`: product release `0.8.0`, build number `8`. The 0.6.x milestone represented Public Forms, 0.7.0 added the Excel Grid, and 0.8.0 delivers Designer v2, flexible QR payloads, and secure student-verification links. Pre-1.0 minor releases may still introduce substantial product changes.
 
 ## Roadmap
 
