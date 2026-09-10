@@ -13,6 +13,9 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 - Added the first Advanced Print Production slice: a Print Basket that keeps
   selected cards across search and filter changes, supports review/removal/clear
   actions, and exports through the existing PDF preflight workflow.
+- Added A4 and Letter sheet imposition with portrait/landscape orientation,
+  configurable margins and spacing, exact-size automatic card grids, page-count
+  review, non-fitting layout validation, and optional crop marks.
 
 ### Changed
 

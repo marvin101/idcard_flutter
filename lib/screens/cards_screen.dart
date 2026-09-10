@@ -13,6 +13,7 @@ import '../navigation/app_navigation.dart';
 import '../models/card_template.dart';
 import '../models/school_profile.dart';
 import '../models/design_bindings.dart';
+import '../models/print_sheet.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
@@ -31,6 +32,7 @@ typedef BulkPdfAction =
       required String? schoolLogoUrl,
       required SchoolProfile? schoolProfile,
       required String? assetBaseUrl,
+      required PrintSheetSettings printSettings,
       required void Function(int completed, int total) onCardPrepared,
     });
 
@@ -666,6 +668,8 @@ class _CardsScreenState extends State<CardsScreen> {
         initialSectionUuid: _selectedSectionUuid,
         selectedStudentCount: _selectedStudentUuids.length,
         printBasketCount: _printBasketStudents.length,
+        cardWidthMm: _cardTemplate.document.canvas.width,
+        cardHeightMm: _cardTemplate.document.canvas.height,
         verificationStatus: _verificationStatus,
         printed: _printed,
       ),
@@ -743,6 +747,7 @@ class _CardsScreenState extends State<CardsScreen> {
           schoolLogoUrl: _schoolLogoUrl,
           schoolProfile: _schoolProfile,
           assetBaseUrl: widget.api.baseUrl,
+          printSettings: filter.printSettings,
           onCardPrepared: onCardPrepared,
         );
       } else {
@@ -753,6 +758,7 @@ class _CardsScreenState extends State<CardsScreen> {
           assetBaseUrl: widget.api.baseUrl,
           template: _cardTemplate,
           schoolLogoUrl: _schoolLogoUrl,
+          printSettings: filter.printSettings,
           onCardPrepared: onCardPrepared,
         );
         if (mounted) setState(() => _bulkExportStatus = 'Opening download…');
@@ -941,14 +947,10 @@ class _CardsScreenState extends State<CardsScreen> {
                     ? null
                     : () {
                         Navigator.pop(dialogContext);
-                        _runBulkExport(
-                          const BulkPdfFilter(
-                            scope: BulkCardExportScope.printBasket,
-                          ),
-                        );
+                        _downloadFilteredCards();
                       },
                 icon: const Icon(Icons.picture_as_pdf_outlined),
-                label: const Text('Create PDF'),
+                label: const Text('Configure PDF'),
               ),
             ],
           );
@@ -985,6 +987,12 @@ class _CardsScreenState extends State<CardsScreen> {
         BulkCardExportScope.printBasket => 'Print Basket',
         BulkCardExportScope.matchingFilters => 'All students matching filters',
       };
+      final plan = PrintSheetPlan.calculate(
+        settings: filter.printSettings,
+        cardWidthMm: canvas.width,
+        cardHeightMm: canvas.height,
+        cardCount: students.length,
+      );
       return AlertDialog(
         key: const Key('bulk-export-confirmation'),
         title: const Text('Review PDF export'),
@@ -1011,7 +1019,22 @@ class _CardsScreenState extends State<CardsScreen> {
                   'Students/cards: ${students.length}',
                   key: const Key('bulk-student-count'),
                 ),
-                Text('Pages: ${students.length} (one card per page)'),
+                Text(
+                  filter.printSettings.mode == PrintLayoutMode.oneCardPerPage
+                      ? 'Pages: ${plan.pageCount} (one card per page)'
+                      : 'Sheets: ${plan.pageCount} • ${plan.columns} × ${plan.rows} '
+                            '= ${plan.cardsPerPage} cards per sheet',
+                  key: const Key('bulk-page-count'),
+                ),
+                if (filter.printSettings.mode == PrintLayoutMode.sheet)
+                  Text(
+                    'Paper: ${filter.printSettings.paperLabel} '
+                    '${filter.printSettings.orientationLabel} • '
+                    '${filter.printSettings.marginMm.toStringAsFixed(1)} mm margins • '
+                    '${filter.printSettings.gapMm.toStringAsFixed(1)} mm spacing • '
+                    '${filter.printSettings.cropMarks ? 'crop marks' : 'no crop marks'}',
+                    key: const Key('bulk-sheet-settings'),
+                  ),
                 Text('Template: ${_cardTemplate.name}'),
                 Text(
                   'Card: ${canvas.orientation}, '

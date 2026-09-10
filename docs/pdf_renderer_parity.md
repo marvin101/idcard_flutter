@@ -31,7 +31,7 @@ Baseline: Phase 1 `606b9bb`, Phase 2 `2dada08`. This work changes shared renderi
 | Devanagari | No reliable shaping | Explicitly unsupported: export fails with a descriptive error rather than printing incorrectly shaped student names |
 | Other scripts / emoji | Platform fallback vs limited PDF fonts | Not claimed supported; font coverage and complex shaping remain explicit limits |
 | Kerning / ligatures | Different engines | Line positions shared; vector PDF glyph advances may still differ subtly from Flutter shaping |
-| Bulk output / filtering | One page per supplied card | Preserved; shared images cached for the duration of an export; no filtering changes |
+| Bulk output / filtering | One page per supplied card | Preserved as an option; A4/Letter sheet imposition places exact-size cards in a validated automatic grid, with shared images cached for the duration of an export |
 
 ## Architecture
 

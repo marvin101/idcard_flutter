@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/academic_session.dart';
 import '../models/bulk_card_export.dart';
+import '../models/print_sheet.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../services/api_service.dart';
@@ -15,6 +16,7 @@ class BulkPdfFilter {
     this.sectionUuid,
     this.createdFrom,
     this.createdTo,
+    this.printSettings = const PrintSheetSettings(),
   });
 
   final BulkCardExportScope scope;
@@ -24,6 +26,7 @@ class BulkPdfFilter {
   final String? sectionUuid;
   final DateTime? createdFrom;
   final DateTime? createdTo;
+  final PrintSheetSettings printSettings;
 }
 
 class BulkPdfFilterDialog extends StatefulWidget {
@@ -39,6 +42,8 @@ class BulkPdfFilterDialog extends StatefulWidget {
     this.initialSectionUuid,
     this.selectedStudentCount = 0,
     this.printBasketCount = 0,
+    required this.cardWidthMm,
+    required this.cardHeightMm,
     this.verificationStatus,
     this.printed,
   });
@@ -53,6 +58,8 @@ class BulkPdfFilterDialog extends StatefulWidget {
   final String? initialSectionUuid;
   final int selectedStudentCount;
   final int printBasketCount;
+  final double cardWidthMm;
+  final double cardHeightMm;
   final String? verificationStatus;
   final bool? printed;
 
@@ -70,6 +77,12 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
   List<SchoolSection> _sections = const [];
   bool _loadingSections = false;
   late BulkCardExportScope _scope;
+  late PrintLayoutMode _layoutMode;
+  late PrintPaperSize _paperSize;
+  late PrintPaperOrientation _paperOrientation;
+  late final TextEditingController _margin;
+  late final TextEditingController _gap;
+  bool _cropMarks = false;
 
   @override
   void initState() {
@@ -83,13 +96,34 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
         : widget.selectedStudentCount > 0
         ? BulkCardExportScope.selectedStudents
         : BulkCardExportScope.matchingFilters;
+    _layoutMode = PrintLayoutMode.oneCardPerPage;
+    _paperSize = PrintPaperSize.a4;
+    _paperOrientation = PrintPaperOrientation.portrait;
+    _margin = TextEditingController(text: '10');
+    _gap = TextEditingController(text: '4');
     if (_classUuid != null) _loadSections(_classUuid!);
   }
 
   @override
   void dispose() {
     _search.dispose();
+    _margin.dispose();
+    _gap.dispose();
     super.dispose();
+  }
+
+  PrintSheetSettings? _printSettings() {
+    final margin = double.tryParse(_margin.text.trim());
+    final gap = double.tryParse(_gap.text.trim());
+    if (margin == null || gap == null) return null;
+    return PrintSheetSettings(
+      mode: _layoutMode,
+      paperSize: _paperSize,
+      orientation: _paperOrientation,
+      marginMm: margin,
+      gapMm: gap,
+      cropMarks: _cropMarks,
+    );
   }
 
   Future<void> _loadSections(String classUuid) async {
@@ -139,6 +173,25 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
       );
       return;
     }
+    final printSettings = _printSettings();
+    if (printSettings == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter valid margin and spacing values.')),
+      );
+      return;
+    }
+    final plan = PrintSheetPlan.calculate(
+      settings: printSettings,
+      cardWidthMm: widget.cardWidthMm,
+      cardHeightMm: widget.cardHeightMm,
+      cardCount: 1,
+    );
+    if (!plan.isValid) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(plan.validationError!)));
+      return;
+    }
     Navigator.of(context).pop(
       BulkPdfFilter(
         scope: _scope,
@@ -148,6 +201,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
         sectionUuid: _sectionUuid,
         createdFrom: _createdFrom,
         createdTo: _createdTo,
+        printSettings: printSettings,
       ),
     );
   }
@@ -300,6 +354,143 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            Card(
+              elevation: 0,
+              color: const Color(0xfff5f7fb),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Print layout',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<PrintLayoutMode>(
+                      key: const Key('print-layout-mode'),
+                      initialValue: _layoutMode,
+                      decoration: const InputDecoration(
+                        labelText: 'Output',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: PrintLayoutMode.oneCardPerPage,
+                          child: Text('One card per page'),
+                        ),
+                        DropdownMenuItem(
+                          value: PrintLayoutMode.sheet,
+                          child: Text('Multiple cards per sheet'),
+                        ),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => _layoutMode = value!),
+                    ),
+                    if (_layoutMode == PrintLayoutMode.sheet) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<PrintPaperSize>(
+                              key: const Key('print-paper-size'),
+                              initialValue: _paperSize,
+                              decoration: const InputDecoration(
+                                labelText: 'Paper',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: PrintPaperSize.a4,
+                                  child: Text('A4'),
+                                ),
+                                DropdownMenuItem(
+                                  value: PrintPaperSize.letter,
+                                  child: Text('Letter'),
+                                ),
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => _paperSize = value!),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child:
+                                DropdownButtonFormField<PrintPaperOrientation>(
+                                  key: const Key('print-paper-orientation'),
+                                  initialValue: _paperOrientation,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Orientation',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: PrintPaperOrientation.portrait,
+                                      child: Text('Portrait'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: PrintPaperOrientation.landscape,
+                                      child: Text('Landscape'),
+                                    ),
+                                  ],
+                                  onChanged: (value) => setState(
+                                    () => _paperOrientation = value!,
+                                  ),
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const Key('print-margin-mm'),
+                              controller: _margin,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Margins (mm)',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              key: const Key('print-gap-mm'),
+                              controller: _gap,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Spacing (mm)',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      CheckboxListTile(
+                        key: const Key('print-crop-marks'),
+                        contentPadding: EdgeInsets.zero,
+                        value: _cropMarks,
+                        onChanged: (value) =>
+                            setState(() => _cropMarks = value ?? false),
+                        title: const Text('Add crop marks'),
+                      ),
+                      _sheetSummary(),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -316,6 +507,35 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
       ),
     ],
   );
+
+  Widget _sheetSummary() {
+    final settings = _printSettings();
+    if (settings == null) {
+      return const Text(
+        'Enter numeric margin and spacing values.',
+        style: TextStyle(color: Colors.red),
+      );
+    }
+    final plan = PrintSheetPlan.calculate(
+      settings: settings,
+      cardWidthMm: widget.cardWidthMm,
+      cardHeightMm: widget.cardHeightMm,
+      cardCount: 1,
+    );
+    if (!plan.isValid) {
+      return Text(
+        plan.validationError!,
+        key: const Key('print-sheet-error'),
+        style: const TextStyle(color: Colors.red),
+      );
+    }
+    return Text(
+      '${plan.columns} × ${plan.rows} = ${plan.cardsPerPage} cards per '
+      '${settings.paperLabel} ${settings.orientationLabel} sheet. Cards retain '
+      'their exact physical size.',
+      key: const Key('print-sheet-summary'),
+    );
+  }
 
   Widget _dropdown({
     required String label,

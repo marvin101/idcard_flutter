@@ -7,6 +7,7 @@ import 'package:idcard_flutter/models/academic_session.dart';
 import 'package:idcard_flutter/models/api_student.dart';
 import 'package:idcard_flutter/models/bulk_card_export.dart';
 import 'package:idcard_flutter/models/card_template.dart';
+import 'package:idcard_flutter/models/print_sheet.dart';
 import 'package:idcard_flutter/models/school_class.dart';
 import 'package:idcard_flutter/models/school_profile.dart';
 import 'package:idcard_flutter/models/section.dart';
@@ -276,6 +277,109 @@ void main() {
     expect(progress, [1, 2, 3, 4]);
   });
 
+  test('A4 sheet plan preserves card size and calculates capacity', () {
+    final plan = PrintSheetPlan.calculate(
+      settings: const PrintSheetSettings(mode: PrintLayoutMode.sheet),
+      cardWidthMm: 85.6,
+      cardHeightMm: 53.98,
+      cardCount: 10,
+    );
+
+    expect(plan.isValid, isTrue);
+    expect(plan.columns, 2);
+    expect(plan.rows, 4);
+    expect(plan.cardsPerPage, 8);
+    expect(plan.pageCount, 2);
+    expect(plan.leftFor(0), greaterThanOrEqualTo(10));
+    expect(plan.topFor(0), greaterThanOrEqualTo(10));
+    expect(plan.leftFor(7) + 85.6, lessThanOrEqualTo(200));
+    expect(plan.topFor(7) + 53.98, lessThanOrEqualTo(287));
+  });
+
+  for (final configuration in [
+    (
+      size: PrintPaperSize.a4,
+      orientation: PrintPaperOrientation.landscape,
+      columns: 3,
+      rows: 3,
+    ),
+    (
+      size: PrintPaperSize.letter,
+      orientation: PrintPaperOrientation.portrait,
+      columns: 2,
+      rows: 4,
+    ),
+    (
+      size: PrintPaperSize.letter,
+      orientation: PrintPaperOrientation.landscape,
+      columns: 2,
+      rows: 3,
+    ),
+  ]) {
+    test(
+      '${configuration.size.name} ${configuration.orientation.name} calculates '
+      'an exact-size grid',
+      () {
+        final plan = PrintSheetPlan.calculate(
+          settings: PrintSheetSettings(
+            mode: PrintLayoutMode.sheet,
+            paperSize: configuration.size,
+            orientation: configuration.orientation,
+          ),
+          cardWidthMm: 85.6,
+          cardHeightMm: 53.98,
+          cardCount: 20,
+        );
+        expect(plan.isValid, isTrue);
+        expect(plan.columns, configuration.columns);
+        expect(plan.rows, configuration.rows);
+        expect(
+          plan.leftFor(plan.cardsPerPage - 1) + plan.cardWidthMm,
+          lessThanOrEqualTo(plan.settings.pageWidthMm - plan.settings.marginMm),
+        );
+        expect(
+          plan.topFor(plan.cardsPerPage - 1) + plan.cardHeightMm,
+          lessThanOrEqualTo(
+            plan.settings.pageHeightMm - plan.settings.marginMm,
+          ),
+        );
+      },
+    );
+  }
+
+  test('sheet plan rejects layouts that would scale or clip cards', () {
+    final plan = PrintSheetPlan.calculate(
+      settings: const PrintSheetSettings(
+        mode: PrintLayoutMode.sheet,
+        marginMm: 100,
+      ),
+      cardWidthMm: 85.6,
+      cardHeightMm: 53.98,
+      cardCount: 1,
+    );
+
+    expect(plan.isValid, isFalse);
+    expect(plan.validationError, contains('does not fit'));
+  });
+
+  test('sheet PDF emits the calculated number of physical pages', () async {
+    final cards = List.generate(
+      10,
+      (index) => PdfCardData(student: student(index)),
+    );
+    final bytes = await PdfService.generateStudentCards(
+      cards: cards,
+      schoolName: 'Bulk School',
+      template: bulkTemplate,
+      printSettings: const PrintSheetSettings(
+        mode: PrintLayoutMode.sheet,
+        cropMarks: true,
+      ),
+    );
+    final source = latin1.decode(bytes, allowInvalid: true);
+    expect(RegExp(r'/Type\s*/Page(?!s)\b').allMatches(source).length, 2);
+  });
+
   for (final size in [100, 500, 1000]) {
     test('generates a representative $size-card batch', () async {
       final watch = Stopwatch()..start();
@@ -301,6 +405,70 @@ void main() {
       );
     });
   }
+
+  testWidgets('sheet controls preview capacity and reach PDF generation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = BulkApi([student(1)]);
+    addTearDown(api.dispose);
+    PrintSheetSettings? receivedSettings;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CardsScreen(
+          schoolUuid: 'school',
+          schoolName: 'Bulk School',
+          api: api,
+          canEdit: true,
+          canDesign: false,
+          canPrint: true,
+          bulkPdfAction:
+              ({
+                required cards,
+                required schoolName,
+                required template,
+                required schoolLogoUrl,
+                required schoolProfile,
+                required assetBaseUrl,
+                required printSettings,
+                required onCardPrepared,
+              }) async {
+                receivedSettings = printSettings;
+                onCardPrepared(cards.length, cards.length);
+              },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('bulk-export-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('print-layout-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Multiple cards per sheet').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2 × 4 = 8 cards per A4'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('print-crop-marks')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('print-crop-marks')));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Create PDF'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create PDF'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Sheets: 1 • 2 × 4 = 8 cards per sheet'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('bulk-sheet-settings'))).data,
+      contains('crop marks'),
+    );
+    await tester.tap(find.byKey(const Key('bulk-export-confirm')));
+    await tester.pumpAndSettle();
+    expect(receivedSettings?.mode, PrintLayoutMode.sheet);
+    expect(receivedSettings?.paperSize, PrintPaperSize.a4);
+    expect(receivedSettings?.cropMarks, isTrue);
+  });
 
   testWidgets(
     'selected scope is explicit and a failed export preserves selection',
@@ -329,6 +497,7 @@ void main() {
                   required schoolLogoUrl,
                   required schoolProfile,
                   required assetBaseUrl,
+                  required printSettings,
                   required onCardPrepared,
                 }) {
                   calls++;
