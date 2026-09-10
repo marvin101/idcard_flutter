@@ -21,6 +21,10 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 - Added duplex PDF output for individual cards and imposed sheets, with
   alternating front/back pages, long-edge or short-edge alignment, mirrored
   partial-sheet slots, and separate PDF-page/physical-sheet counts.
+- Added independent front/back X/Y print calibration offsets, bounded to ±20 mm,
+  plus printable front/duplex calibration targets for physical alignment checks.
+- Added named, school-scoped print presets that persist page, layout, duplex,
+  crop-mark, spacing, and calibration settings in the current browser or device.
 
 ### Changed
 
@@ -28,6 +32,8 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
   and duplex preflight now validates content from both selected sides.
 - Card selection is now available to print-capable roles even when they do not
   have student verification or print-lifecycle permissions.
+- Individual-card printing can reuse a saved preset's side and flip-edge choices;
+  filtered, selected, and Print Basket exports apply the complete preset.
 
 ## [0.8.0] - 2026-09-10
 

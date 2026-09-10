@@ -14,6 +14,8 @@ import 'package:idcard_flutter/models/section.dart';
 import 'package:idcard_flutter/screens/cards_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/services/pdf_service.dart';
+import 'package:idcard_flutter/services/print_preset_store.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 ApiStudent student(
   int index, {
@@ -159,6 +161,8 @@ class BulkApi extends ApiService {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('preflight reuses bindings and groups missing-data warnings', () {
@@ -600,6 +604,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Front and back (duplex)').last);
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('print-duplex-flip-edge')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('print-duplex-flip-edge')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Flip on short edge').last);
@@ -664,6 +670,82 @@ void main() {
     expect(find.byKey(const Key('individual-print-flip-edge')), findsOne);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('saved print preset restores sheet and calibration settings', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await const PrintPresetStore().save(
+      schoolUuid: 'school',
+      name: 'Office duplex',
+      settings: const PrintSheetSettings(
+        mode: PrintLayoutMode.sheet,
+        paperSize: PrintPaperSize.letter,
+        orientation: PrintPaperOrientation.landscape,
+        marginMm: 7,
+        gapMm: 3,
+        cropMarks: true,
+        sides: PrintSides.duplex,
+        flipEdge: DuplexFlipEdge.shortEdge,
+        frontOffsetXmm: 1.5,
+        frontOffsetYmm: -0.5,
+        backOffsetXmm: -1,
+        backOffsetYmm: 2,
+      ),
+    );
+    final api = BulkApi([student(1)]);
+    addTearDown(api.dispose);
+    PrintSheetSettings? receivedSettings;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CardsScreen(
+          schoolUuid: 'school',
+          schoolName: 'Bulk School',
+          api: api,
+          canEdit: true,
+          canDesign: false,
+          canPrint: true,
+          bulkPdfAction:
+              ({
+                required cards,
+                required schoolName,
+                required template,
+                required schoolLogoUrl,
+                required schoolProfile,
+                required assetBaseUrl,
+                required printSettings,
+                required onCardPrepared,
+              }) async {
+                receivedSettings = printSettings;
+              },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('bulk-export-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('print-preset')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Office duplex').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Letter landscape sheet'), findsOneWidget);
+    await tester.ensureVisible(find.text('Create PDF'));
+    await tester.tap(find.text('Create PDF'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.textContaining('Calibration: front X 1.5 mm, Y -0.5 mm'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('bulk-export-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(receivedSettings?.paperSize, PrintPaperSize.letter);
+    expect(receivedSettings?.orientation, PrintPaperOrientation.landscape);
+    expect(receivedSettings?.frontOffsetXmm, 1.5);
+    expect(receivedSettings?.backOffsetYmm, 2);
   });
 
   testWidgets(

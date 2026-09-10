@@ -33,6 +33,8 @@ Baseline: Phase 1 `606b9bb`, Phase 2 `2dada08`. This work changes shared renderi
 | Kerning / ligatures | Different engines | Line positions shared; vector PDF glyph advances may still differ subtly from Flutter shaping |
 | Bulk output / filtering | One page per supplied card | Preserved as an option; A4/Letter sheet imposition places exact-size cards in a validated automatic grid, with shared images cached for the duration of an export |
 | Duplex output | Front side only | Front-only remains the default; duplex alternates front/back pages and mirrors back slots for long-edge or short-edge printing, including partial sheets |
+| Printer calibration | No per-printer correction | Sheet output applies independent bounded front/back X/Y offsets to cards and crop marks; a printable target supports physical measurement at 100% scale |
+| Print presets | Settings re-entered for each export | Named presets persist per school in the current browser/device and restore paper, layout, duplex, crop-mark, spacing, and calibration choices |
 
 ## Architecture
 

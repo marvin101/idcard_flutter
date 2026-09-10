@@ -22,6 +22,7 @@ import '../widgets/student_lifecycle_badge.dart';
 import 'package:printing/printing.dart';
 
 import '../services/pdf_service.dart';
+import '../services/print_preset_store.dart';
 import 'bulk_pdf_filter_dialog.dart';
 
 typedef BulkPdfAction =
@@ -639,8 +640,11 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<PrintSheetSettings?> _chooseIndividualPrintSides() async {
+    final presets = await const PrintPresetStore().load(widget.schoolUuid);
+    if (!mounted) return null;
     var sides = PrintSides.frontOnly;
     var flipEdge = DuplexFlipEdge.longEdge;
+    String? selectedPresetId;
     return showDialog<PrintSheetSettings>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -650,8 +654,47 @@ class _CardsScreenState extends State<CardsScreen> {
           content: SizedBox(
             width: 420,
             child: Column(
+              key: ValueKey(
+                'individual-print-$selectedPresetId-${sides.name}-${flipEdge.name}',
+              ),
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (presets.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    key: const Key('individual-print-preset'),
+                    isExpanded: true,
+                    initialValue: selectedPresetId,
+                    decoration: const InputDecoration(
+                      labelText: 'Print preset',
+                      border: OutlineInputBorder(),
+                    ),
+                    hint: const Text('Custom settings'),
+                    items: presets
+                        .map(
+                          (preset) => DropdownMenuItem(
+                            value: preset.id,
+                            child: Text(preset.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (id) {
+                      if (id == null) return;
+                      final settings = presets
+                          .firstWhere((preset) => preset.id == id)
+                          .settings;
+                      setDialogState(() {
+                        selectedPresetId = id;
+                        sides = settings.sides;
+                        flipEdge = settings.flipEdge;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'For individual cards, the preset applies side and flip-edge preferences. Sheet calibration remains available in bulk export.',
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 DropdownButtonFormField<PrintSides>(
                   key: const Key('individual-print-sides'),
                   isExpanded: true,
@@ -1142,6 +1185,14 @@ class _CardsScreenState extends State<CardsScreen> {
                     '${filter.printSettings.gapMm.toStringAsFixed(1)} mm spacing • '
                     '${filter.printSettings.cropMarks ? 'crop marks' : 'no crop marks'}',
                     key: const Key('bulk-sheet-settings'),
+                  ),
+                if (filter.printSettings.mode == PrintLayoutMode.sheet)
+                  Text(
+                    'Calibration: front X '
+                    '${filter.printSettings.frontOffsetXmm.toStringAsFixed(1)} mm, '
+                    'Y ${filter.printSettings.frontOffsetYmm.toStringAsFixed(1)} mm'
+                    '${filter.printSettings.isDuplex ? ' • back X ${filter.printSettings.backOffsetXmm.toStringAsFixed(1)} mm, Y ${filter.printSettings.backOffsetYmm.toStringAsFixed(1)} mm' : ''}',
+                    key: const Key('bulk-calibration-settings'),
                   ),
                 Text('Template: ${_cardTemplate.name}'),
                 Text(

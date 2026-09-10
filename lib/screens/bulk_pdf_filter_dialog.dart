@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../models/academic_session.dart';
 import '../models/bulk_card_export.dart';
@@ -6,6 +7,8 @@ import '../models/print_sheet.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../services/api_service.dart';
+import '../services/pdf_service.dart';
+import '../services/print_preset_store.dart';
 
 class BulkPdfFilter {
   const BulkPdfFilter({
@@ -70,6 +73,7 @@ class BulkPdfFilterDialog extends StatefulWidget {
 }
 
 class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
+  static const _presetStore = PrintPresetStore();
   late final TextEditingController _search;
   String? _sessionUuid;
   String? _classUuid;
@@ -84,9 +88,18 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
   late PrintPaperOrientation _paperOrientation;
   late final TextEditingController _margin;
   late final TextEditingController _gap;
+  late final TextEditingController _frontOffsetX;
+  late final TextEditingController _frontOffsetY;
+  late final TextEditingController _backOffsetX;
+  late final TextEditingController _backOffsetY;
   bool _cropMarks = false;
   PrintSides _sides = PrintSides.frontOnly;
   DuplexFlipEdge _flipEdge = DuplexFlipEdge.longEdge;
+  List<PrintPreset> _presets = const [];
+  String? _selectedPresetId;
+  bool _loadingPresets = true;
+  bool _printingCalibration = false;
+  int _controlsRevision = 0;
 
   @override
   void initState() {
@@ -105,7 +118,12 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     _paperOrientation = PrintPaperOrientation.portrait;
     _margin = TextEditingController(text: '10');
     _gap = TextEditingController(text: '4');
+    _frontOffsetX = TextEditingController(text: '0');
+    _frontOffsetY = TextEditingController(text: '0');
+    _backOffsetX = TextEditingController(text: '0');
+    _backOffsetY = TextEditingController(text: '0');
     if (_classUuid != null) _loadSections(_classUuid!);
+    _loadPresets();
   }
 
   @override
@@ -113,13 +131,28 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     _search.dispose();
     _margin.dispose();
     _gap.dispose();
+    _frontOffsetX.dispose();
+    _frontOffsetY.dispose();
+    _backOffsetX.dispose();
+    _backOffsetY.dispose();
     super.dispose();
   }
 
   PrintSheetSettings? _printSettings() {
     final margin = double.tryParse(_margin.text.trim());
     final gap = double.tryParse(_gap.text.trim());
-    if (margin == null || gap == null) return null;
+    final frontOffsetX = double.tryParse(_frontOffsetX.text.trim());
+    final frontOffsetY = double.tryParse(_frontOffsetY.text.trim());
+    final backOffsetX = double.tryParse(_backOffsetX.text.trim());
+    final backOffsetY = double.tryParse(_backOffsetY.text.trim());
+    if (margin == null ||
+        gap == null ||
+        frontOffsetX == null ||
+        frontOffsetY == null ||
+        backOffsetX == null ||
+        backOffsetY == null) {
+      return null;
+    }
     return PrintSheetSettings(
       mode: _layoutMode,
       paperSize: _paperSize,
@@ -129,7 +162,162 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
       cropMarks: _cropMarks,
       sides: _sides,
       flipEdge: _flipEdge,
+      frontOffsetXmm: frontOffsetX,
+      frontOffsetYmm: frontOffsetY,
+      backOffsetXmm: backOffsetX,
+      backOffsetYmm: backOffsetY,
     );
+  }
+
+  Future<void> _loadPresets({String? selectId}) async {
+    final presets = await _presetStore.load(widget.schoolUuid);
+    if (!mounted) return;
+    setState(() {
+      _presets = presets;
+      _selectedPresetId =
+          selectId != null && presets.any((preset) => preset.id == selectId)
+          ? selectId
+          : _selectedPresetId != null &&
+                presets.any((preset) => preset.id == _selectedPresetId)
+          ? _selectedPresetId
+          : null;
+      _loadingPresets = false;
+      _controlsRevision++;
+    });
+  }
+
+  String _number(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+
+  void _applyPreset(String? id) {
+    if (id == null) return;
+    final preset = _presets.firstWhere((candidate) => candidate.id == id);
+    final settings = preset.settings;
+    setState(() {
+      _selectedPresetId = id;
+      _layoutMode = settings.mode;
+      _paperSize = settings.paperSize;
+      _paperOrientation = settings.orientation;
+      _margin.text = _number(settings.marginMm);
+      _gap.text = _number(settings.gapMm);
+      _cropMarks = settings.cropMarks;
+      _sides = settings.isDuplex && !widget.hasBackDesign
+          ? PrintSides.frontOnly
+          : settings.sides;
+      _flipEdge = settings.flipEdge;
+      _frontOffsetX.text = _number(settings.frontOffsetXmm);
+      _frontOffsetY.text = _number(settings.frontOffsetYmm);
+      _backOffsetX.text = _number(settings.backOffsetXmm);
+      _backOffsetY.text = _number(settings.backOffsetYmm);
+      _controlsRevision++;
+    });
+  }
+
+  Future<void> _savePreset() async {
+    final settings = _validatedPrintSettings();
+    if (settings == null) return;
+    PrintPreset? current;
+    for (final preset in _presets) {
+      if (preset.id == _selectedPresetId) current = preset;
+    }
+    final controller = TextEditingController(text: current?.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          current == null ? 'Save print preset' : 'Update print preset',
+        ),
+        content: TextField(
+          key: const Key('print-preset-name'),
+          controller: controller,
+          autofocus: true,
+          maxLength: 60,
+          decoration: const InputDecoration(
+            labelText: 'Preset name',
+            hintText: 'Office duplex printer',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty || !mounted) return;
+    final saved = await _presetStore.save(
+      schoolUuid: widget.schoolUuid,
+      name: name,
+      settings: settings,
+      id: current?.id,
+    );
+    await _loadPresets(selectId: saved.id);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved print preset “${saved.name}”.')),
+      );
+    }
+  }
+
+  Future<void> _deletePreset() async {
+    final id = _selectedPresetId;
+    if (id == null) return;
+    await _presetStore.delete(widget.schoolUuid, id);
+    if (!mounted) return;
+    setState(() => _selectedPresetId = null);
+    await _loadPresets();
+  }
+
+  PrintSheetSettings? _validatedPrintSettings() {
+    final settings = _printSettings();
+    if (settings == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter valid numeric print settings.')),
+      );
+      return null;
+    }
+    final plan = PrintSheetPlan.calculate(
+      settings: settings,
+      cardWidthMm: widget.cardWidthMm,
+      cardHeightMm: widget.cardHeightMm,
+      cardCount: 1,
+    );
+    if (!plan.isValid) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(plan.validationError!)));
+      return null;
+    }
+    return settings;
+  }
+
+  Future<void> _printCalibrationSheet() async {
+    final settings = _validatedPrintSettings();
+    if (settings == null) return;
+    setState(() => _printingCalibration = true);
+    try {
+      await Printing.layoutPdf(
+        name: 'CampusID print calibration',
+        onLayout: (_) => PdfService.generatePrintCalibrationSheet(settings),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to create calibration sheet: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _printingCalibration = false);
+    }
   }
 
   Future<void> _loadSections(String classUuid) async {
@@ -182,7 +370,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     final printSettings = _printSettings();
     if (printSettings == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter valid margin and spacing values.')),
+        const SnackBar(content: Text('Enter valid numeric print settings.')),
       );
       return;
     }
@@ -362,6 +550,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
             ),
             const SizedBox(height: 16),
             Card(
+              key: ValueKey('print-layout-card-$_controlsRevision'),
               elevation: 0,
               color: const Color(0xfff5f7fb),
               child: Padding(
@@ -369,6 +558,51 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: const Key('print-preset'),
+                            initialValue: _selectedPresetId,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: _loadingPresets
+                                  ? 'Loading print presets…'
+                                  : 'Print preset',
+                              border: const OutlineInputBorder(),
+                            ),
+                            hint: const Text('Custom settings'),
+                            items: _presets
+                                .map(
+                                  (preset) => DropdownMenuItem(
+                                    value: preset.id,
+                                    child: Text(preset.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _loadingPresets ? null : _applyPreset,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          key: const Key('save-print-preset'),
+                          tooltip: _selectedPresetId == null
+                              ? 'Save as preset'
+                              : 'Update selected preset',
+                          onPressed: _savePreset,
+                          icon: const Icon(Icons.save_outlined),
+                        ),
+                        IconButton(
+                          key: const Key('delete-print-preset'),
+                          tooltip: 'Delete selected preset',
+                          onPressed: _selectedPresetId == null
+                              ? null
+                              : _deletePreset,
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     const Text(
                       'Print layout',
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -542,6 +776,59 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      ExpansionTile(
+                        key: const Key('print-calibration-controls'),
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        title: const Text('Printer calibration'),
+                        subtitle: const Text(
+                          'Move printed content without changing card size.',
+                        ),
+                        children: [
+                          _offsetRow(
+                            label: 'Front',
+                            xController: _frontOffsetX,
+                            yController: _frontOffsetY,
+                            xKey: const Key('print-front-offset-x'),
+                            yKey: const Key('print-front-offset-y'),
+                          ),
+                          if (_sides == PrintSides.duplex) ...[
+                            const SizedBox(height: 10),
+                            _offsetRow(
+                              label: 'Back',
+                              xController: _backOffsetX,
+                              yController: _backOffsetY,
+                              xKey: const Key('print-back-offset-x'),
+                              yKey: const Key('print-back-offset-y'),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Positive X moves right; positive Y moves down. '
+                              'Print at 100% / Actual size. Allowed range: ±20 mm.',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              key: const Key('print-calibration-sheet'),
+                              onPressed: _printingCalibration
+                                  ? null
+                                  : _printCalibrationSheet,
+                              icon: const Icon(Icons.my_location_outlined),
+                              label: Text(
+                                _printingCalibration
+                                    ? 'Opening calibration sheet…'
+                                    : 'Print calibration sheet',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       CheckboxListTile(
                         key: const Key('print-crop-marks'),
                         contentPadding: EdgeInsets.zero,
@@ -597,10 +884,54 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     return Text(
       '${plan.columns} × ${plan.rows} = ${plan.cardsPerPage} cards per '
       '${settings.paperLabel} ${settings.orientationLabel} sheet. Cards retain '
-      'their exact physical size.${settings.isDuplex ? ' Back slots are mirrored for ${settings.flipEdge == DuplexFlipEdge.longEdge ? 'long-edge' : 'short-edge'} printing.' : ''}',
+      'their exact physical size.${settings.isDuplex ? ' Back slots are mirrored for ${settings.flipEdge == DuplexFlipEdge.longEdge ? 'long-edge' : 'short-edge'} printing.' : ''}'
+      '${settings.frontOffsetXmm != 0 || settings.frontOffsetYmm != 0 || (settings.isDuplex && (settings.backOffsetXmm != 0 || settings.backOffsetYmm != 0)) ? ' Calibration offsets are applied.' : ''}',
       key: const Key('print-sheet-summary'),
     );
   }
+
+  Widget _offsetRow({
+    required String label,
+    required TextEditingController xController,
+    required TextEditingController yController,
+    required Key xKey,
+    required Key yKey,
+  }) => Row(
+    children: [
+      SizedBox(width: 52, child: Text(label)),
+      Expanded(
+        child: TextField(
+          key: xKey,
+          controller: xController,
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+            signed: true,
+          ),
+          decoration: const InputDecoration(
+            labelText: 'X offset (mm)',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: TextField(
+          key: yKey,
+          controller: yController,
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+            signed: true,
+          ),
+          decoration: const InputDecoration(
+            labelText: 'Y offset (mm)',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ),
+    ],
+  );
 
   Widget _dropdown({
     required String label,
