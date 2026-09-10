@@ -8,6 +8,17 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 ## [Unreleased]
 
+### Added
+
+- Added the first Advanced Print Production slice: a Print Basket that keeps
+  selected cards across search and filter changes, supports review/removal/clear
+  actions, and exports through the existing PDF preflight workflow.
+
+### Changed
+
+- Card selection is now available to print-capable roles even when they do not
+  have student verification or print-lifecycle permissions.
+
 ## [0.8.0] - 2026-09-10
 
 ### Added

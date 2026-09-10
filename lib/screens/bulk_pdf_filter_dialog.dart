@@ -38,6 +38,7 @@ class BulkPdfFilterDialog extends StatefulWidget {
     this.initialClassUuid,
     this.initialSectionUuid,
     this.selectedStudentCount = 0,
+    this.printBasketCount = 0,
     this.verificationStatus,
     this.printed,
   });
@@ -51,6 +52,7 @@ class BulkPdfFilterDialog extends StatefulWidget {
   final String? initialClassUuid;
   final String? initialSectionUuid;
   final int selectedStudentCount;
+  final int printBasketCount;
   final String? verificationStatus;
   final bool? printed;
 
@@ -76,7 +78,9 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     _sessionUuid = widget.initialSessionUuid;
     _classUuid = widget.initialClassUuid;
     _sectionUuid = widget.initialSectionUuid;
-    _scope = widget.selectedStudentCount > 0
+    _scope = widget.printBasketCount > 0
+        ? BulkCardExportScope.printBasket
+        : widget.selectedStudentCount > 0
         ? BulkCardExportScope.selectedStudents
         : BulkCardExportScope.matchingFilters;
     if (_classUuid != null) _loadSections(_classUuid!);
@@ -160,20 +164,30 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
             const Text(
               'Choose the exact student set. Your current Cards filters are copied here and will not be changed.',
             ),
-            if (widget.selectedStudentCount > 0) ...[
+            if (widget.selectedStudentCount > 0 ||
+                widget.printBasketCount > 0) ...[
               const SizedBox(height: 12),
               RadioGroup<BulkCardExportScope>(
                 groupValue: _scope,
                 onChanged: (value) => setState(() => _scope = value!),
                 child: Column(
                   children: [
-                    RadioListTile<BulkCardExportScope>(
-                      key: const Key('bulk-scope-selected'),
-                      value: BulkCardExportScope.selectedStudents,
-                      title: Text(
-                        'Selected students only (${widget.selectedStudentCount})',
+                    if (widget.printBasketCount > 0)
+                      RadioListTile<BulkCardExportScope>(
+                        key: const Key('bulk-scope-print-basket'),
+                        value: BulkCardExportScope.printBasket,
+                        title: Text(
+                          'Print Basket (${widget.printBasketCount})',
+                        ),
                       ),
-                    ),
+                    if (widget.selectedStudentCount > 0)
+                      RadioListTile<BulkCardExportScope>(
+                        key: const Key('bulk-scope-selected'),
+                        value: BulkCardExportScope.selectedStudents,
+                        title: Text(
+                          'Selected students only (${widget.selectedStudentCount})',
+                        ),
+                      ),
                     const RadioListTile<BulkCardExportScope>(
                       key: Key('bulk-scope-filtered'),
                       value: BulkCardExportScope.matchingFilters,

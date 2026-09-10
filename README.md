@@ -45,7 +45,7 @@ forms, templates, audits   and temporary bulk-photo objects
 - Public Form administration plus a branded anonymous submission route with configured fields and photo policy
 - Excel Grid filters, bounded paging, inline edits, custom fields, academic dropdowns, dirty-state tracking, conflict handling, and structured cell errors
 - Current Card Designer at `/design`
-- Card preview plus individual and filtered/bulk PDF output
+- Card preview plus individual, filtered/bulk, and Print Basket PDF output
 - Platform user and school-assignment administration
 - Revocable QR-based student verification with school-scoped disclosure and an anonymous `/verify/<token>` page
 - Clean web paths through `usePathUrlStrategy()` and Vercel SPA rewrites
@@ -260,7 +260,7 @@ The current Flutter value is `0.8.0+8`: product release `0.8.0`, build number `8
 
 ## Roadmap
 
-- Advanced print production and Print Basket
+- Advanced print production and Print Basket (working-set and export slice in progress)
 - Barcode formats and advanced signed/time-bounded digital credentials
 - Designer v2 remaining fidelity and contract hardening
 - Teacher and non-teaching staff workflows

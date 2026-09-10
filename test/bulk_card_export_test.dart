@@ -380,4 +380,76 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'print basket survives filter reloads and is available as an export scope',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final api = BulkApi([student(1), student(2)]);
+      addTearDown(api.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CardsScreen(
+            schoolUuid: 'school',
+            schoolName: 'Bulk School',
+            api: api,
+            canEdit: true,
+            canDesign: false,
+            canPrint: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(Checkbox).first);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('add-selection-to-print-basket')));
+      await tester.pump();
+      expect(
+        tester.widget<Checkbox>(find.byType(Checkbox).first).value,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('print-basket-action')))
+            .tooltip,
+        'Print Basket (1)',
+      );
+
+      await tester.enterText(find.byType(TextField).first, 'another filter');
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('print-basket-action')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('print-basket-dialog')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('print-basket-dialog')),
+          matching: find.text('Student 1'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('bulk-export-action')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('bulk-scope-print-basket')), findsOneWidget);
+      expect(find.text('Print Basket (1)'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('print-basket-action')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('clear-print-basket')));
+      await tester.pump();
+      expect(
+        find.text(
+          'The basket is empty. Select cards and use Add to Print Basket.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

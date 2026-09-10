@@ -4,7 +4,7 @@ import 'design_bindings.dart';
 import 'design_qr.dart';
 import 'school_profile.dart';
 
-enum BulkCardExportScope { matchingFilters, selectedStudents }
+enum BulkCardExportScope { matchingFilters, selectedStudents, printBasket }
 
 class BulkExportIssue {
   const BulkExportIssue({required this.message, required this.studentCount});

@@ -106,6 +106,7 @@ class _CardsScreenState extends State<CardsScreen> {
   String? _verificationStatus;
   bool? _printed;
   final Set<String> _selectedStudentUuids = {};
+  final Map<String, ApiStudent> _printBasketStudents = {};
 
   StudentLifecycleSelection get _selection =>
       StudentLifecycleSelection.from(_students, _selectedStudentUuids);
@@ -664,20 +665,26 @@ class _CardsScreenState extends State<CardsScreen> {
         initialClassUuid: _selectedClassUuid,
         initialSectionUuid: _selectedSectionUuid,
         selectedStudentCount: _selectedStudentUuids.length,
+        printBasketCount: _printBasketStudents.length,
         verificationStatus: _verificationStatus,
         printed: _printed,
       ),
     );
     if (filter == null || !mounted) return;
+    await _runBulkExport(filter);
+  }
 
+  Future<void> _runBulkExport(BulkPdfFilter filter) async {
     setState(() {
       _exportingBulk = true;
       _bulkExportStatus = 'Preparing cards…';
     });
     try {
-      final loaded = filter.scope == BulkCardExportScope.selectedStudents
-          ? await _loadSelectedStudents()
-          : await _loadBulkStudents(filter);
+      final loaded = switch (filter.scope) {
+        BulkCardExportScope.selectedStudents => await _loadSelectedStudents(),
+        BulkCardExportScope.printBasket => await _loadPrintBasketStudents(),
+        BulkCardExportScope.matchingFilters => await _loadBulkStudents(filter),
+      };
       final students = loaded.students;
 
       if (students.isEmpty) {
@@ -834,6 +841,122 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
+  Future<_LoadedBulkStudents> _loadPrintBasketStudents() async {
+    final uuids = _printBasketStudents.keys.toList();
+    final refreshed = <ApiStudent>[];
+    const requestBatchSize = 20;
+    for (var start = 0; start < uuids.length; start += requestBatchSize) {
+      final end = math.min(start + requestBatchSize, uuids.length);
+      final batch = await Future.wait(
+        uuids.sublist(start, end).map(_refreshSelectedStudent),
+      );
+      refreshed.addAll(batch.whereType<ApiStudent>());
+    }
+    return _LoadedBulkStudents(
+      students: refreshed,
+      expectedTotal: uuids.length,
+    );
+  }
+
+  void _addSelectionToPrintBasket() {
+    if (_selectedStudentUuids.isEmpty) return;
+    setState(() {
+      for (final student in _students) {
+        if (_selectedStudentUuids.contains(student.uuid)) {
+          _printBasketStudents[student.uuid] = student;
+        }
+      }
+      _selectedStudentUuids.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Print Basket now contains ${_printBasketStudents.length} card(s).',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPrintBasket() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final students = _printBasketStudents.values.toList();
+          return AlertDialog(
+            key: const Key('print-basket-dialog'),
+            title: Text('Print Basket (${students.length})'),
+            content: SizedBox(
+              width: 520,
+              child: students.isEmpty
+                  ? const Text(
+                      'The basket is empty. Select cards and use Add to Print Basket.',
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: students.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final student = students[index];
+                        return ListTile(
+                          title: Text(student.fullName),
+                          subtitle: Text(
+                            'Admission ${student.admissionNo} • Roll ${student.rollNo}',
+                          ),
+                          trailing: IconButton(
+                            key: Key(
+                              'remove-from-print-basket-${student.uuid}',
+                            ),
+                            tooltip: 'Remove from Print Basket',
+                            onPressed: () {
+                              setState(
+                                () => _printBasketStudents.remove(student.uuid),
+                              );
+                              setDialogState(() {});
+                            },
+                            icon: const Icon(Icons.remove_circle_outline),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                key: const Key('clear-print-basket'),
+                onPressed: students.isEmpty
+                    ? null
+                    : () {
+                        setState(_printBasketStudents.clear);
+                        setDialogState(() {});
+                      },
+                child: const Text('Clear'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+              FilledButton.icon(
+                key: const Key('export-print-basket'),
+                onPressed: students.isEmpty || _exportingBulk
+                    ? null
+                    : () {
+                        Navigator.pop(dialogContext);
+                        _runBulkExport(
+                          const BulkPdfFilter(
+                            scope: BulkCardExportScope.printBasket,
+                          ),
+                        );
+                      },
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Create PDF'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<ApiStudent?> _refreshSelectedStudent(String studentUuid) async {
     try {
       return await widget.api.getStudent(
@@ -857,9 +980,11 @@ class _CardsScreenState extends State<CardsScreen> {
     context: context,
     builder: (context) {
       final canvas = _cardTemplate.document.canvas;
-      final scope = filter.scope == BulkCardExportScope.selectedStudents
-          ? 'Selected students only'
-          : 'All students matching filters';
+      final scope = switch (filter.scope) {
+        BulkCardExportScope.selectedStudents => 'Selected students only',
+        BulkCardExportScope.printBasket => 'Print Basket',
+        BulkCardExportScope.matchingFilters => 'All students matching filters',
+      };
       return AlertDialog(
         key: const Key('bulk-export-confirmation'),
         title: const Text('Review PDF export'),
@@ -977,6 +1102,17 @@ class _CardsScreenState extends State<CardsScreen> {
         actions: [
           if (widget.canPrint)
             IconButton(
+              key: const Key('print-basket-action'),
+              tooltip: 'Print Basket (${_printBasketStudents.length})',
+              onPressed: _showPrintBasket,
+              icon: Badge.count(
+                count: _printBasketStudents.length,
+                isLabelVisible: _printBasketStudents.isNotEmpty,
+                child: const Icon(Icons.shopping_basket_outlined),
+              ),
+            ),
+          if (widget.canPrint)
+            IconButton(
               key: const Key('bulk-export-action'),
               tooltip: 'Download filtered cards as PDF',
               onPressed: _exportingBulk ? null : _downloadFilteredCards,
@@ -998,6 +1134,13 @@ class _CardsScreenState extends State<CardsScreen> {
                   ? () => _runSelectedLifecycle(verify: true)
                   : null,
               icon: const Icon(Icons.verified_outlined),
+            ),
+          if (widget.canPrint && _selectedStudentUuids.isNotEmpty)
+            IconButton(
+              key: const Key('add-selection-to-print-basket'),
+              tooltip: 'Add selected to Print Basket',
+              onPressed: _addSelectionToPrintBasket,
+              icon: const Icon(Icons.add_shopping_cart_outlined),
             ),
           if (widget.canMarkPrinted && _selectedStudentUuids.isNotEmpty)
             IconButton(
@@ -1092,7 +1235,7 @@ class _CardsScreenState extends State<CardsScreen> {
 
                     if (_selectedStudentUuids.isNotEmpty)
                       Text(
-                        '${_selectedStudentUuids.length} selected. Selection resets when search or filters change.',
+                        '${_selectedStudentUuids.length} selected. Add them to Print Basket to keep them across search and filter changes.',
                         key: const Key('cards-selection-scope-note'),
                         style: const TextStyle(
                           fontSize: 12,
@@ -1420,7 +1563,10 @@ class _CardsScreenState extends State<CardsScreen> {
                   left: 6,
                   child: Checkbox(
                     value: _selectedStudentUuids.contains(student.uuid),
-                    onChanged: widget.canVerify || widget.canMarkPrinted
+                    onChanged:
+                        widget.canPrint ||
+                            widget.canVerify ||
+                            widget.canMarkPrinted
                         ? (value) => setState(() {
                             if (value == true) {
                               _selectedStudentUuids.add(student.uuid);
