@@ -1,6 +1,7 @@
 import 'api_student.dart';
 import 'card_template.dart';
 import 'design_bindings.dart';
+import 'design_barcode.dart';
 import 'design_qr.dart';
 import 'school_profile.dart';
 
@@ -52,12 +53,26 @@ class BulkExportInspection {
       (element) =>
           element.type == DesignElementType.boundText ||
           element.type == DesignElementType.customFieldText ||
-          (element.type == DesignElementType.qrCode &&
+          ({
+                DesignElementType.qrCode,
+                DesignElementType.barcode,
+              }.contains(element.type) &&
               (element.data.containsKey('field') ||
                   element.data.containsKey('field_uuid'))),
     );
     final qrElements = visible.where(
       (element) => element.type == DesignElementType.qrCode,
+    );
+    final barcodeElements = visible.where(
+      (element) => element.type == DesignElementType.barcode,
+    );
+    final multiFieldElements = visible.where(
+      (element) =>
+          {
+            DesignElementType.qrCode,
+            DesignElementType.barcode,
+          }.contains(element.type) &&
+          element.data['fields'] is List,
     );
 
     for (final student in students) {
@@ -98,9 +113,7 @@ class BulkExportInspection {
             : _fieldLabel(element.data['field'] as String?);
         missingForStudent.add(label);
       }
-      for (final element in qrElements.where(
-        (element) => element.data['fields'] is List,
-      )) {
+      for (final element in multiFieldElements) {
         for (final field in bindings.qrFieldValues(element)) {
           if (field.rawValue.trim().isEmpty && field.value.trim().isEmpty) {
             missingForStudent.add(field.label);
@@ -122,6 +135,19 @@ class BulkExportInspection {
           (value) => value + 1,
           ifAbsent: () => 1,
         );
+      }
+      for (final element in barcodeElements) {
+        final message = designBarcodeValidation(
+          bindings.text(element),
+          element.data['symbology'] as String? ?? 'code128',
+        );
+        if (message != null) {
+          blockingCounts.update(
+            message,
+            (value) => value + 1,
+            ifAbsent: () => 1,
+          );
+        }
       }
     }
 

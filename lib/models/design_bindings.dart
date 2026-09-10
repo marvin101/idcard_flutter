@@ -28,7 +28,11 @@ class DesignBindings {
     if (element.type == DesignElementType.text) {
       return data['text'] as String? ?? 'Text';
     }
-    if (element.type == DesignElementType.qrCode && data['text'] is String) {
+    if ({
+          DesignElementType.qrCode,
+          DesignElementType.barcode,
+        }.contains(element.type) &&
+        data['text'] is String) {
       return data['text'] as String;
     }
     return _rawBinding(data);
@@ -78,7 +82,11 @@ class DesignBindings {
 
   List<DesignQrFieldValue> qrFieldValues(DesignElement element) {
     final fields = element.data['fields'];
-    if (element.type != DesignElementType.qrCode || fields is! List) {
+    if (!{
+          DesignElementType.qrCode,
+          DesignElementType.barcode,
+        }.contains(element.type) ||
+        fields is! List) {
       return const [];
     }
     return fields.whereType<Map>().map((source) {
@@ -100,7 +108,11 @@ class DesignBindings {
 
   String text(DesignElement element) {
     final data = element.data;
-    if (element.type == DesignElementType.qrCode && data['fields'] is List) {
+    if ({
+          DesignElementType.qrCode,
+          DesignElementType.barcode,
+        }.contains(element.type) &&
+        data['fields'] is List) {
       final values = qrFieldValues(element);
       final payload = data['format'] == 'labeled_text'
           ? values.map((entry) => '${entry.label}: ${entry.value}').join('\n')
@@ -120,6 +132,8 @@ class DesignBindings {
                 'Custom field'
           : element.type == DesignElementType.qrCode
           ? data['fallback'] as String? ?? 'QR data'
+          : element.type == DesignElementType.barcode
+          ? data['fallback'] as String? ?? 'Barcode data'
           : data['fallback'] as String? ?? 'Student field';
     }
     return '${data['prefix'] ?? ''}$value${data['suffix'] ?? ''}';

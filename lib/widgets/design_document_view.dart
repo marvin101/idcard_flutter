@@ -8,6 +8,7 @@ import '../models/design_bindings.dart';
 import '../models/design_render_scene.dart';
 import '../models/school_profile.dart';
 import 'design_qr_code.dart';
+import 'design_barcode.dart';
 
 class DesignDocumentView extends StatelessWidget {
   const DesignDocumentView({
@@ -229,6 +230,17 @@ class DesignDocumentView extends StatelessWidget {
           backgroundColor: style.qrBackground,
           quietZone: style.quietZone * scale,
           errorCorrection: style.errorCorrection,
+        );
+
+      case DesignElementType.barcode:
+        return DesignBarcode(
+          data: node.text,
+          symbology: node.element.data['symbology'] as String? ?? 'code128',
+          color: style.color,
+          backgroundColor: style.qrBackground,
+          quietZone: style.quietZone * scale,
+          showText: style.showText,
+          fontSize: style.fontSize * scale,
         );
 
       case DesignElementType.text:

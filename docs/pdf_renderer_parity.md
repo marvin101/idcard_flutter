@@ -35,6 +35,7 @@ Baseline: Phase 1 `606b9bb`, Phase 2 `2dada08`. This work changes shared renderi
 | Duplex output | Front side only | Front-only remains the default; duplex alternates front/back pages and mirrors back slots for long-edge or short-edge printing, including partial sheets |
 | Printer calibration | No per-printer correction | Sheet output applies independent bounded front/back X/Y offsets to cards and crop marks; a printable target supports physical measurement at 100% scale |
 | Print presets | Settings re-entered for each export | Named presets persist per school in the current browser/device and restore paper, layout, duplex, crop-mark, spacing, and calibration choices |
+| Barcodes | No barcode element | Code 128, Code 39, EAN-13, and Data Matrix consume the shared resolved scene value and validated style; Flutter preview and vector PDF use the same symbology, colours, quiet zone, and optional 1D human-readable text |
 
 ## Architecture
 

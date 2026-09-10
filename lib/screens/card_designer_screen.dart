@@ -12,6 +12,7 @@ import '../widgets/designer_colour_field.dart';
 
 import '../models/api_student.dart';
 import '../models/card_template.dart';
+import '../models/design_barcode.dart';
 import '../models/design_geometry.dart';
 import '../models/school_profile.dart';
 import '../models/student_field.dart';
@@ -574,26 +575,28 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         type == DesignElementType.studentPhoto ||
         type == DesignElementType.schoolLogo;
     final isQr = type == DesignElementType.qrCode;
+    final isBarcode = type == DesignElementType.barcode;
+    final defaultWidth = isImage || isQr
+        ? 20.0
+        : isBarcode
+        ? 35.0
+        : 30.0;
+    final defaultHeight = isQr
+        ? 20.0
+        : isImage
+        ? 22.0
+        : isBarcode
+        ? 15.0
+        : type == DesignElementType.line
+        ? 1.0
+        : 6.0;
     final element = DesignElement(
       id: id,
       type: type,
-      x: (_document.canvas.width - (isImage || isQr ? 20 : 30)) / 2,
-      y:
-          (_document.canvas.height -
-              (isQr
-                  ? 20
-                  : isImage
-                  ? 22
-                  : 6)) /
-          2,
-      width: isImage || isQr ? 20 : 30,
-      height: isQr
-          ? 20
-          : isImage
-          ? 22
-          : type == DesignElementType.line
-          ? 1
-          : 6,
+      x: (_document.canvas.width - defaultWidth) / 2,
+      y: (_document.canvas.height - defaultHeight) / 2,
+      width: defaultWidth,
+      height: defaultHeight,
       zIndex: z,
       style: switch (type) {
         DesignElementType.rectangle => {
@@ -615,6 +618,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           'quiet_zone': 1.0,
           'error_correction': 'medium',
         },
+        DesignElementType.barcode => {
+          'color': '#000000',
+          'background_color': '#FFFFFF',
+          'quiet_zone': 1.0,
+          'show_text': true,
+          'font_size': 2.5,
+        },
         _ => {
           'font_size': 3.5,
           'font_weight': 400,
@@ -634,6 +644,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           'fallback': customField.label,
         },
         DesignElementType.qrCode => {'field': 'verification_url'},
+        DesignElementType.barcode => {
+          'field': 'admission_no',
+          'fallback': 'Admission number',
+          'symbology': 'code128',
+        },
         _ => const {},
       },
     );
@@ -1426,6 +1441,17 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         children: [
+          IconButton(
+            onPressed: _canUndo ? _undo : null,
+            icon: const Icon(Icons.undo),
+            tooltip: 'Undo',
+          ),
+          IconButton(
+            onPressed: _canRedo ? _redo : null,
+            icon: const Icon(Icons.redo),
+            tooltip: 'Redo',
+          ),
+          const VerticalDivider(),
           _tool(
             Icons.text_fields,
             'Text',
@@ -1488,17 +1514,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             () => _add(DesignElementType.qrCode),
             key: 'add-qr-code',
           ),
+          _tool(
+            Icons.view_week_outlined,
+            'Barcode',
+            () => _add(DesignElementType.barcode),
+            key: 'add-barcode',
+          ),
           const VerticalDivider(),
-          IconButton(
-            onPressed: _canUndo ? _undo : null,
-            icon: const Icon(Icons.undo),
-            tooltip: 'Undo',
-          ),
-          IconButton(
-            onPressed: _canRedo ? _redo : null,
-            icon: const Icon(Icons.redo),
-            tooltip: 'Redo',
-          ),
           IconButton(
             onPressed: _selected == null ? null : _duplicate,
             icon: const Icon(Icons.copy_outlined),
@@ -1824,6 +1846,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       if (prefix != null) data['prefix'] = prefix;
       if (suffix != null) data['suffix'] = suffix;
     }
+    if (element.type == DesignElementType.barcode) {
+      data['symbology'] = element.data['symbology'] ?? 'code128';
+    }
     return data;
   }
 
@@ -2019,16 +2044,57 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       );
                   },
                 ),
-              if (e.type == DesignElementType.qrCode) ...[
+              if ({
+                DesignElementType.qrCode,
+                DesignElementType.barcode,
+              }.contains(e.type)) ...[
+                if (e.type == DesignElementType.barcode)
+                  _dropdownProperty<String>(
+                    key: ValueKey('barcode-symbology-${e.id}'),
+                    label: 'Barcode format',
+                    value: e.data['symbology'] as String? ?? 'code128',
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'code128',
+                        child: Text('Code 128'),
+                      ),
+                      DropdownMenuItem(value: 'code39', child: Text('Code 39')),
+                      DropdownMenuItem(value: 'ean13', child: Text('EAN-13')),
+                      DropdownMenuItem(
+                        value: 'data_matrix',
+                        child: Text('Data Matrix'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      final square = isDesignBarcodeSquare(value);
+                      update(
+                        (e) => e.copyWith(
+                          width: square ? 20 : 35,
+                          height: square ? 20 : 15,
+                          style: {
+                            ...e.style,
+                            'show_text': square
+                                ? false
+                                : e.style['show_text'] != false,
+                          },
+                          data: {...e.data, 'symbology': value},
+                        ),
+                      );
+                    },
+                  ),
                 _dropdownProperty<String>(
                   key: ValueKey('qr-source-${e.id}'),
-                  label: 'QR content source',
+                  label: e.type == DesignElementType.qrCode
+                      ? 'QR content source'
+                      : 'Barcode content source',
                   value: _qrSource(e),
                   items: [
-                    const DropdownMenuItem(
-                      value: 'verification_link',
-                      child: Text('Verification link (recommended)'),
-                    ),
+                    if (e.type == DesignElementType.qrCode)
+                      const DropdownMenuItem(
+                        value: 'verification_link',
+                        child: Text('Verification link (recommended)'),
+                      ),
                     const DropdownMenuItem(
                       value: 'static',
                       child: Text('Static text'),
@@ -2058,7 +2124,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 ),
                 if (_qrSource(e) == 'static')
                   _textProperty(
-                    'QR content',
+                    e.type == DesignElementType.qrCode
+                        ? 'QR content'
+                        : 'Barcode content',
                     e.data['text'] as String? ?? '',
                     (value) => update(
                       (e) => e.copyWith(data: {...e.data, 'text': value}),
@@ -2067,7 +2135,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 if (_qrSource(e) == 'system_field')
                   _dropdownProperty<String>(
                     key: ValueKey('qr-system-field-${e.id}'),
-                    label: 'QR field',
+                    label: e.type == DesignElementType.qrCode
+                        ? 'QR field'
+                        : 'Barcode field',
                     value: e.data['field'] as String? ?? 'admission_no',
                     items: _systemFields.entries
                         .map(
@@ -2094,7 +2164,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 if (_qrSource(e) == 'custom_field')
                   _dropdownProperty<String>(
                     key: ValueKey('qr-custom-field-${e.id}'),
-                    label: 'QR custom field',
+                    label: e.type == DesignElementType.qrCode
+                        ? 'QR custom field'
+                        : 'Barcode custom field',
                     value: e.data['field_uuid'] as String,
                     items: _qrCustomFieldItems(e),
                     onChanged: (value) {
@@ -2233,48 +2305,58 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     (_qrSource(e) != 'multiple_fields' ||
                         e.data['format'] == 'labeled_text')) ...[
                   _textProperty(
-                    'QR prefix',
+                    e.type == DesignElementType.qrCode
+                        ? 'QR prefix'
+                        : 'Barcode prefix',
                     e.data['prefix'] as String? ?? '',
                     (value) => update(
                       (e) => e.copyWith(data: {...e.data, 'prefix': value}),
                     ),
                   ),
                   _textProperty(
-                    'QR suffix',
+                    e.type == DesignElementType.qrCode
+                        ? 'QR suffix'
+                        : 'Barcode suffix',
                     e.data['suffix'] as String? ?? '',
                     (value) => update(
                       (e) => e.copyWith(data: {...e.data, 'suffix': value}),
                     ),
                   ),
                 ],
-                _dropdownProperty<String>(
-                  key: ValueKey('qr-correction-${e.id}'),
-                  label: 'Error correction',
-                  value: e.style['error_correction'] as String? ?? 'medium',
-                  items: const [
-                    DropdownMenuItem(value: 'low', child: Text('Low · 7%')),
-                    DropdownMenuItem(
-                      value: 'medium',
-                      child: Text('Medium · 15%'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'quartile',
-                      child: Text('Quartile · 25%'),
-                    ),
-                    DropdownMenuItem(value: 'high', child: Text('High · 30%')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      update(
-                        (e) => e.copyWith(
-                          style: {...e.style, 'error_correction': value},
-                        ),
-                      );
-                    }
-                  },
-                ),
+                if (e.type == DesignElementType.qrCode)
+                  _dropdownProperty<String>(
+                    key: ValueKey('qr-correction-${e.id}'),
+                    label: 'Error correction',
+                    value: e.style['error_correction'] as String? ?? 'medium',
+                    items: const [
+                      DropdownMenuItem(value: 'low', child: Text('Low · 7%')),
+                      DropdownMenuItem(
+                        value: 'medium',
+                        child: Text('Medium · 15%'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'quartile',
+                        child: Text('Quartile · 25%'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'high',
+                        child: Text('High · 30%'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        update(
+                          (e) => e.copyWith(
+                            style: {...e.style, 'error_correction': value},
+                          ),
+                        );
+                      }
+                    },
+                  ),
                 _colourProperty(
-                  'QR foreground',
+                  e.type == DesignElementType.qrCode
+                      ? 'QR foreground'
+                      : 'Barcode foreground',
                   e.style['color'] as String? ?? '#000000',
                   (value) {
                     if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
@@ -2287,7 +2369,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   },
                 ),
                 _colourProperty(
-                  'QR background',
+                  e.type == DesignElementType.qrCode
+                      ? 'QR background'
+                      : 'Barcode background',
                   e.style['background_color'] as String? ?? '#FFFFFF',
                   (value) {
                     if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
@@ -2312,6 +2396,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   ),
                   wide: true,
                 ),
+                if (e.type == DesignElementType.barcode &&
+                    !isDesignBarcodeSquare(
+                      e.data['symbology'] as String? ?? 'code128',
+                    )) ...[
+                  SwitchListTile(
+                    key: const Key('barcode-show-text'),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Show human-readable value'),
+                    value: e.style['show_text'] != false,
+                    onChanged: (value) => update(
+                      (e) =>
+                          e.copyWith(style: {...e.style, 'show_text': value}),
+                    ),
+                  ),
+                  if (e.style['show_text'] != false)
+                    _numberField(
+                      'Value text size (mm)',
+                      (e.style['font_size'] as num?)?.toDouble() ?? 2.5,
+                      (value) => update(
+                        (e) => e.copyWith(
+                          style: {...e.style, 'font_size': value.clamp(1, 6)},
+                        ),
+                      ),
+                      wide: true,
+                    ),
+                ],
               ],
               if ({
                 DesignElementType.text,

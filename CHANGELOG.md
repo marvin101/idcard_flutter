@@ -25,6 +25,10 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
   plus printable front/duplex calibration targets for physical alignment checks.
 - Added named, school-scoped print presets that persist page, layout, duplex,
   crop-mark, spacing, and calibration settings in the current browser or device.
+- Added Code 128, Code 39, EAN-13, and Data Matrix elements with static,
+  single-field, custom-field, or scoped multi-field payloads, matching Designer,
+  Cards preview, and vector PDF rendering, optional 1D human-readable text, and
+  format-specific bulk-export preflight validation.
 
 ### Changed
 

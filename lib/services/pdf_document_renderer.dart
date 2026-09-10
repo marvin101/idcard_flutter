@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/card_template.dart';
+import '../models/design_barcode.dart';
 import '../models/design_render_scene.dart';
 import '../models/design_qr.dart';
 import '../models/design_text_layout.dart';
@@ -224,6 +225,27 @@ class PdfDocumentRenderer {
           backgroundColor: color(style.qrBackground),
           padding: pw.EdgeInsets.all(mm(style.quietZone)),
           drawText: false,
+        );
+
+      case DesignElementType.barcode:
+        final symbology =
+            node.element.data['symbology'] as String? ?? 'code128';
+        if (!isDesignBarcodeDataSupported(node.text, symbology)) {
+          return pw.Container(color: color(style.qrBackground));
+        }
+        return pw.BarcodeWidget(
+          data: node.text,
+          barcode: designBarcode(symbology),
+          color: color(style.color),
+          backgroundColor: color(style.qrBackground),
+          padding: pw.EdgeInsets.all(mm(style.quietZone)),
+          drawText: style.showText && !isDesignBarcodeSquare(symbology),
+          textStyle: pw.TextStyle(
+            font: fonts[400],
+            fontSize: mm(style.fontSize),
+            color: color(style.color),
+          ),
+          textPadding: mm(.5),
         );
 
       case DesignElementType.text:

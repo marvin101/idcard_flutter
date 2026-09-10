@@ -538,6 +538,39 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
+  testWidgets('barcode tool adds a bound Code 128 and switches formats', (
+    t,
+  ) async {
+    await mount(t);
+    await t.tap(find.byKey(const Key('add-barcode')));
+    await t.pump();
+
+    final barcode = view(t).document.elements.last;
+    expect(barcode.type, DesignElementType.barcode);
+    expect(barcode.width, 35);
+    expect(barcode.height, 15);
+    expect(barcode.data['field'], 'admission_no');
+    expect(barcode.data['symbology'], 'code128');
+    expect(barcode.style['show_text'], isTrue);
+    expect(find.byKey(const Key('design-barcode')), findsOneWidget);
+    expect(find.text('Verification link (recommended)'), findsNothing);
+
+    final format = find.descendant(
+      of: find.byKey(Key('barcode-symbology-${barcode.id}')),
+      matching: find.byType(DropdownButtonFormField<String>),
+    );
+    t.widget<DropdownButtonFormField<String>>(format).onChanged!('data_matrix');
+    await t.pump();
+
+    final dataMatrix = view(t).document.elements.last;
+    expect(dataMatrix.data['symbology'], 'data_matrix');
+    expect(dataMatrix.width, 20);
+    expect(dataMatrix.height, 20);
+    expect(dataMatrix.style['show_text'], isFalse);
+    expect(find.byKey(const Key('barcode-show-text')), findsNothing);
+    expect(t.takeException(), isNull);
+  });
+
   testWidgets(
     'small screens warn, continue once, and mobile uses an information state',
     (t) async {

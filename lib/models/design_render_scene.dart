@@ -74,6 +74,7 @@ class DesignRenderStyle {
       errorCorrection = e.style['error_correction'] is String
           ? e.style['error_correction'] as String
           : 'medium',
+      showText = e.style['show_text'] != false,
       alignment = switch (e.style['alignment']) {
         'center' => TextAlign.center,
         'right' => TextAlign.right,
@@ -85,6 +86,7 @@ class DesignRenderStyle {
   final Color color, qrBackground, fill, border;
   final double borderWidth, radius, fontSize, quietZone;
   final String errorCorrection;
+  final bool showText;
   final int weight, maxLines;
   final TextAlign alignment;
   final BoxFit fit;
