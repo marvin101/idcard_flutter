@@ -29,6 +29,7 @@ class PdfService {
     String? schoolLogoUrl,
     SchoolProfile? schoolProfile,
     String? assetBaseUrl,
+    PrintSheetSettings printSettings = const PrintSheetSettings(),
   }) => generateStudentCards(
     cards: [
       PdfCardData(
@@ -44,6 +45,7 @@ class PdfService {
     schoolLogoUrl: schoolLogoUrl,
     schoolProfile: schoolProfile,
     assetBaseUrl: assetBaseUrl,
+    printSettings: printSettings,
   );
 
   static Future<Uint8List> generateStudentCards({
@@ -56,33 +58,64 @@ class PdfService {
     void Function(int completed, int total)? onCardPrepared,
     PrintSheetSettings printSettings = const PrintSheetSettings(),
   }) async {
+    final backDocument = template.backDocument;
+    if (printSettings.isDuplex && backDocument == null) {
+      throw ArgumentError(
+        'Duplex PDF output requires a template with a back design.',
+      );
+    }
+    if (printSettings.isDuplex &&
+        ((backDocument!.canvas.width - template.document.canvas.width).abs() >
+                .001 ||
+            (backDocument.canvas.height - template.document.canvas.height)
+                    .abs() >
+                .001)) {
+      throw ArgumentError(
+        'Front and back canvas dimensions must match for duplex PDF output.',
+      );
+    }
     final pdf = pw.Document();
     final fonts = await DesignFonts.pdfFonts();
     final images = <String, pw.MemoryImage?>{};
-    final scenes = <DesignRenderScene>[];
+    final frontScenes = <DesignRenderScene>[];
+    final backScenes = <DesignRenderScene>[];
     for (var index = 0; index < cards.length; index++) {
       final card = cards[index];
-      final scene = DesignRenderScene(
-        document: template.document,
-        bindings: DesignBindings(
-          student: card.student,
-          sessionName: card.sessionName,
-          className: card.className,
-          sectionName: card.sectionName,
-          schoolName: schoolName,
-          schoolProfile: schoolProfile,
-        ),
-        photoUrl: card.photoUrl,
-        logoUrl: schoolLogoUrl,
-        assetBaseUrl: assetBaseUrl,
+      final bindings = DesignBindings(
+        student: card.student,
+        sessionName: card.sessionName,
+        className: card.className,
+        sectionName: card.sectionName,
+        schoolName: schoolName,
+        schoolProfile: schoolProfile,
       );
-      for (final url in {
-        scene.backgroundImage,
-        ...scene.elements.map((e) => e.imageUrl),
-      }.whereType<String>()) {
-        if (!images.containsKey(url)) images[url] = await _download(url);
+      final scenes = [
+        DesignRenderScene(
+          document: template.document,
+          bindings: bindings,
+          photoUrl: card.photoUrl,
+          logoUrl: schoolLogoUrl,
+          assetBaseUrl: assetBaseUrl,
+        ),
+        if (printSettings.isDuplex)
+          DesignRenderScene(
+            document: backDocument!,
+            bindings: bindings,
+            photoUrl: card.photoUrl,
+            logoUrl: schoolLogoUrl,
+            assetBaseUrl: assetBaseUrl,
+          ),
+      ];
+      frontScenes.add(scenes.first);
+      if (printSettings.isDuplex) backScenes.add(scenes.last);
+      for (final scene in scenes) {
+        for (final url in {
+          scene.backgroundImage,
+          ...scene.elements.map((e) => e.imageUrl),
+        }.whereType<String>()) {
+          if (!images.containsKey(url)) images[url] = await _download(url);
+        }
       }
-      scenes.add(scene);
       onCardPrepared?.call(index + 1, cards.length);
       if ((index + 1) % 25 == 0) {
         // Keep the application responsive while preparing large local PDFs.
@@ -102,62 +135,98 @@ class PdfService {
     }
     final renderer = PdfDocumentRenderer(fonts, images);
     if (printSettings.mode == PrintLayoutMode.oneCardPerPage) {
-      for (final scene in scenes) {
-        pdf.addPage(
-          pw.Page(
-            pageFormat: PdfPageFormat(
-              _mm(scene.canvas.width),
-              _mm(scene.canvas.height),
+      for (var index = 0; index < frontScenes.length; index++) {
+        for (final scene in [
+          frontScenes[index],
+          if (printSettings.isDuplex) backScenes[index],
+        ]) {
+          pdf.addPage(
+            pw.Page(
+              pageFormat: PdfPageFormat(
+                _mm(scene.canvas.width),
+                _mm(scene.canvas.height),
+              ),
+              margin: pw.EdgeInsets.zero,
+              build: (_) => renderer.build(scene),
             ),
-            margin: pw.EdgeInsets.zero,
-            build: (_) => renderer.build(scene),
-          ),
-        );
+          );
+        }
       }
       return pdf.save();
     }
 
     for (
       var pageStart = 0;
-      pageStart < scenes.length;
+      pageStart < frontScenes.length;
       pageStart += plan.cardsPerPage
     ) {
-      final pageScenes = scenes
+      final pageFronts = frontScenes
           .skip(pageStart)
           .take(plan.cardsPerPage)
           .toList();
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat(
-            _mm(printSettings.pageWidthMm),
-            _mm(printSettings.pageHeightMm),
-          ),
-          margin: pw.EdgeInsets.zero,
-          build: (_) => pw.Stack(
-            children: [
-              for (var index = 0; index < pageScenes.length; index++)
-                pw.Positioned(
-                  left: _mm(plan.leftFor(index)),
-                  top: _mm(plan.topFor(index)),
-                  child: renderer.build(pageScenes[index]),
-                ),
-              if (printSettings.cropMarks)
-                ..._cropMarks(plan, pageScenes.length),
-            ],
-          ),
-        ),
+      _addSheetPage(
+        pdf: pdf,
+        renderer: renderer,
+        scenes: pageFronts,
+        slots: List.generate(pageFronts.length, (index) => index),
+        plan: plan,
       );
+      if (printSettings.isDuplex) {
+        final pageBacks = backScenes
+            .skip(pageStart)
+            .take(plan.cardsPerPage)
+            .toList();
+        _addSheetPage(
+          pdf: pdf,
+          renderer: renderer,
+          scenes: pageBacks,
+          slots: List.generate(
+            pageBacks.length,
+            (index) => plan.backSlotFor(index, printSettings.flipEdge),
+          ),
+          plan: plan,
+        );
+      }
     }
     return pdf.save();
   }
 
+  static void _addSheetPage({
+    required pw.Document pdf,
+    required PdfDocumentRenderer renderer,
+    required List<DesignRenderScene> scenes,
+    required List<int> slots,
+    required PrintSheetPlan plan,
+  }) {
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat(
+          _mm(plan.settings.pageWidthMm),
+          _mm(plan.settings.pageHeightMm),
+        ),
+        margin: pw.EdgeInsets.zero,
+        build: (_) => pw.Stack(
+          children: [
+            for (var index = 0; index < scenes.length; index++)
+              pw.Positioned(
+                left: _mm(plan.leftFor(slots[index])),
+                top: _mm(plan.topFor(slots[index])),
+                child: renderer.build(scenes[index]),
+              ),
+            if (plan.settings.cropMarks) ..._cropMarks(plan, slots),
+          ],
+        ),
+      ),
+    );
+  }
+
   static Iterable<pw.Widget> _cropMarks(
     PrintSheetPlan plan,
-    int cardsOnPage,
+    Iterable<int> slots,
   ) sync* {
     const markLengthMm = 2.0;
     const lineWidthMm = 0.2;
-    for (var index = 0; index < cardsOnPage; index++) {
+    for (final index in slots) {
       final left = plan.leftFor(index);
       final top = plan.topFor(index);
       final right = left + plan.cardWidthMm;

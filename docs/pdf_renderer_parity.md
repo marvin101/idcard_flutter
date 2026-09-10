@@ -32,6 +32,7 @@ Baseline: Phase 1 `606b9bb`, Phase 2 `2dada08`. This work changes shared renderi
 | Other scripts / emoji | Platform fallback vs limited PDF fonts | Not claimed supported; font coverage and complex shaping remain explicit limits |
 | Kerning / ligatures | Different engines | Line positions shared; vector PDF glyph advances may still differ subtly from Flutter shaping |
 | Bulk output / filtering | One page per supplied card | Preserved as an option; A4/Letter sheet imposition places exact-size cards in a validated automatic grid, with shared images cached for the duration of an export |
+| Duplex output | Front side only | Front-only remains the default; duplex alternates front/back pages and mirrors back slots for long-edge or short-edge printing, including partial sheets |
 
 ## Architecture
 

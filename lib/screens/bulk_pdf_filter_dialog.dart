@@ -44,6 +44,7 @@ class BulkPdfFilterDialog extends StatefulWidget {
     this.printBasketCount = 0,
     required this.cardWidthMm,
     required this.cardHeightMm,
+    required this.hasBackDesign,
     this.verificationStatus,
     this.printed,
   });
@@ -60,6 +61,7 @@ class BulkPdfFilterDialog extends StatefulWidget {
   final int printBasketCount;
   final double cardWidthMm;
   final double cardHeightMm;
+  final bool hasBackDesign;
   final String? verificationStatus;
   final bool? printed;
 
@@ -83,6 +85,8 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
   late final TextEditingController _margin;
   late final TextEditingController _gap;
   bool _cropMarks = false;
+  PrintSides _sides = PrintSides.frontOnly;
+  DuplexFlipEdge _flipEdge = DuplexFlipEdge.longEdge;
 
   @override
   void initState() {
@@ -123,6 +127,8 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
       marginMm: margin,
       gapMm: gap,
       cropMarks: _cropMarks,
+      sides: _sides,
+      flipEdge: _flipEdge,
     );
   }
 
@@ -388,6 +394,65 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
                       onChanged: (value) =>
                           setState(() => _layoutMode = value!),
                     ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<PrintSides>(
+                      key: const Key('print-sides'),
+                      isExpanded: true,
+                      initialValue: _sides,
+                      decoration: const InputDecoration(
+                        labelText: 'Card sides',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: PrintSides.frontOnly,
+                          child: Text('Front only'),
+                        ),
+                        if (widget.hasBackDesign)
+                          const DropdownMenuItem(
+                            value: PrintSides.duplex,
+                            child: Text('Front and back (duplex)'),
+                          ),
+                      ],
+                      onChanged: (value) => setState(() => _sides = value!),
+                    ),
+                    if (!widget.hasBackDesign)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Add a back design in Designer to enable duplex output.',
+                        ),
+                      ),
+                    if (_sides == PrintSides.duplex) ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<DuplexFlipEdge>(
+                        key: const Key('print-duplex-flip-edge'),
+                        isExpanded: true,
+                        initialValue: _flipEdge,
+                        decoration: const InputDecoration(
+                          labelText: 'Printer flip edge',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: DuplexFlipEdge.longEdge,
+                            child: Text('Flip on long edge'),
+                          ),
+                          DropdownMenuItem(
+                            value: DuplexFlipEdge.shortEdge,
+                            child: Text('Flip on short edge'),
+                          ),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _flipEdge = value!),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Use the same flip-edge option in the printer dialog. Back-side slots are mirrored automatically.',
+                        ),
+                      ),
+                    ],
                     if (_layoutMode == PrintLayoutMode.sheet) ...[
                       const SizedBox(height: 12),
                       Row(
@@ -532,7 +597,7 @@ class _BulkPdfFilterDialogState extends State<BulkPdfFilterDialog> {
     return Text(
       '${plan.columns} × ${plan.rows} = ${plan.cardsPerPage} cards per '
       '${settings.paperLabel} ${settings.orientationLabel} sheet. Cards retain '
-      'their exact physical size.',
+      'their exact physical size.${settings.isDuplex ? ' Back slots are mirrored for ${settings.flipEdge == DuplexFlipEdge.longEdge ? 'long-edge' : 'short-edge'} printing.' : ''}',
       key: const Key('print-sheet-summary'),
     );
   }

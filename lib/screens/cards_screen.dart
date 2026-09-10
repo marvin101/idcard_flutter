@@ -606,6 +606,10 @@ class _CardsScreenState extends State<CardsScreen> {
     String? sessionName,
   ) async {
     final photoUrl = _photoUrl(student);
+    final printSettings = _cardTemplate.hasBackDesign
+        ? await _chooseIndividualPrintSides()
+        : const PrintSheetSettings();
+    if (printSettings == null || !mounted) return;
 
     try {
       await Printing.layoutPdf(
@@ -621,6 +625,7 @@ class _CardsScreenState extends State<CardsScreen> {
             photoUrl: photoUrl,
             schoolLogoUrl: _schoolLogoUrl,
             template: _cardTemplate,
+            printSettings: printSettings,
           );
         },
       );
@@ -631,6 +636,92 @@ class _CardsScreenState extends State<CardsScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Unable to generate ID card: $e')));
     }
+  }
+
+  Future<PrintSheetSettings?> _chooseIndividualPrintSides() async {
+    var sides = PrintSides.frontOnly;
+    var flipEdge = DuplexFlipEdge.longEdge;
+    return showDialog<PrintSheetSettings>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          key: const Key('individual-print-sides-dialog'),
+          title: const Text('Print card'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<PrintSides>(
+                  key: const Key('individual-print-sides'),
+                  isExpanded: true,
+                  initialValue: sides,
+                  decoration: const InputDecoration(
+                    labelText: 'Card sides',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: PrintSides.frontOnly,
+                      child: Text('Front only'),
+                    ),
+                    DropdownMenuItem(
+                      value: PrintSides.duplex,
+                      child: Text('Front and back (duplex)'),
+                    ),
+                  ],
+                  onChanged: (value) => setDialogState(() => sides = value!),
+                ),
+                if (sides == PrintSides.duplex) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<DuplexFlipEdge>(
+                    key: const Key('individual-print-flip-edge'),
+                    isExpanded: true,
+                    initialValue: flipEdge,
+                    decoration: const InputDecoration(
+                      labelText: 'Printer flip edge',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: DuplexFlipEdge.longEdge,
+                        child: Text('Flip on long edge'),
+                      ),
+                      DropdownMenuItem(
+                        value: DuplexFlipEdge.shortEdge,
+                        child: Text('Flip on short edge'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => flipEdge = value!),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'The PDF contains alternating front and back pages. Select the same flip edge in the printer dialog.',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('individual-print-continue'),
+              onPressed: () => Navigator.pop(
+                context,
+                PrintSheetSettings(sides: sides, flipEdge: flipEdge),
+              ),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String? _photoUrl(ApiStudent student) =>
@@ -670,6 +761,7 @@ class _CardsScreenState extends State<CardsScreen> {
         printBasketCount: _printBasketStudents.length,
         cardWidthMm: _cardTemplate.document.canvas.width,
         cardHeightMm: _cardTemplate.document.canvas.height,
+        hasBackDesign: _cardTemplate.hasBackDesign,
         verificationStatus: _verificationStatus,
         printed: _printed,
       ),
@@ -707,6 +799,7 @@ class _CardsScreenState extends State<CardsScreen> {
         className: _className,
         sectionName: _sectionName,
         photoUrl: _photoUrl,
+        includeBack: filter.printSettings.isDuplex,
       );
       final confirmed = await _confirmBulkExport(
         filter: filter,
@@ -1020,12 +1113,27 @@ class _CardsScreenState extends State<CardsScreen> {
                   key: const Key('bulk-student-count'),
                 ),
                 Text(
-                  filter.printSettings.mode == PrintLayoutMode.oneCardPerPage
+                  filter.printSettings.isDuplex
+                      ? 'PDF pages: ${plan.pdfPageCount} • Physical sheets: '
+                            '${plan.physicalSheetCount}'
+                            '${filter.printSettings.mode == PrintLayoutMode.oneCardPerPage ? ' (one card per sheet)' : ' • ${plan.columns} × ${plan.rows} = ${plan.cardsPerPage} cards per sheet'}'
+                      : filter.printSettings.mode ==
+                            PrintLayoutMode.oneCardPerPage
                       ? 'Pages: ${plan.pageCount} (one card per page)'
                       : 'Sheets: ${plan.pageCount} • ${plan.columns} × ${plan.rows} '
                             '= ${plan.cardsPerPage} cards per sheet',
                   key: const Key('bulk-page-count'),
                 ),
+                Text(
+                  filter.printSettings.isDuplex
+                      ? 'Sides: Front and back • ${filter.printSettings.flipEdge == DuplexFlipEdge.longEdge ? 'flip on long edge' : 'flip on short edge'}'
+                      : 'Sides: Front only',
+                  key: const Key('bulk-side-settings'),
+                ),
+                if (filter.printSettings.isDuplex)
+                  const Text(
+                    'Print double-sided using the same flip-edge setting. Front and back pages alternate in the PDF.',
+                  ),
                 if (filter.printSettings.mode == PrintLayoutMode.sheet)
                   Text(
                     'Paper: ${filter.printSettings.paperLabel} '

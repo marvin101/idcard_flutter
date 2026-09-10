@@ -67,6 +67,23 @@ final bulkTemplate = CardTemplate(
   ),
 );
 
+final duplexBulkTemplate = bulkTemplate.copyWith(
+  backDocument: const DesignDocument(
+    canvas: DesignCanvas(width: 85.6, height: 53.98),
+    elements: [
+      DesignElement(
+        id: 'back-admission',
+        type: DesignElementType.boundText,
+        x: 4,
+        y: 4,
+        width: 50,
+        height: 8,
+        data: {'field': 'admission_no'},
+      ),
+    ],
+  ),
+);
+
 class BulkApi extends ApiService {
   BulkApi(this.students) : super(baseUrl: 'https://example.test');
 
@@ -91,7 +108,8 @@ class BulkApi extends ApiService {
   }) async => const [SchoolSection(uuid: 'section', name: 'A')];
 
   @override
-  Future<CardTemplate> getCardTemplate(String schoolUuid) async => bulkTemplate;
+  Future<CardTemplate> getCardTemplate(String schoolUuid) async =>
+      duplexBulkTemplate;
 
   @override
   Future<ApiStudent> getStudent({
@@ -296,6 +314,93 @@ void main() {
     expect(plan.topFor(7) + 53.98, lessThanOrEqualTo(287));
   });
 
+  test('duplex slot mapping mirrors for page orientation and flip edge', () {
+    final portrait = PrintSheetPlan.calculate(
+      settings: const PrintSheetSettings(mode: PrintLayoutMode.sheet),
+      cardWidthMm: 85.6,
+      cardHeightMm: 53.98,
+      cardCount: 3,
+    );
+    expect(portrait.backSlotFor(0, DuplexFlipEdge.longEdge), 1);
+    expect(portrait.backSlotFor(1, DuplexFlipEdge.longEdge), 0);
+    expect(portrait.backSlotFor(0, DuplexFlipEdge.shortEdge), 6);
+    expect(portrait.backSlotFor(1, DuplexFlipEdge.shortEdge), 7);
+
+    final landscape = PrintSheetPlan.calculate(
+      settings: const PrintSheetSettings(
+        mode: PrintLayoutMode.sheet,
+        orientation: PrintPaperOrientation.landscape,
+      ),
+      cardWidthMm: 85.6,
+      cardHeightMm: 53.98,
+      cardCount: 3,
+    );
+    expect(landscape.backSlotFor(0, DuplexFlipEdge.longEdge), 6);
+    expect(landscape.backSlotFor(0, DuplexFlipEdge.shortEdge), 2);
+  });
+
+  test('duplex plan reports PDF pages separately from physical sheets', () {
+    final plan = PrintSheetPlan.calculate(
+      settings: const PrintSheetSettings(
+        mode: PrintLayoutMode.sheet,
+        sides: PrintSides.duplex,
+      ),
+      cardWidthMm: 85.6,
+      cardHeightMm: 53.98,
+      cardCount: 10,
+    );
+    expect(plan.physicalSheetCount, 2);
+    expect(plan.pdfPageCount, 4);
+  });
+
+  test('back-side preflight runs only for duplex output', () {
+    const template = CardTemplate(
+      name: 'Back preflight',
+      document: DesignDocument(
+        canvas: DesignCanvas(width: 85.6, height: 53.98),
+        elements: [],
+      ),
+      backDocument: DesignDocument(
+        canvas: DesignCanvas(width: 85.6, height: 53.98),
+        elements: [
+          DesignElement(
+            id: 'back-photo',
+            type: DesignElementType.studentPhoto,
+            x: 5,
+            y: 5,
+            width: 20,
+            height: 20,
+          ),
+          DesignElement(
+            id: 'back-father',
+            type: DesignElementType.boundText,
+            x: 30,
+            y: 5,
+            width: 30,
+            height: 8,
+            data: {'field': 'father_name'},
+          ),
+        ],
+      ),
+    );
+    BulkExportInspection inspect(bool includeBack) =>
+        BulkExportInspection.inspect(
+          students: [student(1)],
+          template: template,
+          schoolName: 'Bulk School',
+          sessionName: (_) => '2026–27',
+          className: (_) => '10',
+          sectionName: (_) => 'A',
+          includeBack: includeBack,
+        );
+
+    expect(inspect(false).warnings, isEmpty);
+    expect(
+      inspect(true).warnings.map((issue) => issue.message),
+      containsAll(['Missing student photo', "Missing father's name"]),
+    );
+  });
+
   for (final configuration in [
     (
       size: PrintPaperSize.a4,
@@ -380,6 +485,49 @@ void main() {
     expect(RegExp(r'/Type\s*/Page(?!s)\b').allMatches(source).length, 2);
   });
 
+  test('duplex sheet PDF alternates front and mirrored back pages', () async {
+    final cards = List.generate(
+      10,
+      (index) => PdfCardData(student: student(index)),
+    );
+    final bytes = await PdfService.generateStudentCards(
+      cards: cards,
+      schoolName: 'Bulk School',
+      template: duplexBulkTemplate,
+      printSettings: const PrintSheetSettings(
+        mode: PrintLayoutMode.sheet,
+        sides: PrintSides.duplex,
+        flipEdge: DuplexFlipEdge.shortEdge,
+        cropMarks: true,
+      ),
+    );
+    final source = latin1.decode(bytes, allowInvalid: true);
+    expect(RegExp(r'/Type\s*/Page(?!s)\b').allMatches(source).length, 4);
+  });
+
+  test('one-card duplex PDF emits one front/back pair per student', () async {
+    final bytes = await PdfService.generateStudentCards(
+      cards: List.generate(3, (index) => PdfCardData(student: student(index))),
+      schoolName: 'Bulk School',
+      template: duplexBulkTemplate,
+      printSettings: const PrintSheetSettings(sides: PrintSides.duplex),
+    );
+    final source = latin1.decode(bytes, allowInvalid: true);
+    expect(RegExp(r'/Type\s*/Page(?!s)\b').allMatches(source).length, 6);
+  });
+
+  test('duplex output requires a matching back design', () async {
+    await expectLater(
+      PdfService.generateStudentCards(
+        cards: [PdfCardData(student: student(1))],
+        schoolName: 'Bulk School',
+        template: bulkTemplate,
+        printSettings: const PrintSheetSettings(sides: PrintSides.duplex),
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
   for (final size in [100, 500, 1000]) {
     test('generates a representative $size-card batch', () async {
       final watch = Stopwatch()..start();
@@ -448,6 +596,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Multiple cards per sheet').last);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('print-sides')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Front and back (duplex)').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('print-duplex-flip-edge')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Flip on short edge').last);
+    await tester.pumpAndSettle();
     expect(find.textContaining('2 × 4 = 8 cards per A4'), findsOneWidget);
     await tester.ensureVisible(find.byKey(const Key('print-crop-marks')));
     await tester.pumpAndSettle();
@@ -458,7 +614,12 @@ void main() {
     await tester.tap(find.text('Create PDF'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Sheets: 1 • 2 × 4 = 8 cards per sheet'), findsOneWidget);
+    expect(
+      find.text(
+        'PDF pages: 2 • Physical sheets: 1 • 2 × 4 = 8 cards per sheet',
+      ),
+      findsOneWidget,
+    );
     expect(
       tester.widget<Text>(find.byKey(const Key('bulk-sheet-settings'))).data,
       contains('crop marks'),
@@ -468,6 +629,41 @@ void main() {
     expect(receivedSettings?.mode, PrintLayoutMode.sheet);
     expect(receivedSettings?.paperSize, PrintPaperSize.a4);
     expect(receivedSettings?.cropMarks, isTrue);
+    expect(receivedSettings?.sides, PrintSides.duplex);
+    expect(receivedSettings?.flipEdge, DuplexFlipEdge.shortEdge);
+  });
+
+  testWidgets('individual card print offers duplex and flip-edge controls', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = BulkApi([student(1)]);
+    addTearDown(api.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CardsScreen(
+          schoolUuid: 'school',
+          schoolName: 'Bulk School',
+          api: api,
+          canEdit: true,
+          canDesign: false,
+          canPrint: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.print_outlined).first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('individual-print-sides-dialog')), findsOne);
+    await tester.tap(find.byKey(const Key('individual-print-sides')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Front and back (duplex)').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('individual-print-flip-edge')), findsOne);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(

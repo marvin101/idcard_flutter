@@ -33,12 +33,18 @@ class BulkExportInspection {
     required String? Function(ApiStudent) sectionName,
     String? Function(ApiStudent)? photoUrl,
     SchoolProfile? schoolProfile,
+    bool includeBack = false,
   }) {
     final warningCounts = <String, int>{};
     final blockingCounts = <String, int>{};
-    final visible = template.document.elements.where(
-      (element) => element.visible,
-    );
+    final visible =
+        [
+              template.document,
+              if (includeBack && template.backDocument != null)
+                template.backDocument!,
+            ]
+            .expand((document) => document.elements)
+            .where((element) => element.visible);
     final needsPhoto = visible.any(
       (element) => element.type == DesignElementType.studentPhoto,
     );

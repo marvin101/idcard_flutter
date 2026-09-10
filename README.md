@@ -64,7 +64,7 @@ DesignDocument
   -> Designer / Cards preview / PDF
 ```
 
-The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. Templates may include an optional back document: Designer exposes independent Front/Back editing and Cards can flip each preview between sides. Both canvases keep matching physical dimensions. PDF export remains front-only in this initial duplex slice. QR codes can contain fixed text, bind to one field, or combine up to 20 student, academic, school, and custom fields as structured JSON or labeled text, with configurable correction level, foreground/background colours, and quiet zone.
+The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and QR-code output aligned across outputs and reduces parity drift. Templates may include an optional back document: Designer exposes independent Front/Back editing and Cards can flip each preview between sides. Both canvases keep matching physical dimensions. PDF export supports front-only or duplex output; duplex PDFs alternate front/back pages and mirror imposed back-side slots for the selected long-edge or short-edge printer setting. QR codes can contain fixed text, bind to one field, or combine up to 20 student, academic, school, and custom fields as structured JSON or labeled text, with configurable correction level, foreground/background colours, and quiet zone.
 
 New QR elements default to **Verification link (recommended)**. This source encodes the student's opaque `/verify/<token>` URL instead of embedding PII in the QR payload. Existing QR modes remain available for compatibility. The verification-link binding cannot be selected as visible bound text or mixed into a multi-field payload.
 
@@ -261,7 +261,7 @@ The current Flutter value is `0.8.0+8`: product release `0.8.0`, build number `8
 
 ## Roadmap
 
-- Advanced print production and Print Basket (working-set, front-side sheet imposition, and duplex design/preview slices complete; duplex PDF output remains)
+- Advanced print production and Print Basket (working-set, exact-size sheet imposition, duplex design/preview, and duplex PDF output complete; production calibration and reusable print presets remain)
 - Barcode formats and advanced signed/time-bounded digital credentials
 - Designer v2 remaining fidelity and contract hardening
 - Teacher and non-teaching staff workflows

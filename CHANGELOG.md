@@ -18,11 +18,14 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 - Added A4 and Letter sheet imposition with portrait/landscape orientation,
   configurable margins and spacing, exact-size automatic card grids, page-count
   review, non-fitting layout validation, and optional crop marks.
+- Added duplex PDF output for individual cards and imposed sheets, with
+  alternating front/back pages, long-edge or short-edge alignment, mirrored
+  partial-sheet slots, and separate PDF-page/physical-sheet counts.
 
 ### Changed
 
-- Canvas size and orientation changes now keep both card sides physically
-  aligned. Existing PDF export remains front-only for this initial duplex slice.
+- Canvas size and orientation changes keep both card sides physically aligned,
+  and duplex preflight now validates content from both selected sides.
 - Card selection is now available to print-capable roles even when they do not
   have student verification or print-lifecycle permissions.
 

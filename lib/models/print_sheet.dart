@@ -6,6 +6,10 @@ enum PrintPaperSize { a4, letter }
 
 enum PrintPaperOrientation { portrait, landscape }
 
+enum PrintSides { frontOnly, duplex }
+
+enum DuplexFlipEdge { longEdge, shortEdge }
+
 class PrintSheetSettings {
   const PrintSheetSettings({
     this.mode = PrintLayoutMode.oneCardPerPage,
@@ -14,6 +18,8 @@ class PrintSheetSettings {
     this.marginMm = 10,
     this.gapMm = 4,
     this.cropMarks = false,
+    this.sides = PrintSides.frontOnly,
+    this.flipEdge = DuplexFlipEdge.longEdge,
   });
 
   final PrintLayoutMode mode;
@@ -22,6 +28,10 @@ class PrintSheetSettings {
   final double marginMm;
   final double gapMm;
   final bool cropMarks;
+  final PrintSides sides;
+  final DuplexFlipEdge flipEdge;
+
+  bool get isDuplex => sides == PrintSides.duplex;
 
   double get pageWidthMm {
     final portraitWidth = paperSize == PrintPaperSize.a4 ? 210.0 : 215.9;
@@ -168,10 +178,26 @@ class PrintSheetPlan {
   int get pageCount => cardCount == 0 || cardsPerPage == 0
       ? 0
       : (cardCount + cardsPerPage - 1) ~/ cardsPerPage;
+  int get physicalSheetCount => pageCount;
+  int get pdfPageCount => pageCount * (settings.isDuplex ? 2 : 1);
 
   double leftFor(int indexOnPage) =>
       startXmm + (indexOnPage % columns) * (cardWidthMm + settings.gapMm);
 
   double topFor(int indexOnPage) =>
       startYmm + (indexOnPage ~/ columns) * (cardHeightMm + settings.gapMm);
+
+  int backSlotFor(int frontSlot, DuplexFlipEdge flipEdge) {
+    if (frontSlot < 0 || frontSlot >= cardsPerPage) {
+      throw RangeError.range(frontSlot, 0, cardsPerPage - 1, 'frontSlot');
+    }
+    final row = frontSlot ~/ columns;
+    final column = frontSlot % columns;
+    final mirrorHorizontally = flipEdge == DuplexFlipEdge.longEdge
+        ? settings.orientation == PrintPaperOrientation.portrait
+        : settings.orientation == PrintPaperOrientation.landscape;
+    final backRow = mirrorHorizontally ? row : rows - 1 - row;
+    final backColumn = mirrorHorizontally ? columns - 1 - column : column;
+    return backRow * columns + backColumn;
+  }
 }
