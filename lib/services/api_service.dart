@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/api_student.dart';
+import '../models/api_personnel.dart';
 import '../models/academic_session.dart';
 import '../models/bulk_photo_import.dart';
 import '../models/school_class.dart';
@@ -678,6 +679,185 @@ class ApiService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _apiException(response);
     }
+  }
+
+  Future<ApiPersonnelPage> getPersonnel({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    int limit = 100,
+    int offset = 0,
+    String? search,
+    String? verificationStatus,
+    bool? printed,
+  }) async {
+    final query = <String, String>{
+      'personnel_type': personnelType.apiValue,
+      'limit': '$limit',
+      'offset': '$offset',
+      if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
+      if (verificationStatus?.isNotEmpty == true)
+        'verification_status': verificationStatus!,
+      if (printed != null) 'printed': '$printed',
+    };
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/personnel').replace(queryParameters: query),
+      headers: _headers,
+    );
+    return ApiPersonnelPage.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiPersonnel> createPersonnel({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String employeeNo,
+    required String fullName,
+    String? designation,
+    String? department,
+    DateTime? dob,
+    String? gender,
+    String? bloodGroup,
+    String? mobile,
+    String? email,
+    String? address,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/personnel'),
+      headers: _headers,
+      body: jsonEncode({
+        'personnel_type': personnelType.apiValue,
+        'employee_no': employeeNo,
+        'full_name': fullName,
+        'designation': designation,
+        'department': department,
+        'dob': _formatDate(dob),
+        'gender': gender,
+        'blood_group': bloodGroup,
+        'mobile': mobile,
+        'email': email,
+        'address': address,
+      }),
+    );
+    return ApiPersonnel.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiPersonnel> updatePersonnel({
+    required String schoolUuid,
+    required String personnelUuid,
+    required PersonnelType personnelType,
+    required String employeeNo,
+    required String fullName,
+    String? designation,
+    String? department,
+    DateTime? dob,
+    String? gender,
+    String? bloodGroup,
+    String? mobile,
+    String? email,
+    String? address,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid'),
+      headers: _headers,
+      body: jsonEncode({
+        'personnel_type': personnelType.apiValue,
+        'employee_no': employeeNo,
+        'full_name': fullName,
+        'designation': designation,
+        'department': department,
+        'dob': _formatDate(dob),
+        'gender': gender,
+        'blood_group': bloodGroup,
+        'mobile': mobile,
+        'email': email,
+        'address': address,
+      }),
+    );
+    return ApiPersonnel.fromJson(_decodeMap(response));
+  }
+
+  Future<void> deletePersonnel({
+    required String schoolUuid,
+    required String personnelUuid,
+  }) async {
+    final response = await _client.delete(
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _apiException(response);
+    }
+  }
+
+  Future<ApiPersonnel> updatePersonnelVerification({
+    required String schoolUuid,
+    required String personnelUuid,
+    required String status,
+    String? note,
+  }) async {
+    final response = await _client.patch(
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid/verification'),
+      headers: _headers,
+      body: jsonEncode({'status': status, 'note': note}),
+    );
+    return ApiPersonnel.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiPersonnel> markPersonnelPrinted({
+    required String schoolUuid,
+    required String personnelUuid,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid/mark-printed'),
+      headers: _headers,
+    );
+    return ApiPersonnel.fromJson(_decodeMap(response));
+  }
+
+  Future<List<ApiPersonnel>> batchVerifyPersonnel({
+    required String schoolUuid,
+    required List<String> personnelUuids,
+  }) => _batchPersonnelLifecycle(
+    schoolUuid: schoolUuid,
+    endpoint: 'batch-verify',
+    personnelUuids: personnelUuids,
+  );
+
+  Future<List<ApiPersonnel>> batchMarkPersonnelPrinted({
+    required String schoolUuid,
+    required List<String> personnelUuids,
+  }) => _batchPersonnelLifecycle(
+    schoolUuid: schoolUuid,
+    endpoint: 'batch-mark-printed',
+    personnelUuids: personnelUuids,
+  );
+
+  Future<List<ApiPersonnel>> _batchPersonnelLifecycle({
+    required String schoolUuid,
+    required String endpoint,
+    required List<String> personnelUuids,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/personnel/$endpoint'),
+      headers: _headers,
+      body: jsonEncode({'personnel_uuids': personnelUuids}),
+    );
+    final data = _decodeMap(response);
+    return (data['personnel'] as List<dynamic>? ?? const [])
+        .map((item) => ApiPersonnel.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<PersonnelAuditEvent>> getPersonnelHistory({
+    required String schoolUuid,
+    required String personnelUuid,
+  }) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid/history'),
+      headers: _headers,
+    );
+    return _decodeList(
+      response,
+    ).map((item) => PersonnelAuditEvent.fromJson(item)).toList();
   }
 
   Future<List<ApiStudent>> getStudents({

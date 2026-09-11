@@ -13,7 +13,7 @@ void main() {
     );
   });
 
-  test('card operators see student entry and ID-card tools', () {
+  test('card operators see identity records and ID-card tools', () {
     expect(
       dashboardModulesFor(
         isPlatformAdmin: false,
@@ -23,6 +23,8 @@ void main() {
       {
         DashboardModuleKind.schoolProfile,
         DashboardModuleKind.students,
+        DashboardModuleKind.teachers,
+        DashboardModuleKind.staff,
         DashboardModuleKind.idCards,
       },
     );

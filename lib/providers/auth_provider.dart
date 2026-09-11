@@ -57,6 +57,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool get canDeleteStudents => canManageUsers;
+  bool get canDeletePersonnel => canManageUsers;
   bool get canDesignCards => canManageUsers;
   bool get canPrintCards => canManageCardData;
   LifecyclePermissions get _lifecyclePermissions => lifecyclePermissionsFor(
@@ -66,6 +67,9 @@ class AuthProvider extends ChangeNotifier {
   bool get canVerifyStudents => _lifecyclePermissions.canVerify;
   bool get canViewStudentHistory => _lifecyclePermissions.canViewHistory;
   bool get canMarkStudentsPrinted => _lifecyclePermissions.canMarkPrinted;
+  bool get canVerifyPersonnel => _lifecyclePermissions.canVerify;
+  bool get canViewPersonnelHistory => _lifecyclePermissions.canViewHistory;
+  bool get canMarkPersonnelPrinted => _lifecyclePermissions.canMarkPrinted;
 
   SchoolAccess? get selectedSchoolAccess {
     final id = _selectedSchool?.uuid;

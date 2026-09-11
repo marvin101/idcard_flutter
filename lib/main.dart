@@ -4,6 +4,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'app_routes.dart';
 import 'models/api_student.dart';
+import 'models/api_personnel.dart';
 import 'models/auth_models.dart';
 import 'services/api_service.dart';
 import 'navigation/app_navigation.dart';
@@ -32,6 +33,9 @@ import 'screens/public_design_screen.dart';
 import 'screens/public_student_verification_screen.dart';
 import 'screens/student_screen.dart';
 import 'screens/student_grid_screen.dart';
+import 'screens/personnel_form_screen.dart';
+import 'screens/personnel_history_screen.dart';
+import 'screens/personnel_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
 import 'widgets/authenticated_app_bar.dart';
@@ -205,6 +209,29 @@ class _AuthenticatedRoute extends StatelessWidget {
           canViewHistory: auth.canViewStudentHistory,
           canMarkPrinted: auth.canMarkStudentsPrinted,
         ),
+      AppRoutes.teachers when has(DashboardModuleKind.teachers) =>
+        PersonnelScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          personnelType: PersonnelType.teacher,
+          canEdit: auth.canManageCardData,
+          canDelete: auth.canDeletePersonnel,
+          canVerify: auth.canVerifyPersonnel,
+          canViewHistory: auth.canViewPersonnelHistory,
+          canMarkPrinted: auth.canMarkPersonnelPrinted,
+        ),
+      AppRoutes.staff when has(DashboardModuleKind.staff) => PersonnelScreen(
+        schoolUuid: school.uuid,
+        schoolName: school.name,
+        api: auth.api,
+        personnelType: PersonnelType.staff,
+        canEdit: auth.canManageCardData,
+        canDelete: auth.canDeletePersonnel,
+        canVerify: auth.canVerifyPersonnel,
+        canViewHistory: auth.canViewPersonnelHistory,
+        canMarkPrinted: auth.canMarkPersonnelPrinted,
+      ),
       AppRoutes.studentGrid
           when has(DashboardModuleKind.students) && auth.canManageCardData =>
         StudentGridScreen(
@@ -223,6 +250,28 @@ class _AuthenticatedRoute extends StatelessWidget {
           schoolUuid: school.uuid,
           api: auth.api,
           student: arguments as ApiStudent,
+        ),
+      AppRoutes.addTeacher
+          when has(DashboardModuleKind.teachers) && auth.canManageCardData =>
+        PersonnelFormScreen(
+          schoolUuid: school.uuid,
+          api: auth.api,
+          personnelType: PersonnelType.teacher,
+        ),
+      AppRoutes.addStaff
+          when has(DashboardModuleKind.staff) && auth.canManageCardData =>
+        PersonnelFormScreen(
+          schoolUuid: school.uuid,
+          api: auth.api,
+          personnelType: PersonnelType.staff,
+        ),
+      AppRoutes.editPersonnel
+          when auth.canManageCardData && arguments is ApiPersonnel =>
+        PersonnelFormScreen(
+          schoolUuid: school.uuid,
+          api: auth.api,
+          personnelType: (arguments as ApiPersonnel).personnelType,
+          personnel: arguments as ApiPersonnel,
         ),
       AppRoutes.studentFields when has(DashboardModuleKind.studentFields) =>
         StudentFieldsScreen(
@@ -301,9 +350,22 @@ class _AuthenticatedRoute extends StatelessWidget {
           studentUuid: AppRoutes.studentUuidFromHistory(routeName)!,
           api: auth.api,
         ),
+      _
+          when AppRoutes.isPersonnelHistory(routeName) &&
+              auth.canViewPersonnelHistory =>
+        PersonnelHistoryScreen(
+          schoolUuid: school.uuid,
+          personnelUuid: AppRoutes.personnelUuidFromHistory(routeName)!,
+          api: auth.api,
+        ),
       AppRoutes.editStudent => const _ProtectedRouteMessage(
         title: 'Student unavailable',
         message: 'Return to Students and choose a student to edit.',
+        icon: Icons.person_search_outlined,
+      ),
+      AppRoutes.editPersonnel => const _ProtectedRouteMessage(
+        title: 'Personnel record unavailable',
+        message: 'Return to Teachers or Staff and choose a record to edit.',
         icon: Icons.person_search_outlined,
       ),
       _ => const _ProtectedRouteMessage(

@@ -4,6 +4,8 @@ enum DashboardModuleKind {
   academicSessions,
   classesAndSections,
   students,
+  teachers,
+  staff,
   studentFields,
   publicForms,
   idCards,
@@ -26,6 +28,8 @@ Set<DashboardModuleKind> dashboardModulesFor({
     'card_operator' => const {
       DashboardModuleKind.schoolProfile,
       DashboardModuleKind.students,
+      DashboardModuleKind.teachers,
+      DashboardModuleKind.staff,
       DashboardModuleKind.idCards,
     },
     'teacher' || 'staff' => const {

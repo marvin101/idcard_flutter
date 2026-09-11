@@ -316,6 +316,14 @@ List<_NavigationItem> _navigationItems(_NavigationAuthState auth) {
         Icons.people_outline,
         AppRoutes.students,
       ),
+    if (modules.contains(DashboardModuleKind.teachers))
+      const _NavigationItem(
+        'Teachers',
+        Icons.co_present_outlined,
+        AppRoutes.teachers,
+      ),
+    if (modules.contains(DashboardModuleKind.staff))
+      const _NavigationItem('Staff', Icons.badge_outlined, AppRoutes.staff),
     if (modules.contains(DashboardModuleKind.students) &&
         auth.canManageCardData)
       const _NavigationItem(

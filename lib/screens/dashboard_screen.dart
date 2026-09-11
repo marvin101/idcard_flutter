@@ -283,6 +283,22 @@ class _ModuleGrid extends StatelessWidget {
           true,
           () => AppNavigation.navigateToModule(context, AppRoutes.students),
         ),
+      if (visibleModules.contains(DashboardModuleKind.teachers))
+        _DashboardModule(
+          'Teachers',
+          'Teacher records, verification, and card lifecycle.',
+          Icons.co_present_outlined,
+          true,
+          () => AppNavigation.navigateToModule(context, AppRoutes.teachers),
+        ),
+      if (visibleModules.contains(DashboardModuleKind.staff))
+        _DashboardModule(
+          'Staff',
+          'Non-teaching staff records and ID-card data.',
+          Icons.badge_outlined,
+          true,
+          () => AppNavigation.navigateToModule(context, AppRoutes.staff),
+        ),
       if (visibleModules.contains(DashboardModuleKind.studentFields))
         _DashboardModule(
           'Student Fields',

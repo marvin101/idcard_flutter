@@ -79,6 +79,8 @@ abstract final class AppNavigation {
   static const primaryModuleRoutes = <String>{
     AppRoutes.dashboard,
     AppRoutes.students,
+    AppRoutes.teachers,
+    AppRoutes.staff,
     AppRoutes.studentFields,
     AppRoutes.publicForms,
     AppRoutes.schoolProfile,
@@ -92,6 +94,9 @@ abstract final class AppNavigation {
   static const nestedWorkflowRoutes = <String>{
     AppRoutes.addStudent,
     AppRoutes.editStudent,
+    AppRoutes.addTeacher,
+    AppRoutes.addStaff,
+    AppRoutes.editPersonnel,
     AppRoutes.studentImport,
     AppRoutes.bulkPhotoImport,
     AppRoutes.studentGrid,
@@ -103,7 +108,8 @@ abstract final class AppNavigation {
   static bool isNestedWorkflow(String? routeName) =>
       routeName != null &&
       (nestedWorkflowRoutes.contains(routeName) ||
-          AppRoutes.isStudentHistory(routeName));
+          AppRoutes.isStudentHistory(routeName) ||
+          AppRoutes.isPersonnelHistory(routeName));
 
   static bool showsLeadingBack(String? routeName) =>
       AppRoutes.isProtected(routeName) &&
