@@ -29,6 +29,9 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
   single-field, custom-field, or scoped multi-field payloads, matching Designer,
   Cards preview, and vector PDF rendering, optional 1D human-readable text, and
   format-specific bulk-export preflight validation.
+- Added administrator-configurable credential validity, signed credential
+  status/version/issue/expiry details, and a public cryptographic-signature
+  verification indicator while retaining a compatible legacy-link display.
 
 ### Changed
 

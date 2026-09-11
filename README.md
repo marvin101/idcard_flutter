@@ -49,7 +49,7 @@ forms, templates, audits   and temporary bulk-photo objects
   exact-size A4/Letter sheet layouts, configurable margins/spacing, crop marks,
   duplex alignment, printer calibration sheets, and reusable school-scoped presets
 - Platform user and school-assignment administration
-- Revocable QR-based student verification with school-scoped disclosure and an anonymous `/verify/<token>` page
+- Signed, expiring, and revocable QR-based student verification with school-scoped disclosure and an anonymous `/verify/<token>` page
 - Code 128, Code 39, EAN-13, and Data Matrix barcode elements with fixed,
   single-field, custom-field, or scoped multi-field payloads
 - Clean web paths through `usePathUrlStrategy()` and Vercel SPA rewrites
@@ -69,14 +69,14 @@ DesignDocument
 
 The Designer and Cards preview consume the same document-driven rendering model, while PDF export consumes the same normalized render scene. This keeps content binding, geometry, stacking, visibility, styling, image selection, and machine-readable symbol output aligned across outputs and reduces parity drift. Templates may include an optional back document: Designer exposes independent Front/Back editing and Cards can flip each preview between sides. Both canvases keep matching physical dimensions. PDF export supports front-only or duplex output; duplex PDFs alternate front/back pages and mirror imposed back-side slots for the selected long-edge or short-edge printer setting. Sheet output supports independent front/back X/Y calibration offsets, a printable alignment target, and named print presets stored per school in the current browser or device. QR codes can contain fixed text, bind to one field, or combine up to 20 student, academic, school, and custom fields as structured JSON or labeled text, with configurable correction level, foreground/background colours, and quiet zone. Barcode elements support Code 128, Code 39, EAN-13, and Data Matrix with the same scoped binding modes; format-specific validation blocks invalid content before PDF export, and 1D formats can optionally print a human-readable value.
 
-New QR elements default to **Verification link (recommended)**. This source encodes the student's opaque `/verify/<token>` URL instead of embedding PII in the QR payload. Existing QR modes remain available for compatibility. The verification-link binding cannot be selected as visible bound text or mixed into a multi-field payload.
+New QR elements default to **Verification link (recommended)**. This source encodes a signed `/verify/<credential>` URL instead of embedding student PII in the QR payload. Existing opaque links and QR modes remain available for rollout compatibility. The verification-link binding cannot be selected as visible bound text or mixed into a multi-field payload.
 
 ## Public student verification
 
-- School and platform administrators use the shield action in Designer to enable verification and choose the fields disclosed after scanning.
+- School and platform administrators use the shield action in Designer to enable verification, choose the fields disclosed after scanning, and set a 1–3650 day validity period for newly issued credentials.
 - Eligible public fields are limited to full name, admission/roll number, stream, academic session, class, section, and photo. Contact details, address, Aadhaar, parent details, audit data, and internal IDs are not selectable.
 - The student action menu exposes **Verification link** to copy, disable/re-enable, or regenerate an individual link. Regeneration invalidates the QR on previously printed cards, so the UI explicitly warns that the card must be reprinted.
-- `/verify/<token>` is outside the authenticated shell and makes an anonymous API request without a bearer header. It shows school identity, the current verification state, and only the school-approved fields.
+- `/verify/<token>` is outside the authenticated shell and makes an anonymous API request without a bearer header. It shows school identity, signature verification and expiry, the current verification state, and only the school-approved fields.
 - Invalid, disabled, revoked, and inactive links share the same generic unavailable state. The backend remains the authorization, disclosure, throttling, and revocation boundary.
 
 ### Editing capabilities
@@ -266,7 +266,7 @@ The current Flutter value is `0.8.0+8`: product release `0.8.0`, build number `8
 
 - Advanced print production and Print Basket (working-set, exact-size sheet imposition, duplex design/preview/PDF, production calibration, and reusable print presets complete)
 - Barcode formats (Code 128, Code 39, EAN-13, and Data Matrix complete)
-- Advanced signed/time-bounded digital credentials
+- Advanced signed/time-bounded digital credentials (issuance, expiry, versioned regeneration, and public signature status complete)
 - Designer v2 remaining fidelity and contract hardening
 - Teacher and non-teaching staff workflows
 - School collaboration

@@ -226,11 +226,16 @@ class ApiService {
     required String schoolUuid,
     required bool enabled,
     required List<String> fields,
+    required int validityDays,
   }) async {
     final response = await _client.put(
       _uri('/schools/$schoolUuid/public-verification'),
       headers: _headers,
-      body: jsonEncode({'enabled': enabled, 'fields': fields}),
+      body: jsonEncode({
+        'enabled': enabled,
+        'fields': fields,
+        'validity_days': validityDays,
+      }),
     );
     return PublicVerificationSettings.fromJson(_decodeMap(response));
   }

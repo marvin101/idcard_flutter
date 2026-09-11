@@ -47,6 +47,18 @@ class _VerificationSettingsDialogState
   bool _saving = false;
   bool _enabled = false;
   final Set<String> _selected = {};
+  final _validityController = TextEditingController(text: '365');
+
+  int? get _validityDays => int.tryParse(_validityController.text.trim());
+
+  bool get _validValidityDays =>
+      _validityDays != null && _validityDays! >= 1 && _validityDays! <= 3650;
+
+  @override
+  void dispose() {
+    _validityController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -63,6 +75,7 @@ class _VerificationSettingsDialogState
       setState(() {
         _settings = value;
         _enabled = value.enabled;
+        _validityController.text = value.validityDays.toString();
         _selected
           ..clear()
           ..addAll(value.fields);
@@ -76,13 +89,20 @@ class _VerificationSettingsDialogState
   }
 
   Future<void> _save() async {
-    if (_selected.isEmpty) return;
+    final validityDays = _validityDays;
+    if (_selected.isEmpty ||
+        validityDays == null ||
+        validityDays < 1 ||
+        validityDays > 3650) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       await widget.api.updatePublicVerificationSettings(
         schoolUuid: widget.schoolUuid,
         enabled: _enabled,
         fields: _selected.toList(),
+        validityDays: validityDays,
       );
       if (mounted) {
         Navigator.pop(context);
@@ -128,6 +148,22 @@ class _VerificationSettingsDialogState
                     onChanged: (value) => setState(() => _enabled = value),
                   ),
                   const Divider(),
+                  TextFormField(
+                    key: const Key('public-verification-validity-days'),
+                    controller: _validityController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: 'Credential validity (days)',
+                      helperText: _validValidityDays
+                          ? 'Applies to newly issued or regenerated credentials (1–3650 days).'
+                          : null,
+                      errorText: _validValidityDays
+                          ? null
+                          : 'Enter a value from 1 to 3650 days.',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   const Text(
                     'Information shown after scanning',
                     style: TextStyle(fontWeight: FontWeight.w600),
@@ -172,7 +208,11 @@ class _VerificationSettingsDialogState
       ),
       FilledButton(
         key: const Key('save-public-verification-settings'),
-        onPressed: _settings == null || _saving || _selected.isEmpty
+        onPressed:
+            _settings == null ||
+                _saving ||
+                _selected.isEmpty ||
+                !_validValidityDays
             ? null
             : _save,
         child: Text(_saving ? 'Saving…' : 'Save'),

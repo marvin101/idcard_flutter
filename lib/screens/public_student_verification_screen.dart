@@ -187,6 +187,37 @@ class _VerificationCard extends StatelessWidget {
                             ],
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      Container(
+                        key: const Key('signed-credential-status'),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xffeef4ff),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              view.signatureVerified
+                                  ? Icons.gpp_good_outlined
+                                  : Icons.link_outlined,
+                              color: const Color(0xff242c61),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                view.signatureVerified
+                                    ? 'Cryptographic signature verified • valid until ${_date(view.credentialExpiresAt)}'
+                                    : 'Legacy secure link • valid until ${_date(view.credentialExpiresAt)}',
+                                style: const TextStyle(
+                                  color: Color(0xff242c61),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 20),
                       const Divider(),
                       const SizedBox(height: 12),
@@ -204,6 +235,14 @@ class _VerificationCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _date(DateTime? value) {
+    if (value == null) return 'not provided';
+    final local = value.toLocal();
+    return '${local.year.toString().padLeft(4, '0')}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')}';
   }
 }
 

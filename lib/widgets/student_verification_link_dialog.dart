@@ -44,6 +44,12 @@ class _StudentVerificationLinkDialogState
   Object? _error;
   bool _busy = false;
 
+  String _date(DateTime? value) => value == null
+      ? 'Unavailable'
+      : '${value.toLocal().year.toString().padLeft(4, '0')}-'
+            '${value.toLocal().month.toString().padLeft(2, '0')}-'
+            '${value.toLocal().day.toString().padLeft(2, '0')}';
+
   @override
   void initState() {
     super.initState();
@@ -168,6 +174,27 @@ class _StudentVerificationLinkDialogState
                   onChanged: _busy ? null : _setEnabled,
                 ),
                 const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Chip(
+                      key: const Key('student-credential-status'),
+                      avatar: Icon(
+                        _link!.credentialStatus == 'active'
+                            ? Icons.verified_user_outlined
+                            : Icons.warning_amber_outlined,
+                        size: 18,
+                      ),
+                      label: Text('Credential: ${_link!.credentialStatus}'),
+                    ),
+                    Chip(label: Text('Version ${_link!.credentialVersion}')),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('Issued: ${_date(_link!.issuedAt)}'),
+                Text('Expires: ${_date(_link!.expiresAt)}'),
+                const SizedBox(height: 12),
                 const Text('Verification URL'),
                 const SizedBox(height: 6),
                 SelectableText(_link!.verificationUrl ?? 'Unavailable'),
