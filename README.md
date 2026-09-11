@@ -2,9 +2,9 @@
 
 ## Current release
 
-**CampusID v0.8.0** is the Designer v2 and secure student-verification release. The Flutter package version is `0.8.0+8`, where `+8` is the platform build number.
+**CampusID v0.9.0** is the print-production, barcode, and signed-credential release. The Flutter package version is `0.9.0+9`, where `+9` is the platform build number.
 
-CampusID remains pre-1.0 while advanced print production, Designer fidelity, and other roadmap modules continue to mature. Version 0.8.0 adds Designer v2, flexible QR payloads, and revocable school-controlled student verification.
+CampusID remains pre-1.0 while identity, collaboration, and Designer-fidelity work continues. Version 0.9.0 adds two-sided cards, Print Basket, A4/Letter imposition, duplex and calibrated PDF production, supported barcode formats, and signed time-bounded student verification.
 
 ## Overview
 
@@ -260,13 +260,10 @@ Deploy the backend migration and API before publishing this Flutter build. Rende
 
 CampusID follows Semantic Versioning: `MAJOR.MINOR.PATCH`. Backend and Flutter currently share one product version. `pubspec.yaml` adds Flutter's platform build number after `+`.
 
-The current Flutter value is `0.8.0+8`: product release `0.8.0`, build number `8`. The 0.6.x milestone represented Public Forms, 0.7.0 added the Excel Grid, and 0.8.0 delivers Designer v2, flexible QR payloads, and secure student-verification links. Pre-1.0 minor releases may still introduce substantial product changes.
+The current Flutter value is `0.9.0+9`: product release `0.9.0`, build number `9`. The 0.6.x milestone represented Public Forms, 0.7.0 added the Excel Grid, 0.8.0 delivered Designer v2 and flexible QR payloads, and 0.9.0 adds production printing, supported barcode formats, two-sided cards, and signed time-bounded credentials. Pre-1.0 minor releases may still introduce substantial product changes.
 
 ## Roadmap
 
-- Advanced print production and Print Basket (working-set, exact-size sheet imposition, duplex design/preview/PDF, production calibration, and reusable print presets complete)
-- Barcode formats (Code 128, Code 39, EAN-13, and Data Matrix complete)
-- Advanced signed/time-bounded digital credentials (issuance, expiry, versioned regeneration, and public signature status complete)
 - Designer v2 remaining fidelity and contract hardening
 - Teacher and non-teaching staff workflows
 - School collaboration

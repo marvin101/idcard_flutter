@@ -7,7 +7,7 @@ tokens, capability URLs, or secrets.
 
 ## Candidate validation
 
-- [ ] Backend reports `0.8.0`, Flutter reports `0.8.0+8`, and both changelogs contain the dated `0.8.0` release notes.
+- [ ] Backend reports `0.9.0`, Flutter reports `0.9.0+9`, and both changelogs contain the dated `0.9.0` release notes.
 - [ ] `flutter pub get`, `flutter analyze`, and `flutter test` pass.
 - [ ] A production build succeeds with the approved API origin:
 
@@ -20,7 +20,7 @@ tokens, capability URLs, or secrets.
 
 ## Backend dependency
 
-- [ ] Backend revision `a1d4e7f9b2c5` is reviewed and applied before this Flutter build is deployed.
+- [ ] Backend revision `c6d2e9f4a731` is reviewed and applied before this Flutter build is deployed.
 - [ ] Render sets `PUBLIC_APP_URL` to the exact canonical Vercel HTTPS origin.
 - [ ] Render includes the approved public-verification rate limit and production CORS origin.
 - [ ] Backend health and database-readiness checks pass after deployment.
@@ -41,5 +41,8 @@ tokens, capability URLs, or secrets.
 ## Regression and deployment
 
 - [ ] Sign-in, school switching, students, photos, lifecycle/history, Public Forms, Excel Grid, Designer save/conflict handling, Cards preview, and single/bulk PDF export still pass smoke testing.
+- [ ] Front/back Designer documents survive save and reopen, and Cards preview can switch between both sides.
+- [ ] Print Basket, A4 and Letter imposition, front-only and duplex output, long-/short-edge mirroring, crop marks, page counts, and saved presets are verified.
+- [ ] Front/back calibration targets are physically printed and measured, and Code 128, Code 39, EAN-13, and Data Matrix PDF output scans with approved real scanners/apps.
 - [ ] The exact locally built `build/web` directory is deployed with Vercel CLI, and the production deployment ID is recorded.
 - [ ] Rollback artifacts for the prior frontend/backend commits are known. Application rollback is handled separately from database recovery; the production migration is not casually downgraded.
