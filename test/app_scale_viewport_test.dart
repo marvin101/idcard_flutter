@@ -36,6 +36,21 @@ Future<void> _trackpadScale(
   await tester.pump();
 }
 
+Future<void> _webPointerScale(
+  WidgetTester tester,
+  Offset position,
+  double scale,
+) async {
+  tester.binding.handlePointerEvent(
+    PointerScaleEvent(
+      kind: PointerDeviceKind.trackpad,
+      position: position,
+      scale: scale,
+    ),
+  );
+  await tester.pump();
+}
+
 Future<void> _touchPinch(
   WidgetTester tester, {
   required Offset firstStart,
@@ -113,6 +128,23 @@ void main() {
     await _trackpadScale(tester, center, 3);
     expect(displayScale.scale, DisplayScaleProvider.maxScale);
     await _trackpadScale(tester, center, 0.1);
+    expect(displayScale.scale, DisplayScaleProvider.minScale);
+  });
+
+  testWidgets('web pointer-scale signals compose and clamp through provider', (
+    tester,
+  ) async {
+    final displayScale = DisplayScaleProvider();
+    await _pumpViewport(tester, displayScale);
+    final center = tester.getCenter(find.byKey(_globalTarget));
+
+    await _webPointerScale(tester, center, 1.1);
+    expect(displayScale.scale, closeTo(1.1, 0.001));
+    await _webPointerScale(tester, center, 1.25);
+    expect(displayScale.scale, closeTo(1.375, 0.001));
+    await _webPointerScale(tester, center, 10);
+    expect(displayScale.scale, DisplayScaleProvider.maxScale);
+    await _webPointerScale(tester, center, 0.1);
     expect(displayScale.scale, DisplayScaleProvider.minScale);
   });
 
@@ -324,5 +356,49 @@ void main() {
     expect(displayScale.scale, DisplayScaleProvider.normalScale);
     await _doubleTap(tester, target);
     expect(displayScale.scale, DisplayScaleProvider.normalScale);
+  });
+
+  testWidgets('web pointer scale belongs to local viewer inside its boundary', (
+    tester,
+  ) async {
+    final displayScale = DisplayScaleProvider();
+    final localTransform = TransformationController();
+    addTearDown(localTransform.dispose);
+    await _pumpViewport(
+      tester,
+      displayScale,
+      child: Stack(
+        children: [
+          const Positioned.fill(
+            child: ColoredBox(key: _globalTarget, color: Colors.white),
+          ),
+          Center(
+            child: SizedBox(
+              key: const Key('local-web-scale-area'),
+              width: 300,
+              height: 300,
+              child: AppScaleGestureBoundary(
+                child: InteractiveViewer(
+                  transformationController: localTransform,
+                  minScale: 0.5,
+                  maxScale: 3,
+                  child: const SizedBox(width: 500, height: 500),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final localCenter = tester.getCenter(
+      find.byKey(const Key('local-web-scale-area')),
+    );
+    await _webPointerScale(tester, localCenter, 1.4);
+    expect(localTransform.value.getMaxScaleOnAxis(), closeTo(1.4, 0.001));
+    expect(displayScale.scale, DisplayScaleProvider.normalScale);
+
+    await _webPointerScale(tester, const Offset(20, 40), 1.2);
+    expect(displayScale.scale, closeTo(1.2, 0.001));
   });
 }

@@ -79,6 +79,15 @@ class _AppScaleViewportState extends State<AppScaleViewport> {
     _panZoomOwnedLocally = false;
   }
 
+  void _pointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScaleEvent ||
+        _localZoomOwns(event.position, event.viewId)) {
+      return;
+    }
+    final displayScale = context.read<DisplayScaleProvider>();
+    displayScale.setScale(displayScale.scale * event.scale);
+  }
+
   void _pointerDown(PointerDownEvent event) {
     _pointerDownPositions[event.pointer] = event.position;
     final localZoomOwns = _localZoomOwns(event.position, event.viewId);
@@ -199,6 +208,7 @@ class _AppScaleViewportState extends State<AppScaleViewport> {
       onPointerPanZoomStart: _panZoomStart,
       onPointerPanZoomUpdate: _panZoomUpdate,
       onPointerPanZoomEnd: _panZoomEnd,
+      onPointerSignal: _pointerSignal,
       child: CallbackShortcuts(
         bindings: shortcuts,
         child: Focus(
