@@ -148,6 +148,28 @@ void main() {
     expect(displayScale.scale, DisplayScaleProvider.minScale);
   });
 
+  testWidgets('scaled content always covers the physical viewport', (
+    tester,
+  ) async {
+    final displayScale = DisplayScaleProvider();
+    await _pumpViewport(tester, displayScale);
+    final viewportSize =
+        tester.view.physicalSize / tester.view.devicePixelRatio;
+
+    for (final scale in [
+      DisplayScaleProvider.minScale,
+      DisplayScaleProvider.maxScale,
+    ]) {
+      displayScale.setScale(scale);
+      await tester.pump();
+
+      expect(tester.getTopLeft(find.byKey(_globalTarget)), Offset.zero);
+      final bottomRight = tester.getBottomRight(find.byKey(_globalTarget));
+      expect(bottomRight.dx, closeTo(viewportSize.width, 0.01));
+      expect(bottomRight.dy, closeTo(viewportSize.height, 0.01));
+    }
+  });
+
   testWidgets('real two-touch pinch zooms out and in', (tester) async {
     final displayScale = DisplayScaleProvider();
     await _pumpViewport(tester, displayScale);

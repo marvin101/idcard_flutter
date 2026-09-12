@@ -222,14 +222,21 @@ class _AppScaleViewportState extends State<AppScaleViewport> {
               );
               final mediaQuery = MediaQuery.of(context);
               return ClipRect(
-                child: Transform.scale(
-                  scale: scale,
+                child: OverflowBox(
                   alignment: Alignment.topLeft,
-                  child: SizedBox.fromSize(
-                    size: logicalSize,
-                    child: MediaQuery(
-                      data: mediaQuery.copyWith(size: logicalSize),
-                      child: widget.child,
+                  minWidth: 0,
+                  minHeight: 0,
+                  maxWidth: double.infinity,
+                  maxHeight: double.infinity,
+                  child: Transform.scale(
+                    scale: scale,
+                    alignment: Alignment.topLeft,
+                    child: SizedBox.fromSize(
+                      size: logicalSize,
+                      child: MediaQuery(
+                        data: mediaQuery.copyWith(size: logicalSize),
+                        child: widget.child,
+                      ),
                     ),
                   ),
                 ),
