@@ -4,8 +4,10 @@ class DisplayScaleProvider extends ChangeNotifier {
   static const List<double> _steps = [0.75, 0.9, 1.0, 1.1, 1.25, 1.5];
   static const double minScale = 0.75;
   static const double maxScale = 1.5;
+  static const double normalScale = 1.0;
+  static const double doubleTapScale = 1.25;
 
-  double _scale = 1.0;
+  double _scale = normalScale;
 
   double get scale => _scale;
   int get percentage => (scale * 100).round();
@@ -30,6 +32,14 @@ class DisplayScaleProvider extends ChangeNotifier {
   }
 
   void reset() {
-    setScale(1.0);
+    setScale(normalScale);
+  }
+
+  void toggleDoubleTapScale() {
+    if ((scale - normalScale).abs() < 0.01) {
+      setScale(doubleTapScale);
+    } else {
+      reset();
+    }
   }
 }

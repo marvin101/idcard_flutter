@@ -42,10 +42,11 @@
   src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"
 ></script>
 <style>
-  /* Flutter owns single-pointer gestures; the browser retains pinch zoom. */
+  /* Flutter owns gestures inside its surface, including app-level pinch.
+     Native browser accessibility zoom remains enabled by the viewport meta. */
   flutter-view,
   flt-glass-pane {
-    touch-action: pinch-zoom !important;
+    touch-action: none !important;
   }
 </style>
 </head>

@@ -20,6 +20,7 @@ import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../widgets/authenticated_app_bar.dart';
 import '../widgets/design_document_view.dart';
+import '../widgets/app_scale_viewport.dart';
 import '../widgets/public_design_share_button.dart';
 import '../widgets/public_verification_settings_button.dart';
 
@@ -1643,67 +1644,69 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             final displayWidth = naturalWidth * fitScale * _zoom;
             return Focus(
               focusNode: _canvasFocus,
-              child: InteractiveViewer(
-                transformationController: _viewTransform,
-                panEnabled: _selectedId == null,
-                minScale: .5,
-                maxScale: 3,
-                child: Center(
-                  child: SizedBox(
-                    key: const Key('designer-canvas-frame'),
-                    width: displayWidth,
-                    child: Stack(
-                      children: [
-                        KeyedSubtree(
-                          key: _canvasCoordinates,
-                          child: DesignDocumentView(
-                            key: const Key('designer-canvas'),
-                            document: _document,
-                            student: _sampleStudent,
-                            sessionName: '2026-2028',
-                            className: 'XII',
-                            sectionName: 'A',
-                            logoUrl: _logoUrl,
-                            schoolProfile: _schoolProfile,
-                            assetBaseUrl: widget.api.baseUrl,
-                            selectedId: _selectedId,
-                            interactive: true,
-                            onSelect: _select,
-                            onGestureStart: _beginGesture,
-                            onGestureEnd: _endGesture,
-                            isGestureActive: (id) => _gestureId == id,
-                            onMove: _move,
-                            onResize: _resize,
+              child: AppScaleGestureBoundary(
+                child: InteractiveViewer(
+                  transformationController: _viewTransform,
+                  panEnabled: _selectedId == null,
+                  minScale: .5,
+                  maxScale: 3,
+                  child: Center(
+                    child: SizedBox(
+                      key: const Key('designer-canvas-frame'),
+                      width: displayWidth,
+                      child: Stack(
+                        children: [
+                          KeyedSubtree(
+                            key: _canvasCoordinates,
+                            child: DesignDocumentView(
+                              key: const Key('designer-canvas'),
+                              document: _document,
+                              student: _sampleStudent,
+                              sessionName: '2026-2028',
+                              className: 'XII',
+                              sectionName: 'A',
+                              logoUrl: _logoUrl,
+                              schoolProfile: _schoolProfile,
+                              assetBaseUrl: widget.api.baseUrl,
+                              selectedId: _selectedId,
+                              interactive: true,
+                              onSelect: _select,
+                              onGestureStart: _beginGesture,
+                              onGestureEnd: _endGesture,
+                              isGestureActive: (id) => _gestureId == id,
+                              onMove: _move,
+                              onResize: _resize,
+                            ),
                           ),
-                        ),
-                        Positioned.fill(
-                          child: ValueListenableBuilder<List<DesignerGuide>>(
-                            valueListenable: _guides,
-                            builder: (context, guides, _) => guides.isEmpty
-                                ? const SizedBox.shrink()
-                                : DesignerGuideOverlay(
-                                    key: const Key('designer-smart-guides'),
-                                    guides: guides,
-                                    canvasWidth: _document.canvas.width,
-                                    viewScale: _viewTransform.value
-                                        .getMaxScaleOnAxis(),
-                                  ),
-                          ),
-                        ),
-                        if (_document.settings['grid_enabled'] != false)
                           Positioned.fill(
-                            child: IgnorePointer(
-                              child: CustomPaint(
-                                painter: _GridPainter(
-                                  (_document.settings['grid_size'] as num?)
-                                          ?.toDouble() ??
-                                      2,
-                                  _document.canvas.width,
+                            child: ValueListenableBuilder<List<DesignerGuide>>(
+                              valueListenable: _guides,
+                              builder: (context, guides, _) => guides.isEmpty
+                                  ? const SizedBox.shrink()
+                                  : DesignerGuideOverlay(
+                                      key: const Key('designer-smart-guides'),
+                                      guides: guides,
+                                      canvasWidth: _document.canvas.width,
+                                      viewScale: _viewTransform.value
+                                          .getMaxScaleOnAxis(),
+                                    ),
+                            ),
+                          ),
+                          if (_document.settings['grid_enabled'] != false)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _GridPainter(
+                                    (_document.settings['grid_size'] as num?)
+                                            ?.toDouble() ??
+                                        2,
+                                    _document.canvas.width,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
