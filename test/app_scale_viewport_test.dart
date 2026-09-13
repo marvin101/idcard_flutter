@@ -249,6 +249,52 @@ void main() {
     expect(displayScale.scale, DisplayScaleProvider.normalScale);
   });
 
+  testWidgets('text fields keep focus and accept typing without global zoom', (
+    tester,
+  ) async {
+    final displayScale = DisplayScaleProvider();
+    await _pumpViewport(
+      tester,
+      displayScale,
+      child: const Material(child: TextField(key: Key('ordinary-text-field'))),
+    );
+    final field = find.byKey(const Key('ordinary-text-field'));
+
+    await tester.tap(field);
+    await tester.enterText(field, 'CampusID');
+    await tester.pump();
+
+    expect(find.text('CampusID'), findsOneWidget);
+    expect(displayScale.scale, DisplayScaleProvider.normalScale);
+  });
+
+  testWidgets('one-finger vertical scrolling does not change global scale', (
+    tester,
+  ) async {
+    final displayScale = DisplayScaleProvider();
+    await _pumpViewport(
+      tester,
+      displayScale,
+      child: ListView.builder(
+        key: const Key('ordinary-list'),
+        itemExtent: 80,
+        itemCount: 30,
+        itemBuilder: (context, index) => Text('Row $index'),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const Key('ordinary-list')),
+      const Offset(0, -400),
+      pointer: 61,
+      kind: PointerDeviceKind.touch,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Row 0'), findsNothing);
+    expect(displayScale.scale, DisplayScaleProvider.normalScale);
+  });
+
   testWidgets('Ctrl and Cmd shortcuts share provider steps and clamping', (
     tester,
   ) async {
@@ -274,6 +320,24 @@ void main() {
       LogicalKeyboardKey.minus,
     );
     expect(displayScale.scale, 1.1);
+    await _shortcut(
+      tester,
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.digit0,
+    );
+    expect(displayScale.scale, DisplayScaleProvider.normalScale);
+    await _shortcut(
+      tester,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.equal,
+    );
+    expect(displayScale.scale, 1.1);
+    await _shortcut(
+      tester,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.minus,
+    );
+    expect(displayScale.scale, DisplayScaleProvider.normalScale);
     await _shortcut(
       tester,
       LogicalKeyboardKey.metaLeft,
