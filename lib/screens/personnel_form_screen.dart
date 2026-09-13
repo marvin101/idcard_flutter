@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../layouts/main_layout.dart';
 import '../models/api_personnel.dart';
+import '../models/student_field.dart';
+import '../models/design_bindings.dart';
 import '../services/api_service.dart';
 
 class PersonnelFormScreen extends StatefulWidget {
@@ -35,6 +38,11 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
   String? _gender;
   String? _bloodGroup;
   bool _saving = false;
+  bool _loadingFields = true;
+  List<StudentFieldDefinition> _customFieldDefinitions = const [];
+  final Map<String, TextEditingController> _customFieldControllers = {};
+  XFile? _selectedPhoto;
+  bool _removePhoto = false;
 
   @override
   void initState() {
@@ -50,6 +58,7 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
     _dob = value?.dob;
     _gender = value?.gender;
     _bloodGroup = value?.bloodGroup;
+    _loadCustomFields();
   }
 
   @override
@@ -65,7 +74,41 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
     ]) {
       controller.dispose();
     }
+    for (final controller in _customFieldControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
+  }
+
+  Future<void> _loadCustomFields() async {
+    try {
+      final definitions = await widget.api.getPersonnelFields(
+        schoolUuid: widget.schoolUuid,
+        personnelType: widget.personnelType,
+      );
+      for (final definition in definitions) {
+        final existing = widget.personnel?.customFields
+            .where((item) => item.fieldUuid == definition.uuid)
+            .map((item) => item.value)
+            .firstOrNull;
+        _customFieldControllers[definition.uuid] = TextEditingController(
+          text: existing,
+        );
+      }
+      if (mounted) {
+        setState(() {
+          _customFieldDefinitions = definitions;
+          _loadingFields = false;
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() => _loadingFields = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   String? _optional(TextEditingController controller) {
@@ -78,8 +121,17 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
     setState(() => _saving = true);
     try {
       final existing = widget.personnel;
+      final customFields = _customFieldDefinitions
+          .map(
+            (definition) => StudentCustomFieldValue(
+              fieldUuid: definition.uuid,
+              value: _customFieldControllers[definition.uuid]!.text.trim(),
+            ),
+          )
+          .toList();
+      late ApiPersonnel saved;
       if (existing == null) {
-        await widget.api.createPersonnel(
+        saved = await widget.api.createPersonnel(
           schoolUuid: widget.schoolUuid,
           personnelType: widget.personnelType,
           employeeNo: _employeeNo.text.trim(),
@@ -92,9 +144,10 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
           mobile: _optional(_mobile),
           email: _optional(_email),
           address: _optional(_address),
+          customFields: customFields,
         );
       } else {
-        await widget.api.updatePersonnel(
+        saved = await widget.api.updatePersonnel(
           schoolUuid: widget.schoolUuid,
           personnelUuid: existing.uuid,
           personnelType: widget.personnelType,
@@ -108,6 +161,19 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
           mobile: _optional(_mobile),
           email: _optional(_email),
           address: _optional(_address),
+          customFields: customFields,
+        );
+      }
+      if (_selectedPhoto != null) {
+        saved = await widget.api.uploadPersonnelPhoto(
+          schoolUuid: widget.schoolUuid,
+          personnelUuid: saved.uuid,
+          photo: _selectedPhoto!,
+        );
+      } else if (_removePhoto && saved.photoPath != null) {
+        await widget.api.removePersonnelPhoto(
+          schoolUuid: widget.schoolUuid,
+          personnelUuid: saved.uuid,
         );
       }
       if (!mounted) return;
@@ -249,8 +315,114 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
                     ),
                   ),
                 ),
+                SizedBox(
+                  width: 320,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        height: 180,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: _selectedPhoto != null
+                            ? FutureBuilder(
+                                future: _selectedPhoto!.readAsBytes(),
+                                builder: (context, snapshot) => snapshot.hasData
+                                    ? Image.memory(
+                                        snapshot.data!,
+                                        fit: BoxFit.contain,
+                                      )
+                                    : const Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                              )
+                            : !_removePhoto &&
+                                  widget.personnel?.photoPath != null
+                            ? Image.network(
+                                resolveDesignAssetUrl(
+                                  widget.personnel!.photoPath,
+                                  widget.api.baseUrl,
+                                )!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 48,
+                                ),
+                              )
+                            : const Icon(Icons.badge_outlined, size: 56),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _saving
+                                ? null
+                                : () async {
+                                    final photo = await ImagePicker().pickImage(
+                                      source: ImageSource.gallery,
+                                    );
+                                    if (photo != null && mounted) {
+                                      setState(() {
+                                        _selectedPhoto = photo;
+                                        _removePhoto = false;
+                                      });
+                                    }
+                                  },
+                            icon: const Icon(Icons.upload_outlined),
+                            label: Text(
+                              widget.personnel?.photoPath == null
+                                  ? 'Upload photo'
+                                  : 'Replace photo',
+                            ),
+                          ),
+                          if (widget.personnel?.photoPath != null &&
+                              !_removePhoto)
+                            TextButton(
+                              onPressed: _saving
+                                  ? null
+                                  : () => setState(() {
+                                      _selectedPhoto = null;
+                                      _removePhoto = true;
+                                    }),
+                              child: const Text('Remove'),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
+            if (_loadingFields)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_customFieldDefinitions.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text(
+                'Custom fields',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: _customFieldDefinitions
+                    .map(
+                      (definition) => _field(
+                        controller: _customFieldControllers[definition.uuid]!,
+                        label: definition.label,
+                        required: definition.isRequired,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
             const SizedBox(height: 24),
             Align(
               alignment: Alignment.centerRight,

@@ -706,6 +706,26 @@ class ApiService {
     return ApiPersonnelPage.fromJson(_decodeMap(response));
   }
 
+  Future<List<StudentFieldDefinition>> getPersonnelFields({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    bool includeInactive = false,
+  }) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/personnel-fields').replace(
+        queryParameters: {
+          'personnel_type': personnelType.apiValue,
+          if (includeInactive) 'include_inactive': 'true',
+        },
+      ),
+      headers: _headers,
+    );
+    return _decodeList(response)
+        .whereType<Map<String, dynamic>>()
+        .map(StudentFieldDefinition.fromJson)
+        .toList();
+  }
+
   Future<ApiPersonnel> createPersonnel({
     required String schoolUuid,
     required PersonnelType personnelType,
@@ -719,6 +739,7 @@ class ApiService {
     String? mobile,
     String? email,
     String? address,
+    List<StudentCustomFieldValue> customFields = const [],
   }) async {
     final response = await _client.post(
       _uri('/schools/$schoolUuid/personnel'),
@@ -735,6 +756,7 @@ class ApiService {
         'mobile': mobile,
         'email': email,
         'address': address,
+        'custom_fields': customFields.map((item) => item.toJson()).toList(),
       }),
     );
     return ApiPersonnel.fromJson(_decodeMap(response));
@@ -754,6 +776,7 @@ class ApiService {
     String? mobile,
     String? email,
     String? address,
+    List<StudentCustomFieldValue>? customFields,
   }) async {
     final response = await _client.put(
       _uri('/schools/$schoolUuid/personnel/$personnelUuid'),
@@ -770,7 +793,47 @@ class ApiService {
         'mobile': mobile,
         'email': email,
         'address': address,
+        if (customFields != null)
+          'custom_fields': customFields.map((item) => item.toJson()).toList(),
       }),
+    );
+    return ApiPersonnel.fromJson(_decodeMap(response));
+  }
+
+  Future<ApiPersonnel> uploadPersonnelPhoto({
+    required String schoolUuid,
+    required String personnelUuid,
+    required XFile photo,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid/photo'),
+    );
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    final contentType = photo.mimeType ?? 'image/jpeg';
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'photo',
+        await photo.readAsBytes(),
+        filename: photo.name.isEmpty ? 'personnel_photo.jpg' : photo.name,
+        contentType: MediaType.parse(contentType),
+      ),
+    );
+    return ApiPersonnel.fromJson(
+      _decodeMap(await http.Response.fromStream(await _client.send(request))),
+    );
+  }
+
+  Future<ApiPersonnel> removePersonnelPhoto({
+    required String schoolUuid,
+    required String personnelUuid,
+  }) async {
+    final response = await _client.delete(
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid/photo'),
+      headers: _headers,
     );
     return ApiPersonnel.fromJson(_decodeMap(response));
   }

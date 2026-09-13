@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/api_student.dart';
+import '../models/api_personnel.dart';
 import '../models/card_template.dart';
 import '../models/design_bindings.dart';
 import '../models/school_profile.dart';
@@ -40,6 +41,25 @@ class PdfService {
         photoUrl: photoUrl,
       ),
     ],
+    schoolName: schoolName,
+    template: template,
+    schoolLogoUrl: schoolLogoUrl,
+    schoolProfile: schoolProfile,
+    assetBaseUrl: assetBaseUrl,
+    printSettings: printSettings,
+  );
+
+  static Future<Uint8List> generatePersonnelCard({
+    required ApiPersonnel personnel,
+    required String schoolName,
+    required CardTemplate template,
+    String? photoUrl,
+    String? schoolLogoUrl,
+    SchoolProfile? schoolProfile,
+    String? assetBaseUrl,
+    PrintSheetSettings printSettings = const PrintSheetSettings(),
+  }) => generateStudentCards(
+    cards: [PdfCardData(personnel: personnel, photoUrl: photoUrl)],
     schoolName: schoolName,
     template: template,
     schoolLogoUrl: schoolLogoUrl,
@@ -83,6 +103,7 @@ class PdfService {
       final card = cards[index];
       final bindings = DesignBindings(
         student: card.student,
+        personnel: card.personnel,
         sessionName: card.sessionName,
         className: card.className,
         sectionName: card.sectionName,
@@ -405,12 +426,14 @@ class PdfService {
 
 class PdfCardData {
   const PdfCardData({
-    required this.student,
+    this.student,
+    this.personnel,
     this.sessionName,
     this.className,
     this.sectionName,
     this.photoUrl,
-  });
-  final ApiStudent student;
+  }) : assert(student != null || personnel != null);
+  final ApiStudent? student;
+  final ApiPersonnel? personnel;
   final String? sessionName, className, sectionName, photoUrl;
 }

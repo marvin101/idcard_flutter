@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/api_student.dart';
+import '../models/api_personnel.dart';
 import '../models/card_template.dart';
 import '../models/design_bindings.dart';
 import '../models/design_render_scene.dart';
@@ -14,7 +15,8 @@ class DesignDocumentView extends StatelessWidget {
   const DesignDocumentView({
     super.key,
     required this.document,
-    required this.student,
+    this.student,
+    this.personnel,
     this.sessionName,
     this.className,
     this.sectionName,
@@ -31,14 +33,15 @@ class DesignDocumentView extends StatelessWidget {
     this.onGestureStart,
     this.onGestureEnd,
     this.isGestureActive,
-  });
+  }) : assert(student != null || personnel != null);
 
   final String? schoolName;
   final String? assetBaseUrl;
   final SchoolProfile? schoolProfile;
 
   final DesignDocument document;
-  final ApiStudent student;
+  final ApiStudent? student;
+  final ApiPersonnel? personnel;
   final String? sessionName;
   final String? className;
   final String? sectionName;
@@ -88,6 +91,7 @@ class DesignDocumentView extends StatelessWidget {
       document: document,
       bindings: DesignBindings(
         student: student,
+        personnel: personnel,
         sessionName: sessionName,
         className: className,
         sectionName: sectionName,

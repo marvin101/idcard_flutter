@@ -26,7 +26,7 @@ class DesignRenderScene {
                  bindings.text(e),
                  resolveDesignAssetUrl(switch (e.type) {
                    DesignElementType.studentPhoto =>
-                     photoUrl ?? bindings.student.photoPath,
+                     photoUrl ?? bindings.photoPath,
                    DesignElementType.schoolLogo =>
                      logoUrl ??
                          bindings.schoolProfile?.logoUrl ??

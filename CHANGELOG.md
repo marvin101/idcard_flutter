@@ -8,6 +8,10 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 ## [Unreleased]
 
+- Added first-class teacher/staff card data resolution, personnel-safe Designer
+  and machine-readable bindings, type-partitioned personnel Print Baskets and
+  individual/bulk PDF export, plus typed custom fields and audited photo flows.
+
 ## [0.9.0] - 2026-09-11
 
 ### Added

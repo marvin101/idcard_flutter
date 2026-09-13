@@ -1,3 +1,5 @@
+import 'student_field.dart';
+
 enum PersonnelType {
   teacher,
   staff;
@@ -34,6 +36,7 @@ class ApiPersonnel {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.customFields = const [],
   });
 
   final String uuid;
@@ -60,6 +63,7 @@ class ApiPersonnel {
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<StudentCustomFieldValue> customFields;
 
   bool get isVerified => verificationStatus == 'verified';
   bool get isPrinted => printCount > 0;
@@ -93,6 +97,12 @@ class ApiPersonnel {
         _date(json['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0),
     updatedAt:
         _date(json['updated_at']) ?? DateTime.fromMillisecondsSinceEpoch(0),
+    customFields: (json['custom_fields'] as List<dynamic>? ?? const [])
+        .map(
+          (item) =>
+              StudentCustomFieldValue.fromJson(item as Map<String, dynamic>),
+        )
+        .toList(),
   );
 
   static DateTime? _date(Object? value) =>

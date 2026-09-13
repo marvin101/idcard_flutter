@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'api_student.dart';
+import 'api_personnel.dart';
 import 'card_template.dart';
 import 'school_profile.dart';
 
@@ -8,16 +9,22 @@ import 'school_profile.dart';
 /// Bindings never supply placement or styling: those belong to DesignElement.
 class DesignBindings {
   const DesignBindings({
-    required this.student,
+    this.student,
+    this.personnel,
     this.sessionName,
     this.className,
     this.sectionName,
     this.schoolName,
     this.schoolProfile,
-  });
-  final ApiStudent student;
+  }) : assert(student != null || personnel != null);
+  final ApiStudent? student;
+  final ApiPersonnel? personnel;
   final String? sessionName, className, sectionName, schoolName;
   final SchoolProfile? schoolProfile;
+
+  String? get photoPath => student?.photoPath ?? personnel?.photoPath;
+  String get identityType =>
+      student != null ? 'student' : personnel!.personnelType.apiValue;
 
   /// The bound value before a template fallback, prefix, or suffix is applied.
   ///
@@ -40,7 +47,7 @@ class DesignBindings {
 
   String _rawBinding(Map<String, dynamic> data) {
     if (data['field_uuid'] is String) {
-      return student.customFields
+      return (student?.customFields ?? personnel?.customFields ?? const [])
               .where((field) => field.fieldUuid == data['field_uuid'])
               .map((field) => field.value)
               .firstOrNull ??
@@ -48,18 +55,25 @@ class DesignBindings {
     }
 
     return switch (data['field']) {
-      'full_name' => student.fullName,
-      'admission_no' => student.admissionNo,
-      'roll_no' => student.rollNo ?? '',
-      'stream' => student.stream ?? '',
-      'father_name' => student.fatherName ?? '',
-      'mother_name' => student.motherName ?? '',
-      'dob' => _date(student.dob),
-      'gender' => student.gender ?? '',
-      'blood_group' => student.bloodGroup ?? '',
-      'mobile' => student.mobile ?? '',
-      'aadhaar' => student.aadhaar ?? '',
-      'address' => student.address ?? '',
+      'full_name' => student?.fullName ?? personnel?.fullName ?? '',
+      'admission_no' => student?.admissionNo ?? '',
+      'roll_no' => student?.rollNo ?? '',
+      'stream' => student?.stream ?? '',
+      'father_name' => student?.fatherName ?? '',
+      'mother_name' => student?.motherName ?? '',
+      'dob' => _date(student?.dob ?? personnel?.dob),
+      'gender' => student?.gender ?? personnel?.gender ?? '',
+      'blood_group' => student?.bloodGroup ?? personnel?.bloodGroup ?? '',
+      'mobile' => student?.mobile ?? personnel?.mobile ?? '',
+      'email' => personnel?.email ?? '',
+      'aadhaar' => student?.aadhaar ?? '',
+      'address' => student?.address ?? personnel?.address ?? '',
+      'id_number' ||
+      'employee_number' ||
+      'employee_no' => personnel?.employeeNo ?? student?.admissionNo ?? '',
+      'designation' => personnel?.designation ?? '',
+      'department' => personnel?.department ?? '',
+      'personnel_type' => personnel?.personnelType.label ?? 'Student',
       'session' => sessionName ?? '',
       'class' => className ?? '',
       'section' => sectionName ?? '',
@@ -75,7 +89,7 @@ class DesignBindings {
       'school_country' => schoolProfile?.country ?? '',
       'school_postal_code' => schoolProfile?.postalCode ?? '',
       'principal_name' => schoolProfile?.principalName ?? '',
-      'verification_url' => student.verificationUrl ?? '',
+      'verification_url' => student?.verificationUrl ?? '',
       _ => '',
     };
   }
@@ -134,7 +148,7 @@ class DesignBindings {
           ? data['fallback'] as String? ?? 'QR data'
           : element.type == DesignElementType.barcode
           ? data['fallback'] as String? ?? 'Barcode data'
-          : data['fallback'] as String? ?? 'Student field';
+          : data['fallback'] as String? ?? 'Identity field';
     }
     return '${data['prefix'] ?? ''}$value${data['suffix'] ?? ''}';
   }

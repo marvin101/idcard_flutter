@@ -11,6 +11,7 @@ import '../widgets/designer_guides.dart';
 import '../widgets/designer_colour_field.dart';
 
 import '../models/api_student.dart';
+import '../models/api_personnel.dart';
 import '../models/card_template.dart';
 import '../models/design_barcode.dart';
 import '../models/design_geometry.dart';
@@ -77,6 +78,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   bool _editingBack = false;
   bool _allowPop = false;
   bool _leaveDialogOpen = false;
+  String _previewIdentityType = 'student';
   String _saveState = 'Saved';
   String? _canvasError;
   int _idCounter = 0;
@@ -100,6 +102,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     verificationUrl:
         'https://idcard-flutter-web.vercel.app/verify/sample-verification-token',
     isActive: true,
+  );
+  static final _samplePersonnel = ApiPersonnel(
+    uuid: 'personnel-preview',
+    personnelType: PersonnelType.teacher,
+    employeeNo: 'EMP-1042',
+    fullName: 'Asha Singh',
+    designation: 'Senior Teacher',
+    department: 'Science',
+    dob: DateTime(1990, 2, 3),
+    gender: 'Female',
+    bloodGroup: 'A+',
+    mobile: '9000000000',
+    email: 'asha@example.edu',
+    address: 'Ranchi',
+    photoPath: null,
+    verificationStatus: 'verified',
+    lifecycleStatus: 'ready_for_print',
+    correctionNote: null,
+    verifiedAt: null,
+    verifiedByName: null,
+    printedAt: null,
+    printedByName: null,
+    printCount: 0,
+    isActive: true,
+    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+    updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
   );
 
   DesignDocument get _document => _editingBack
@@ -143,10 +171,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         widget.api
             .getSchoolProfile(widget.schoolUuid)
             .then<SchoolProfile?>((profile) => profile, onError: (_) => null),
+        widget.api
+            .getPersonnelFields(
+              schoolUuid: widget.schoolUuid,
+              personnelType: PersonnelType.teacher,
+            )
+            .catchError((_) => <StudentFieldDefinition>[]),
+        widget.api
+            .getPersonnelFields(
+              schoolUuid: widget.schoolUuid,
+              personnelType: PersonnelType.staff,
+            )
+            .catchError((_) => <StudentFieldDefinition>[]),
       ]);
       if (!mounted) return;
       _updateUi(() {
-        _customFields = results[0] as List<StudentFieldDefinition>;
+        _customFields = [
+          ...(results[0] as List<StudentFieldDefinition>),
+          ..._labeledFields(
+            results[2] as List<StudentFieldDefinition>,
+            'Teacher',
+          ),
+          ..._labeledFields(
+            results[3] as List<StudentFieldDefinition>,
+            'Staff',
+          ),
+        ];
         _schoolProfile = results[1] as SchoolProfile?;
         _logoUrl = _schoolProfile?.logoUrl;
       });
@@ -154,6 +204,23 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       /* The editor remains usable when optional metadata is unavailable. */
     }
   }
+
+  static List<StudentFieldDefinition> _labeledFields(
+    List<StudentFieldDefinition> fields,
+    String identityLabel,
+  ) => fields
+      .map(
+        (field) => StudentFieldDefinition(
+          uuid: field.uuid,
+          fieldKey: field.fieldKey,
+          label: '$identityLabel • ${field.label}',
+          dataType: field.dataType,
+          isRequired: field.isRequired,
+          displayOrder: field.displayOrder,
+          isActive: field.isActive,
+        ),
+      )
+      .toList();
 
   @override
   void dispose() {
@@ -1391,6 +1458,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                               _zoom,
                               _logoUrl,
                               _schoolProfile,
+                              _previewIdentityType,
                             ),
                             _workspace,
                           ),
@@ -1414,6 +1482,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                               _zoom,
                               _logoUrl,
                               _schoolProfile,
+                              _previewIdentityType,
                             ),
                             _workspace,
                           ),
@@ -1461,7 +1530,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ),
           _tool(
             Icons.badge_outlined,
-            'Student field',
+            'Identity field',
             () => _add(DesignElementType.boundText),
             key: 'add-student-field',
           ),
@@ -1619,6 +1688,27 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               ),
             ),
             const Icon(Icons.zoom_in),
+            const SizedBox(width: 12),
+            DropdownButton<String>(
+              key: const Key('designer-preview-identity-type'),
+              value: _previewIdentityType,
+              items: const [
+                DropdownMenuItem(
+                  value: 'student',
+                  child: Text('Student preview'),
+                ),
+                DropdownMenuItem(
+                  value: 'teacher',
+                  child: Text('Teacher preview'),
+                ),
+                DropdownMenuItem(value: 'staff', child: Text('Staff preview')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  _updateUi(() => _previewIdentityType = value);
+                }
+              },
+            ),
             TextButton(
               onPressed: () => _updateUi(() {
                 _zoom = 1;
@@ -1661,7 +1751,48 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                             child: DesignDocumentView(
                               key: const Key('designer-canvas'),
                               document: _document,
-                              student: _sampleStudent,
+                              student: _previewIdentityType == 'student'
+                                  ? _sampleStudent
+                                  : null,
+                              personnel: _previewIdentityType == 'student'
+                                  ? null
+                                  : ApiPersonnel(
+                                      uuid: _samplePersonnel.uuid,
+                                      personnelType:
+                                          _previewIdentityType == 'teacher'
+                                          ? PersonnelType.teacher
+                                          : PersonnelType.staff,
+                                      employeeNo: _samplePersonnel.employeeNo,
+                                      fullName: _samplePersonnel.fullName,
+                                      designation:
+                                          _previewIdentityType == 'teacher'
+                                          ? _samplePersonnel.designation
+                                          : 'Office Administrator',
+                                      department:
+                                          _previewIdentityType == 'teacher'
+                                          ? _samplePersonnel.department
+                                          : 'Administration',
+                                      dob: _samplePersonnel.dob,
+                                      gender: _samplePersonnel.gender,
+                                      bloodGroup: _samplePersonnel.bloodGroup,
+                                      mobile: _samplePersonnel.mobile,
+                                      email: _samplePersonnel.email,
+                                      address: _samplePersonnel.address,
+                                      photoPath: _samplePersonnel.photoPath,
+                                      verificationStatus:
+                                          _samplePersonnel.verificationStatus,
+                                      lifecycleStatus:
+                                          _samplePersonnel.lifecycleStatus,
+                                      correctionNote: null,
+                                      verifiedAt: null,
+                                      verifiedByName: null,
+                                      printedAt: null,
+                                      printedByName: null,
+                                      printCount: 0,
+                                      isActive: true,
+                                      createdAt: _samplePersonnel.createdAt,
+                                      updatedAt: _samplePersonnel.updatedAt,
+                                    ),
                               sessionName: '2026-2028',
                               className: 'XII',
                               sectionName: 'A',
@@ -2879,6 +3010,13 @@ class _ModelTextPropertyState extends State<_ModelTextProperty> {
 
 const _systemFields = <String, String>{
   'full_name': 'Full name',
+  'id_number': 'ID / employee number',
+  'employee_number': 'Employee number',
+  'employee_no': 'Employee number (legacy API key)',
+  'designation': 'Designation',
+  'department': 'Department',
+  'email': 'Email',
+  'personnel_type': 'Personnel type',
   'admission_no': 'Admission number',
   'roll_no': 'Roll number',
   'stream': 'Stream',
@@ -2908,8 +3046,15 @@ const _systemFields = <String, String>{
 };
 
 const _qrSystemFieldGroups = <String, List<String>>{
-  'Student fields': [
+  'Identity fields': [
     'full_name',
+    'id_number',
+    'designation',
+    'department',
+    'personnel_type',
+    'email',
+  ],
+  'Student fields': [
     'admission_no',
     'roll_no',
     'stream',

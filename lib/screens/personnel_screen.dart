@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../app_routes.dart';
 import '../models/api_personnel.dart';
+import '../models/card_template.dart';
+import '../models/design_bindings.dart';
+import '../models/school_profile.dart';
+import '../models/print_sheet.dart';
+import '../services/pdf_service.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
@@ -39,6 +45,7 @@ class PersonnelScreen extends StatefulWidget {
 class _PersonnelScreenState extends State<PersonnelScreen> {
   final _search = TextEditingController();
   final Set<String> _selected = {};
+  final Map<String, ApiPersonnel> _printBasket = {};
   List<ApiPersonnel> _records = const [];
   String? _verificationStatus;
   bool? _printed;
@@ -210,6 +217,174 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
     );
   }
 
+  Future<void> _printRecords(List<ApiPersonnel> records) async {
+    if (records.isEmpty) return;
+    try {
+      final results = await Future.wait<Object>([
+        widget.api.getCardTemplate(widget.schoolUuid),
+        widget.api.getSchoolProfile(widget.schoolUuid),
+      ]);
+      final template = results[0] as CardTemplate;
+      final profile = results[1] as SchoolProfile;
+      if (!mounted) return;
+      final printSettings = await _choosePrintSettings(template.hasBackDesign);
+      if (printSettings == null) return;
+      final cards = records
+          .map(
+            (record) => PdfCardData(
+              personnel: record,
+              photoUrl: resolveDesignAssetUrl(
+                record.photoPath,
+                widget.api.baseUrl,
+              ),
+            ),
+          )
+          .toList();
+      final bytes = await PdfService.generateStudentCards(
+        cards: cards,
+        schoolName: widget.schoolName,
+        template: template,
+        schoolLogoUrl: resolveDesignAssetUrl(
+          profile.logoUrl ?? profile.logoPath,
+          widget.api.baseUrl,
+        ),
+        schoolProfile: profile,
+        assetBaseUrl: widget.api.baseUrl,
+        printSettings: printSettings,
+      );
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: '${widget.personnelType.apiValue}_cards.pdf',
+      );
+    } on ApiException catch (error) {
+      if (mounted) _message(error.message);
+    } catch (error) {
+      if (mounted) _message('Unable to generate personnel cards: $error');
+    }
+  }
+
+  Future<PrintSheetSettings?> _choosePrintSettings(bool hasBack) async {
+    var mode = PrintLayoutMode.oneCardPerPage;
+    var sides = PrintSides.frontOnly;
+    return showDialog<PrintSheetSettings>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Personnel card PDF'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<PrintLayoutMode>(
+                initialValue: mode,
+                decoration: const InputDecoration(labelText: 'Layout'),
+                items: const [
+                  DropdownMenuItem(
+                    value: PrintLayoutMode.oneCardPerPage,
+                    child: Text('One card per page'),
+                  ),
+                  DropdownMenuItem(
+                    value: PrintLayoutMode.sheet,
+                    child: Text('A4 sheet imposition'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => mode = value);
+                },
+              ),
+              if (hasBack)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Include back (duplex)'),
+                  value: sides == PrintSides.duplex,
+                  onChanged: (value) => setDialogState(
+                    () => sides = value
+                        ? PrintSides.duplex
+                        : PrintSides.frontOnly,
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                context,
+                PrintSheetSettings(mode: mode, sides: sides),
+              ),
+              child: const Text('Generate'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addSelectionToBasket() {
+    setState(() {
+      for (final record in _records) {
+        if (_selected.contains(record.uuid)) _printBasket[record.uuid] = record;
+      }
+      _selected.clear();
+    });
+  }
+
+  Future<void> _showPrintBasket() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final records = _printBasket.values.toList();
+          return AlertDialog(
+            title: Text(
+              '${widget.personnelType.label} Print Basket (${records.length})',
+            ),
+            content: SizedBox(
+              width: 520,
+              child: records.isEmpty
+                  ? const Text('The basket is empty.')
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: records.length,
+                      itemBuilder: (_, index) => ListTile(
+                        title: Text(records[index].fullName),
+                        subtitle: Text(records[index].employeeNo),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () {
+                            setState(
+                              () => _printBasket.remove(records[index].uuid),
+                            );
+                            setDialogState(() {});
+                          },
+                        ),
+                      ),
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              FilledButton.icon(
+                onPressed: records.isEmpty
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        _printRecords(records);
+                      },
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Export PDF'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _lifecycle(Future<ApiPersonnel> Function() action) async {
     try {
       await action();
@@ -312,6 +487,20 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                       icon: const Icon(Icons.person_add_alt),
                       label: Text('Add ${widget.personnelType.label}'),
                     ),
+                  if (widget.canMarkPrinted && _selected.isNotEmpty)
+                    OutlinedButton.icon(
+                      key: const Key('personnel-add-to-print-basket'),
+                      onPressed: _addSelectionToBasket,
+                      icon: const Icon(Icons.add_shopping_cart_outlined),
+                      label: const Text('Add to Print Basket'),
+                    ),
+                  if (widget.canMarkPrinted)
+                    OutlinedButton.icon(
+                      key: const Key('personnel-print-basket'),
+                      onPressed: _showPrintBasket,
+                      icon: const Icon(Icons.shopping_basket_outlined),
+                      label: Text('Print Basket (${_printBasket.length})'),
+                    ),
                   if (_selected.isNotEmpty && widget.canVerify)
                     FilledButton.icon(
                       onPressed:
@@ -409,6 +598,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                 if (action == 'verify') _verify(personnel);
                 if (action == 'correction') _needsCorrection(personnel);
                 if (action == 'printed') _markPrinted(personnel);
+                if (action == 'print') _printRecords([personnel]);
                 if (action == 'history') {
                   AppNavigation.navigateToPage<void>(
                     context,
@@ -417,6 +607,11 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                 }
               },
               itemBuilder: (_) => [
+                if (widget.canMarkPrinted)
+                  const PopupMenuItem(
+                    value: 'print',
+                    child: Text('Preview / export PDF'),
+                  ),
                 if (widget.canEdit)
                   const PopupMenuItem(value: 'edit', child: Text('Edit')),
                 if (widget.canDelete)

@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:idcard_flutter/app_routes.dart';
 import 'package:idcard_flutter/models/api_personnel.dart';
+import 'package:idcard_flutter/models/card_template.dart';
+import 'package:idcard_flutter/models/design_bindings.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 
 Map<String, dynamic> _personnelJson({String type = 'teacher'}) => {
@@ -35,7 +37,16 @@ Map<String, dynamic> _personnelJson({String type = 'teacher'}) => {
   'is_active': true,
   'created_at': '2026-09-11T09:00:00Z',
   'updated_at': '2026-09-11T10:00:00Z',
-  'custom_fields': const [],
+  'custom_fields': const [
+    {
+      'field_uuid': '77cce2aa-c16e-4ce1-9db0-dfc2a06c9b83',
+      'field_key': 'emergency_phone',
+      'label': 'Emergency phone',
+      'data_type': 'phone',
+      'value': '+91 91111 11111',
+      'is_active': true,
+    },
+  ],
 };
 
 void main() {
@@ -46,6 +57,54 @@ void main() {
     expect(personnel.isVerified, isTrue);
     expect(personnel.isPrinted, isFalse);
     expect(personnel.dob, DateTime(1990, 2, 3));
+    expect(personnel.customFields.single.fieldKey, 'emergency_phone');
+  });
+
+  test('personnel resolves identity, custom, QR and barcode bindings', () {
+    final personnel = ApiPersonnel.fromJson(_personnelJson());
+    final bindings = DesignBindings(personnel: personnel);
+    const employee = DesignElement(
+      id: 'employee',
+      type: DesignElementType.boundText,
+      x: 0,
+      y: 0,
+      width: 30,
+      height: 5,
+      data: {'field': 'id_number'},
+    );
+    const customQr = DesignElement(
+      id: 'qr',
+      type: DesignElementType.qrCode,
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 20,
+      data: {
+        'fields': [
+          {'field': 'full_name', 'label': 'Name'},
+          {
+            'field_uuid': '77cce2aa-c16e-4ce1-9db0-dfc2a06c9b83',
+            'label': 'Emergency',
+          },
+        ],
+        'format': 'json',
+      },
+    );
+    const designationBarcode = DesignElement(
+      id: 'barcode',
+      type: DesignElementType.barcode,
+      x: 0,
+      y: 0,
+      width: 30,
+      height: 12,
+      data: {'field': 'designation', 'symbology': 'code128'},
+    );
+    expect(bindings.text(employee), 'EMP-7');
+    expect(bindings.text(designationBarcode), 'Teacher');
+    expect(
+      bindings.text(customQr),
+      '{"full_name":"Asha Singh","custom:77cce2aa-c16e-4ce1-9db0-dfc2a06c9b83":"+91 91111 11111"}',
+    );
   });
 
   test('personnel list is type scoped and parses pagination', () async {
@@ -102,6 +161,7 @@ void main() {
     );
     expect(body['personnel_type'], 'teacher');
     expect(body['employee_no'], 'EMP-7');
+    expect(body['custom_fields'], isEmpty);
     api.dispose();
   });
 
