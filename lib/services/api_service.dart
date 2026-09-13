@@ -20,6 +20,7 @@ import '../models/public_form.dart';
 import '../models/public_design.dart';
 import '../models/public_verification.dart';
 import '../models/student_grid.dart';
+import '../models/personnel_grid.dart';
 
 /// Local SQLite service retained for the existing student repository.
 /// The current authentication/user-management workflow uses FastAPI; this
@@ -1057,6 +1058,46 @@ class ApiService {
     return StudentGridPatchResult.fromJson(_decodeMap(response));
   }
 
+  Future<PersonnelGridPage> getPersonnelGrid({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    int limit = 100,
+    int offset = 0,
+    String? search,
+    bool? active = true,
+    String? department,
+    String? designation,
+  }) async {
+    final query = <String, String>{
+      'personnel_type': personnelType.apiValue,
+      'limit': '$limit',
+      'offset': '$offset',
+      if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
+      if (active != null) 'active': '$active',
+      if (department?.isNotEmpty == true) 'department': department!,
+      if (designation?.isNotEmpty == true) 'designation': designation!,
+    };
+    final response = await _client.get(
+      _uri(
+        '/schools/$schoolUuid/personnel/grid',
+      ).replace(queryParameters: query),
+      headers: _headers,
+    );
+    return PersonnelGridPage.fromJson(_decodeMap(response));
+  }
+
+  Future<PersonnelGridPatchResult> patchPersonnelGrid({
+    required String schoolUuid,
+    required List<PersonnelGridRowPatch> rows,
+  }) async {
+    final response = await _client.patch(
+      _uri('/schools/$schoolUuid/personnel/grid'),
+      headers: _headers,
+      body: jsonEncode({'rows': rows.map((row) => row.toJson()).toList()}),
+    );
+    return PersonnelGridPatchResult.fromJson(_decodeMap(response));
+  }
+
   String _dateOnly(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-'
       '${value.month.toString().padLeft(2, '0')}-'
@@ -1233,6 +1274,90 @@ class ApiService {
     return StudentImportSummary.fromJson(_decodeMap(response));
   }
 
+  Future<StudentImportUpload> uploadPersonnelImport({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    final uri = _uri(
+      '/schools/$schoolUuid/personnel/imports/upload',
+    ).replace(queryParameters: {'personnel_type': personnelType.apiValue});
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename),
+    );
+    return StudentImportUpload.fromJson(
+      _decodeMap(await http.Response.fromStream(await _client.send(request))),
+    );
+  }
+
+  Future<StudentImportTemplateFile> downloadPersonnelImportTemplate({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+  }) async {
+    final response = await _client.get(
+      _uri(
+        '/schools/$schoolUuid/personnel/imports/template',
+      ).replace(queryParameters: {'personnel_type': personnelType.apiValue}),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _apiException(response);
+    }
+    return StudentImportTemplateFile(
+      bytes: response.bodyBytes,
+      filename:
+          _responseFilename(response.headers['content-disposition'] ?? '') ??
+          '${personnelType.apiValue}_import_template.xlsx',
+      contentType:
+          response.headers['content-type'] ??
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
+  Future<StudentImportPreview> previewPersonnelImport({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String uploadId,
+    required List<StudentImportMapping> mappings,
+  }) async {
+    final response = await _client.post(
+      _uri(
+        '/schools/$schoolUuid/personnel/imports/$uploadId/preview',
+      ).replace(queryParameters: {'personnel_type': personnelType.apiValue}),
+      headers: _headers,
+      body: jsonEncode({
+        'mappings': mappings.map((item) => item.toJson()).toList(),
+      }),
+    );
+    return StudentImportPreview.fromJson(_decodeMap(response));
+  }
+
+  Future<StudentImportSummary> commitPersonnelImport({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String uploadId,
+    required List<StudentImportMapping> mappings,
+    required bool confirmed,
+  }) async {
+    final response = await _client.post(
+      _uri(
+        '/schools/$schoolUuid/personnel/imports/$uploadId/commit',
+      ).replace(queryParameters: {'personnel_type': personnelType.apiValue}),
+      headers: _headers,
+      body: jsonEncode({
+        'mappings': mappings.map((item) => item.toJson()).toList(),
+        'confirmed': confirmed,
+      }),
+    );
+    return StudentImportSummary.fromJson(_decodeMap(response));
+  }
+
   Future<BulkPhotoUploadResponse> uploadBulkStudentPhotos({
     required String schoolUuid,
     required String filename,
@@ -1273,6 +1398,60 @@ class ApiService {
   }) async {
     final response = await _client.post(
       _uri('/schools/$schoolUuid/student-photos/bulk/$manifestUuid/commit'),
+      headers: _headers,
+      body: jsonEncode({'confirmed': confirmed}),
+    );
+    return BulkPhotoCommitResponse.fromJson(_decodeMap(response));
+  }
+
+  Future<BulkPhotoUploadResponse> uploadBulkPersonnelPhotos({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      _uri(
+        '/schools/$schoolUuid/personnel-photos/bulk/upload',
+      ).replace(queryParameters: {'personnel_type': personnelType.apiValue}),
+    );
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('archive', bytes, filename: filename),
+    );
+    return BulkPhotoUploadResponse.fromJson(
+      _decodeMap(await http.Response.fromStream(await _client.send(request))),
+    );
+  }
+
+  Future<BulkPhotoPreviewResponse> previewBulkPersonnelPhotos({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String manifestUuid,
+  }) async {
+    final response = await _client.post(
+      _uri(
+        '/schools/$schoolUuid/personnel-photos/bulk/$manifestUuid/preview',
+      ).replace(queryParameters: {'personnel_type': personnelType.apiValue}),
+      headers: _headers,
+    );
+    return BulkPhotoPreviewResponse.fromJson(_decodeMap(response));
+  }
+
+  Future<BulkPhotoCommitResponse> commitBulkPersonnelPhotos({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String manifestUuid,
+    required bool confirmed,
+  }) async {
+    final response = await _client.post(
+      _uri(
+        '/schools/$schoolUuid/personnel-photos/bulk/$manifestUuid/commit',
+      ).replace(queryParameters: {'personnel_type': personnelType.apiValue}),
       headers: _headers,
       body: jsonEncode({'confirmed': confirmed}),
     );

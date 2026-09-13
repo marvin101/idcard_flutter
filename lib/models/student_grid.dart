@@ -168,7 +168,8 @@ class StudentGridCellError {
 
   factory StudentGridCellError.fromJson(Map<String, dynamic> json) =>
       StudentGridCellError(
-        studentUuid: json['student_uuid']?.toString() ?? '',
+        studentUuid:
+            (json['student_uuid'] ?? json['personnel_uuid'])?.toString() ?? '',
         field: json['field']?.toString() ?? 'grid',
         message: json['message']?.toString() ?? 'Invalid value',
       );

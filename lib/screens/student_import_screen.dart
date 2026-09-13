@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_routes.dart';
 import '../models/student_import.dart';
+import '../models/api_personnel.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../services/file_download.dart';
@@ -19,6 +20,7 @@ class StudentImportScreen extends StatefulWidget {
     required this.schoolUuid,
     required this.schoolName,
     required this.api,
+    this.personnelType,
     this.pickFile,
     this.saveTemplate,
   });
@@ -26,6 +28,7 @@ class StudentImportScreen extends StatefulWidget {
   final String schoolUuid;
   final String schoolName;
   final ApiService api;
+  final PersonnelType? personnelType;
   final StudentImportFilePicker? pickFile;
   final StudentImportTemplateSaver? saveTemplate;
 
@@ -43,6 +46,15 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
   StudentImportPreview? _preview;
   StudentImportSummary? _summary;
   final Map<String, String?> _mappingBySource = {};
+
+  bool get _isPersonnel => widget.personnelType != null;
+  String get _singular => widget.personnelType?.label ?? 'Student';
+  String get _plural => widget.personnelType?.pluralLabel ?? 'Students';
+  String get _route => switch (widget.personnelType) {
+    PersonnelType.teacher => AppRoutes.teacherImport,
+    PersonnelType.staff => AppRoutes.staffImport,
+    null => AppRoutes.studentImport,
+  };
 
   List<StudentImportMapping> get _mappings => [
     for (final entry in _mappingBySource.entries)
@@ -90,11 +102,18 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
     }
     setState(() => _busy = true);
     try {
-      final upload = await widget.api.uploadStudentImport(
-        schoolUuid: widget.schoolUuid,
-        filename: file.name,
-        bytes: bytes,
-      );
+      final upload = _isPersonnel
+          ? await widget.api.uploadPersonnelImport(
+              schoolUuid: widget.schoolUuid,
+              personnelType: widget.personnelType!,
+              filename: file.name,
+              bytes: bytes,
+            )
+          : await widget.api.uploadStudentImport(
+              schoolUuid: widget.schoolUuid,
+              filename: file.name,
+              bytes: bytes,
+            );
       if (!mounted) return;
       setState(() {
         _upload = upload;
@@ -126,9 +145,14 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       _error = null;
     });
     try {
-      final file = await widget.api.downloadStudentImportTemplate(
-        schoolUuid: widget.schoolUuid,
-      );
+      final file = _isPersonnel
+          ? await widget.api.downloadPersonnelImportTemplate(
+              schoolUuid: widget.schoolUuid,
+              personnelType: widget.personnelType!,
+            )
+          : await widget.api.downloadStudentImportTemplate(
+              schoolUuid: widget.schoolUuid,
+            );
       if (widget.saveTemplate != null) {
         await widget.saveTemplate!(file);
       } else {
@@ -180,11 +204,18 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       _error = null;
     });
     try {
-      final preview = await widget.api.previewStudentImport(
-        schoolUuid: widget.schoolUuid,
-        uploadId: _upload!.uploadId,
-        mappings: _mappings,
-      );
+      final preview = _isPersonnel
+          ? await widget.api.previewPersonnelImport(
+              schoolUuid: widget.schoolUuid,
+              personnelType: widget.personnelType!,
+              uploadId: _upload!.uploadId,
+              mappings: _mappings,
+            )
+          : await widget.api.previewStudentImport(
+              schoolUuid: widget.schoolUuid,
+              uploadId: _upload!.uploadId,
+              mappings: _mappings,
+            );
       if (mounted) {
         setState(() {
           _preview = preview;
@@ -212,12 +243,20 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       _error = null;
     });
     try {
-      final summary = await widget.api.commitStudentImport(
-        schoolUuid: widget.schoolUuid,
-        uploadId: _upload!.uploadId,
-        mappings: _mappings,
-        confirmed: true,
-      );
+      final summary = _isPersonnel
+          ? await widget.api.commitPersonnelImport(
+              schoolUuid: widget.schoolUuid,
+              personnelType: widget.personnelType!,
+              uploadId: _upload!.uploadId,
+              mappings: _mappings,
+              confirmed: true,
+            )
+          : await widget.api.commitStudentImport(
+              schoolUuid: widget.schoolUuid,
+              uploadId: _upload!.uploadId,
+              mappings: _mappings,
+              confirmed: true,
+            );
       if (mounted) {
         setState(() {
           _summary = summary;
@@ -249,7 +288,7 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AuthenticatedAppBar(
-      title: Text('Bulk Student Import — ${widget.schoolName}'),
+      title: Text('Bulk $_singular Import — ${widget.schoolName}'),
     ),
     body: Center(
       child: ConstrainedBox(
@@ -349,10 +388,10 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
     final fields = _upload!.targetFields;
     return Column(
       children: [
-        const Align(
+        Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Map each spreadsheet column to at most one student field. Required targets are marked *.',
+            'Map each spreadsheet column to at most one ${_singular.toLowerCase()} field. Required targets are marked *.',
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
@@ -453,20 +492,22 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Text(
-        'Ready to import ${_preview?.validRows ?? 0} students. The backend will revalidate every row and import all rows together or none.',
+        'Ready to import ${_preview?.validRows ?? 0} ${_plural.toLowerCase()}. The backend will revalidate every row and import all rows together or none.',
       ),
       CheckboxListTile(
         contentPadding: EdgeInsets.zero,
         value: _confirmed,
         onChanged: (value) => setState(() => _confirmed = value ?? false),
-        title: const Text('I confirm that these students should be imported.'),
+        title: Text(
+          'I confirm that these ${_plural.toLowerCase()} should be imported.',
+        ),
       ),
       Align(
         alignment: Alignment.centerRight,
         child: FilledButton.icon(
           onPressed: _confirmed && !_busy ? _commit : null,
           icon: const Icon(Icons.check),
-          label: Text(_busy ? 'Importing…' : 'Import students'),
+          label: Text(_busy ? 'Importing…' : 'Import ${_plural.toLowerCase()}'),
         ),
       ),
     ],
@@ -487,12 +528,9 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
       const SizedBox(height: 16),
       FilledButton(
         key: const Key('student-import-return-to-students'),
-        onPressed: () => AppNavigation.navigateBack(
-          context,
-          AppRoutes.studentImport,
-          result: true,
-        ),
-        child: const Text('Return to students'),
+        onPressed: () =>
+            AppNavigation.navigateBack(context, _route, result: true),
+        child: Text('Return to ${_plural.toLowerCase()}'),
       ),
     ],
   );

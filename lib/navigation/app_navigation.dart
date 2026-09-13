@@ -100,6 +100,12 @@ abstract final class AppNavigation {
     AppRoutes.studentImport,
     AppRoutes.bulkPhotoImport,
     AppRoutes.studentGrid,
+    AppRoutes.teacherGrid,
+    AppRoutes.staffGrid,
+    AppRoutes.teacherImport,
+    AppRoutes.staffImport,
+    AppRoutes.teacherBulkPhotoImport,
+    AppRoutes.staffBulkPhotoImport,
   };
 
   static bool isPrimaryModule(String? routeName) =>

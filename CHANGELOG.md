@@ -11,6 +11,17 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 - Added first-class teacher/staff card data resolution, personnel-safe Designer
   and machine-readable bindings, type-partitioned personnel Print Baskets and
   individual/bulk PDF export, plus typed custom fields and audited photo flows.
+- Added reusable Teacher/Staff Excel import and employee-number bulk-photo
+  workflows, including templates, mapping, preview, confirmation, errors, and
+  completion summaries.
+- Added a type-switchable personnel Excel Grid with search, active/inactive,
+  department and designation filters, editable system/custom fields, dirty-row
+  save/discard, and structured conflict feedback.
+- Teacher and Staff lists now expose Excel Import, Bulk Photos, and Excel Grid
+  actions for roles that can manage card data.
+- Personnel Designer previews and machine-readable multi-field payloads now
+  suppress student-only academic/identity bindings and offer type-appropriate
+  employee fields and custom fields.
 
 ## [0.9.0] - 2026-09-11
 

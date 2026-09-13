@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../app_routes.dart';
 import '../models/bulk_photo_import.dart';
+import '../models/api_personnel.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
@@ -18,12 +19,14 @@ class BulkPhotoImportScreen extends StatefulWidget {
     required this.schoolUuid,
     required this.schoolName,
     required this.api,
+    this.personnelType,
     this.pickArchive,
   });
 
   final String schoolUuid;
   final String schoolName;
   final ApiService api;
+  final PersonnelType? personnelType;
   final BulkPhotoFilePicker? pickArchive;
 
   @override
@@ -41,6 +44,15 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
   BulkPhotoUploadResponse? _upload;
   BulkPhotoPreviewResponse? _preview;
   BulkPhotoCommitResponse? _summary;
+
+  bool get _isPersonnel => widget.personnelType != null;
+  String get _singular => widget.personnelType?.label ?? 'Student';
+  String get _plural => widget.personnelType?.pluralLabel ?? 'Students';
+  String get _route => switch (widget.personnelType) {
+    PersonnelType.teacher => AppRoutes.teacherBulkPhotoImport,
+    PersonnelType.staff => AppRoutes.staffBulkPhotoImport,
+    null => AppRoutes.bulkPhotoImport,
+  };
 
   Future<PlatformFile?> _pickFile() async {
     if (widget.pickArchive != null) return widget.pickArchive!();
@@ -89,7 +101,8 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
     if (!selectedFile.name.toLowerCase().endsWith('.zip')) {
       setState(() {
         _busy = false;
-        _error = 'Choose a ZIP archive containing student photos.';
+        _error =
+            'Choose a ZIP archive containing ${_singular.toLowerCase()} photos.';
         _retry = null;
       });
       return;
@@ -104,11 +117,18 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
   Future<void> _uploadArchive(String filename, Uint8List bytes) async {
     _startRequest();
     try {
-      final upload = await widget.api.uploadBulkStudentPhotos(
-        schoolUuid: widget.schoolUuid,
-        filename: filename,
-        bytes: bytes,
-      );
+      final upload = _isPersonnel
+          ? await widget.api.uploadBulkPersonnelPhotos(
+              schoolUuid: widget.schoolUuid,
+              personnelType: widget.personnelType!,
+              filename: filename,
+              bytes: bytes,
+            )
+          : await widget.api.uploadBulkStudentPhotos(
+              schoolUuid: widget.schoolUuid,
+              filename: filename,
+              bytes: bytes,
+            );
       if (!mounted) return;
       setState(() => _upload = upload);
       await _loadPreview();
@@ -125,10 +145,16 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
     if (upload == null) return;
     _startRequest();
     try {
-      final preview = await widget.api.previewBulkStudentPhotos(
-        schoolUuid: widget.schoolUuid,
-        manifestUuid: upload.manifestUuid,
-      );
+      final preview = _isPersonnel
+          ? await widget.api.previewBulkPersonnelPhotos(
+              schoolUuid: widget.schoolUuid,
+              personnelType: widget.personnelType!,
+              manifestUuid: upload.manifestUuid,
+            )
+          : await widget.api.previewBulkStudentPhotos(
+              schoolUuid: widget.schoolUuid,
+              manifestUuid: upload.manifestUuid,
+            );
       if (!mounted) return;
       setState(() {
         _preview = preview;
@@ -173,11 +199,18 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
     if (!_confirmed || preview == null || !preview.canCommit) return;
     _startRequest();
     try {
-      final summary = await widget.api.commitBulkStudentPhotos(
-        schoolUuid: widget.schoolUuid,
-        manifestUuid: preview.manifestUuid,
-        confirmed: true,
-      );
+      final summary = _isPersonnel
+          ? await widget.api.commitBulkPersonnelPhotos(
+              schoolUuid: widget.schoolUuid,
+              personnelType: widget.personnelType!,
+              manifestUuid: preview.manifestUuid,
+              confirmed: true,
+            )
+          : await widget.api.commitBulkStudentPhotos(
+              schoolUuid: widget.schoolUuid,
+              manifestUuid: preview.manifestUuid,
+              confirmed: true,
+            );
       if (!mounted) return;
       setState(() {
         _summary = summary;
@@ -209,7 +242,7 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.background,
     appBar: AuthenticatedAppBar(
-      title: Text('Bulk Photo Import — ${widget.schoolName}'),
+      title: Text('Bulk $_singular Photo Import — ${widget.schoolName}'),
     ),
     body: Center(
       child: ConstrainedBox(
@@ -223,11 +256,11 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
                   key: const Key('bulk-photo-back-to-students'),
                   onPressed: () => AppNavigation.navigateBack(
                     context,
-                    AppRoutes.bulkPhotoImport,
+                    _route,
                     result: _summary != null,
                   ),
                   icon: const Icon(Icons.arrow_back),
-                  label: const Text('Back to Students'),
+                  label: Text('Back to $_plural'),
                 ),
               ],
             ),
@@ -309,8 +342,10 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
   Widget _uploadStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Choose a ZIP archive. Each image filename must match the student admission number.',
+      Text(
+        _isPersonnel
+            ? 'Choose a ZIP archive. Each image filename must match the ${_singular.toLowerCase()} employee number.'
+            : 'Choose a ZIP archive. Each image filename must match the student admission number.',
       ),
       const SizedBox(height: 8),
       const Text('Accepted images: JPG, JPEG, PNG and WEBP.'),
@@ -395,8 +430,8 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
           onChanged: _busy
               ? null
               : (value) => setState(() => _confirmed = value == true),
-          title: const Text(
-            'I confirm that these student photos should be uploaded.',
+          title: Text(
+            'I confirm that these ${_plural.toLowerCase()} photos should be uploaded.',
           ),
           controlAffinity: ListTileControlAffinity.leading,
         ),
@@ -458,13 +493,10 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
           children: [
             FilledButton.icon(
               key: const Key('bulk-photo-summary-students'),
-              onPressed: () => AppNavigation.navigateBack(
-                context,
-                AppRoutes.bulkPhotoImport,
-                result: true,
-              ),
+              onPressed: () =>
+                  AppNavigation.navigateBack(context, _route, result: true),
               icon: const Icon(Icons.people_outline),
-              label: const Text('Back to Students'),
+              label: Text('Back to $_plural'),
             ),
             OutlinedButton.icon(
               key: const Key('bulk-photo-summary-cards'),
@@ -520,10 +552,10 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
   );
 
   Widget _previewTable(List<BulkPhotoItem> items) => _table(
-    columns: const [
+    columns: [
       'Filename',
-      'Admission No.',
-      'Student Name',
+      _isPersonnel ? 'Employee No.' : 'Admission No.',
+      '$_singular Name',
       'Status',
       'Existing Photo',
       'Detail / Error',
@@ -546,10 +578,10 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
   );
 
   Widget _commitTable(List<BulkPhotoCommitItem> items) => _table(
-    columns: const [
+    columns: [
       'Filename',
-      'Admission No.',
-      'Student Name',
+      _isPersonnel ? 'Employee No.' : 'Admission No.',
+      '$_singular Name',
       'Status',
       'Detail / Error',
     ],

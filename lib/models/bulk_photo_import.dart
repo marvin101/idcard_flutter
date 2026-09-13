@@ -41,9 +41,9 @@ class BulkPhotoItem {
 
   factory BulkPhotoItem.fromJson(Map<String, dynamic> json) => BulkPhotoItem(
     filename: json['filename'] as String,
-    admissionNo: json['admission_no'] as String?,
-    studentUuid: json['student_uuid'] as String?,
-    studentName: json['student_name'] as String?,
+    admissionNo: (json['admission_no'] ?? json['employee_no']) as String?,
+    studentUuid: (json['student_uuid'] ?? json['personnel_uuid']) as String?,
+    studentName: (json['student_name'] ?? json['personnel_name']) as String?,
     status: json['status'] as String,
     detail: json['detail'] as String?,
     hasExistingPhoto: json['has_existing_photo'] == true,
@@ -81,9 +81,7 @@ class BulkPhotoPreviewResponse {
         replacementCount: (json['replacement_count'] as num).toInt(),
         canCommit: json['can_commit'] == true,
         items: (json['items'] as List<dynamic>? ?? const [])
-            .map(
-              (item) => BulkPhotoItem.fromJson(item as Map<String, dynamic>),
-            )
+            .map((item) => BulkPhotoItem.fromJson(item as Map<String, dynamic>))
             .toList(),
       );
 }
@@ -105,15 +103,16 @@ class BulkPhotoCommitItem {
   final String status;
   final String? detail;
 
-  factory BulkPhotoCommitItem.fromJson(Map<String, dynamic> json) =>
-      BulkPhotoCommitItem(
-        filename: json['filename'] as String,
-        admissionNo: json['admission_no'] as String?,
-        studentUuid: json['student_uuid'] as String?,
-        studentName: json['student_name'] as String?,
-        status: json['status'] as String,
-        detail: json['detail'] as String?,
-      );
+  factory BulkPhotoCommitItem.fromJson(
+    Map<String, dynamic> json,
+  ) => BulkPhotoCommitItem(
+    filename: json['filename'] as String,
+    admissionNo: (json['admission_no'] ?? json['employee_no']) as String?,
+    studentUuid: (json['student_uuid'] ?? json['personnel_uuid']) as String?,
+    studentName: (json['student_name'] ?? json['personnel_name']) as String?,
+    status: json['status'] as String,
+    detail: json['detail'] as String?,
+  );
 }
 
 class BulkPhotoCommitResponse {

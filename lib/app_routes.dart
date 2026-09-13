@@ -7,6 +7,8 @@ abstract final class AppRoutes {
   static const teachers = '/teachers';
   static const staff = '/staff';
   static const studentGrid = '/students/grid';
+  static const teacherGrid = '/teachers/grid';
+  static const staffGrid = '/staff/grid';
   static const addStudent = '/students/add';
   static const editStudent = '/students/edit';
   static const addTeacher = '/teachers/add';
@@ -19,6 +21,10 @@ abstract final class AppRoutes {
   static const publicVerificationPrefix = '/verify/';
   static const studentImport = '/students/import';
   static const bulkPhotoImport = '/students/photos/import';
+  static const teacherImport = '/teachers/import';
+  static const staffImport = '/staff/import';
+  static const teacherBulkPhotoImport = '/teachers/photos/import';
+  static const staffBulkPhotoImport = '/staff/photos/import';
   static const studentHistoryPrefix = '/students/';
   static const studentHistorySuffix = '/history';
   static const personnelHistoryPrefix = '/personnel/';
@@ -39,6 +45,8 @@ abstract final class AppRoutes {
     teachers,
     staff,
     studentGrid,
+    teacherGrid,
+    staffGrid,
     addStudent,
     editStudent,
     addTeacher,
@@ -48,6 +56,10 @@ abstract final class AppRoutes {
     publicForms,
     studentImport,
     bulkPhotoImport,
+    teacherImport,
+    staffImport,
+    teacherBulkPhotoImport,
+    staffBulkPhotoImport,
     schoolProfile,
     academicSessions,
     classesSections,

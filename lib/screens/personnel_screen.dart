@@ -127,6 +127,26 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
     if (changed == true && mounted) await _load();
   }
 
+  Future<void> _openPersonnelWorkflow(String route) async {
+    final changed = await AppNavigation.navigateToWorkflow<bool>(
+      context,
+      route,
+    );
+    if (changed == true) _load();
+  }
+
+  String get _importRoute => widget.personnelType == PersonnelType.teacher
+      ? AppRoutes.teacherImport
+      : AppRoutes.staffImport;
+
+  String get _photoImportRoute => widget.personnelType == PersonnelType.teacher
+      ? AppRoutes.teacherBulkPhotoImport
+      : AppRoutes.staffBulkPhotoImport;
+
+  String get _gridRoute => widget.personnelType == PersonnelType.teacher
+      ? AppRoutes.teacherGrid
+      : AppRoutes.staffGrid;
+
   Future<void> _delete(ApiPersonnel personnel) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -481,6 +501,31 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                       _load();
                     },
                   ),
+                  if (widget.canEdit)
+                    OutlinedButton.icon(
+                      key: const Key('personnel-bulk-import'),
+                      onPressed: () => _openPersonnelWorkflow(_importRoute),
+                      icon: const Icon(Icons.table_view_outlined),
+                      label: const Text('Excel Import'),
+                    ),
+                  if (widget.canEdit)
+                    OutlinedButton.icon(
+                      key: const Key('personnel-bulk-photo-import'),
+                      onPressed: () =>
+                          _openPersonnelWorkflow(_photoImportRoute),
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Bulk Photos'),
+                    ),
+                  if (widget.canEdit)
+                    OutlinedButton.icon(
+                      key: const Key('personnel-grid'),
+                      onPressed: () => AppNavigation.navigateToPage<void>(
+                        context,
+                        _gridRoute,
+                      ),
+                      icon: const Icon(Icons.grid_on_outlined),
+                      label: const Text('Excel Grid'),
+                    ),
                   if (widget.canEdit)
                     FilledButton.icon(
                       onPressed: () => _openForm(),

@@ -36,6 +36,7 @@ import 'screens/student_grid_screen.dart';
 import 'screens/personnel_form_screen.dart';
 import 'screens/personnel_history_screen.dart';
 import 'screens/personnel_screen.dart';
+import 'screens/personnel_grid_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_scale_viewport.dart';
 import 'widgets/authenticated_app_bar.dart';
@@ -239,6 +240,22 @@ class _AuthenticatedRoute extends StatelessWidget {
           schoolName: school.name,
           api: auth.api,
         ),
+      AppRoutes.teacherGrid
+          when has(DashboardModuleKind.teachers) && auth.canManageCardData =>
+        PersonnelGridScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          initialType: PersonnelType.teacher,
+        ),
+      AppRoutes.staffGrid
+          when has(DashboardModuleKind.staff) && auth.canManageCardData =>
+        PersonnelGridScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          initialType: PersonnelType.staff,
+        ),
       AppRoutes.addStudent
           when has(DashboardModuleKind.students) && auth.canManageCardData =>
         StudentFormScreen(schoolUuid: school.uuid, api: auth.api),
@@ -292,12 +309,44 @@ class _AuthenticatedRoute extends StatelessWidget {
           schoolName: school.name,
           api: auth.api,
         ),
+      AppRoutes.teacherImport
+          when has(DashboardModuleKind.teachers) && auth.canManageCardData =>
+        StudentImportScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          personnelType: PersonnelType.teacher,
+        ),
+      AppRoutes.staffImport
+          when has(DashboardModuleKind.staff) && auth.canManageCardData =>
+        StudentImportScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          personnelType: PersonnelType.staff,
+        ),
       AppRoutes.bulkPhotoImport
           when has(DashboardModuleKind.students) && auth.canManageCardData =>
         BulkPhotoImportScreen(
           schoolUuid: school.uuid,
           schoolName: school.name,
           api: auth.api,
+        ),
+      AppRoutes.teacherBulkPhotoImport
+          when has(DashboardModuleKind.teachers) && auth.canManageCardData =>
+        BulkPhotoImportScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          personnelType: PersonnelType.teacher,
+        ),
+      AppRoutes.staffBulkPhotoImport
+          when has(DashboardModuleKind.staff) && auth.canManageCardData =>
+        BulkPhotoImportScreen(
+          schoolUuid: school.uuid,
+          schoolName: school.name,
+          api: auth.api,
+          personnelType: PersonnelType.staff,
         ),
       AppRoutes.schoolProfile when has(DashboardModuleKind.schoolProfile) =>
         SchoolProfileScreen(

@@ -79,6 +79,40 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   bool _allowPop = false;
   bool _leaveDialogOpen = false;
   String _previewIdentityType = 'student';
+
+  Map<String, String> get _availableSystemFields {
+    if (_previewIdentityType == 'student') return _systemFields;
+    const studentOnly = {
+      'admission_no',
+      'roll_no',
+      'stream',
+      'father_name',
+      'mother_name',
+      'aadhaar',
+      'session',
+      'class',
+      'section',
+    };
+    return Map.fromEntries(
+      _systemFields.entries.where((entry) => !studentOnly.contains(entry.key)),
+    );
+  }
+
+  Iterable<StudentFieldDefinition> get _availableCustomFields {
+    final prefix = switch (_previewIdentityType) {
+      'teacher' => 'Teacher • ',
+      'staff' => 'Staff • ',
+      _ => null,
+    };
+    return _customFields.where((field) {
+      if (!field.isActive) return false;
+      final personnelField =
+          field.label.startsWith('Teacher • ') ||
+          field.label.startsWith('Staff • ');
+      return prefix == null ? !personnelField : field.label.startsWith(prefix);
+    });
+  }
+
   String _saveState = 'Saved';
   String? _canvasError;
   int _idCounter = 0;
@@ -704,17 +738,24 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         DesignElementType.text => {'text': 'New text'},
         DesignElementType.boundText => {
           'field': 'full_name',
-          'fallback': 'Student name',
+          'fallback': '$_previewIdentityType name',
         },
         DesignElementType.customFieldText => {
           'field_uuid': customField!.uuid,
           'label': customField.label,
           'fallback': customField.label,
         },
-        DesignElementType.qrCode => {'field': 'verification_url'},
+        DesignElementType.qrCode =>
+          _previewIdentityType == 'student'
+              ? {'field': 'verification_url'}
+              : {'field': 'employee_no', 'fallback': 'Employee number'},
         DesignElementType.barcode => {
-          'field': 'admission_no',
-          'fallback': 'Admission number',
+          'field': _previewIdentityType == 'student'
+              ? 'admission_no'
+              : 'employee_no',
+          'fallback': _previewIdentityType == 'student'
+              ? 'Admission number'
+              : 'Employee number',
           'symbology': 'code128',
         },
         _ => const {},
@@ -1536,11 +1577,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ),
           PopupMenuButton<StudentFieldDefinition>(
             tooltip: 'Custom field',
-            enabled: _customFields.isNotEmpty,
+            enabled: _availableCustomFields.isNotEmpty,
             onSelected: (field) =>
                 _add(DesignElementType.customFieldText, customField: field),
             itemBuilder: (_) => [
-              for (final field in _customFields.where((f) => f.isActive))
+              for (final field in _availableCustomFields)
                 PopupMenuItem(value: field, child: Text(field.label)),
             ],
             child: const Padding(
@@ -1945,6 +1986,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     return 'static';
   }
 
+  String _effectiveQrSource(DesignElement element) =>
+      _previewIdentityType != 'student' &&
+          _qrSource(element) == 'verification_link'
+      ? 'system_field'
+      : _qrSource(element);
+
   Map<String, dynamic> _qrDataForSource(DesignElement element, String source) {
     final prefix = element.data['prefix'] as String?;
     final suffix = element.data['suffix'] as String?;
@@ -1952,20 +1999,23 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     if (source == 'verification_link') {
       data = {'field': 'verification_url'};
     } else if (source == 'multiple_fields') {
+      final idField = _previewIdentityType == 'student'
+          ? 'admission_no'
+          : 'employee_no';
       data = {
         'fields': [
           {'field': 'full_name', 'label': _systemFields['full_name']},
-          {'field': 'admission_no', 'label': _systemFields['admission_no']},
+          {'field': idField, 'label': _systemFields[idField]},
         ],
         'format': 'json',
       };
     } else if (source == 'system_field') {
-      data = {
-        'field': 'admission_no',
-        'fallback': _systemFields['admission_no'],
-      };
+      final field = _previewIdentityType == 'student'
+          ? 'admission_no'
+          : 'employee_no';
+      data = {'field': field, 'fallback': _systemFields[field]};
     } else if (source == 'custom_field') {
-      final field = _customFields.where((field) => field.isActive).firstOrNull;
+      final field = _availableCustomFields.firstOrNull;
       data = field == null
           ? {'text': 'CAMPUS-ID'}
           : {
@@ -2019,7 +2069,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   List<DropdownMenuItem<String>> _qrCustomFieldItems(DesignElement element) {
     final selected = element.data['field_uuid'] as String?;
-    final fields = _customFields.where((field) => field.isActive).toList();
+    final fields = _availableCustomFields.toList();
     return [
       if (selected != null && !fields.any((field) => field.uuid == selected))
         DropdownMenuItem(
@@ -2155,9 +2205,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               if (e.type == DesignElementType.boundText)
                 _dropdownProperty<String>(
                   key: ValueKey('student-field-${e.id}'),
-                  label: 'Student field',
-                  value: e.data['field'] as String? ?? 'full_name',
-                  items: _systemFields.entries
+                  label: 'Identity field',
+                  value: _availableSystemFields.containsKey(e.data['field'])
+                      ? e.data['field'] as String
+                      : 'full_name',
+                  items: _availableSystemFields.entries
                       .map(
                         (entry) => DropdownMenuItem(
                           value: entry.key,
@@ -2222,9 +2274,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   label: e.type == DesignElementType.qrCode
                       ? 'QR content source'
                       : 'Barcode content source',
-                  value: _qrSource(e),
+                  value: _effectiveQrSource(e),
                   items: [
-                    if (e.type == DesignElementType.qrCode)
+                    if (e.type == DesignElementType.qrCode &&
+                        _previewIdentityType == 'student')
                       const DropdownMenuItem(
                         value: 'verification_link',
                         child: Text('Verification link (recommended)'),
@@ -2235,17 +2288,17 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     ),
                     const DropdownMenuItem(
                       value: 'system_field',
-                      child: Text('Student or school field'),
+                      child: Text('Identity or school field'),
                     ),
                     const DropdownMenuItem(
                       value: 'multiple_fields',
                       child: Text('Multiple fields'),
                     ),
                     if (e.data['field_uuid'] is String ||
-                        _customFields.any((field) => field.isActive))
+                        _availableCustomFields.isNotEmpty)
                       const DropdownMenuItem(
                         value: 'custom_field',
-                        child: Text('Custom student field'),
+                        child: Text('Custom identity field'),
                       ),
                   ],
                   onChanged: (value) {
@@ -2256,7 +2309,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     }
                   },
                 ),
-                if (_qrSource(e) == 'static')
+                if (_effectiveQrSource(e) == 'static')
                   _textProperty(
                     e.type == DesignElementType.qrCode
                         ? 'QR content'
@@ -2266,14 +2319,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       (e) => e.copyWith(data: {...e.data, 'text': value}),
                     ),
                   ),
-                if (_qrSource(e) == 'system_field')
+                if (_effectiveQrSource(e) == 'system_field')
                   _dropdownProperty<String>(
                     key: ValueKey('qr-system-field-${e.id}'),
                     label: e.type == DesignElementType.qrCode
                         ? 'QR field'
                         : 'Barcode field',
-                    value: e.data['field'] as String? ?? 'admission_no',
-                    items: _systemFields.entries
+                    value: _availableSystemFields.containsKey(e.data['field'])
+                        ? e.data['field'] as String
+                        : 'full_name',
+                    items: _availableSystemFields.entries
                         .map(
                           (entry) => DropdownMenuItem(
                             value: entry.key,
@@ -2295,7 +2350,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       }
                     },
                   ),
-                if (_qrSource(e) == 'custom_field')
+                if (_effectiveQrSource(e) == 'custom_field')
                   _dropdownProperty<String>(
                     key: ValueKey('qr-custom-field-${e.id}'),
                     label: e.type == DesignElementType.qrCode
@@ -2304,7 +2359,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     value: e.data['field_uuid'] as String,
                     items: _qrCustomFieldItems(e),
                     onChanged: (value) {
-                      final field = _customFields
+                      final field = _availableCustomFields
                           .where((field) => field.uuid == value)
                           .firstOrNull;
                       if (field != null) {
@@ -2321,7 +2376,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       }
                     },
                   ),
-                if (_qrSource(e) == 'multiple_fields') ...[
+                if (_effectiveQrSource(e) == 'multiple_fields') ...[
                   _dropdownProperty<String>(
                     key: ValueKey('qr-format-${e.id}'),
                     label: 'Payload format',
@@ -2374,7 +2429,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         style: const TextStyle(color: Colors.black54),
                       ),
                     ),
-                    for (final fieldKey in group.value)
+                    for (final fieldKey in group.value.where(
+                      _availableSystemFields.containsKey,
+                    ))
                       CheckboxListTile(
                         key: Key('qr-field-$fieldKey'),
                         dense: true,
@@ -2400,15 +2457,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                               ),
                       ),
                   ],
-                  if (_customFields.any((field) => field.isActive)) ...[
+                  if (_availableCustomFields.isNotEmpty) ...[
                     const Divider(),
                     const Text(
-                      'Custom student fields',
+                      'Custom identity fields',
                       style: TextStyle(color: Colors.black54),
                     ),
-                    for (final field in _customFields.where(
-                      (field) => field.isActive,
-                    ))
+                    for (final field in _availableCustomFields)
                       CheckboxListTile(
                         key: Key('qr-custom-field-${field.uuid}'),
                         dense: true,
@@ -2435,8 +2490,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       ),
                   ],
                 ],
-                if (_qrSource(e) != 'verification_link' &&
-                    (_qrSource(e) != 'multiple_fields' ||
+                if (_effectiveQrSource(e) != 'verification_link' &&
+                    (_effectiveQrSource(e) != 'multiple_fields' ||
                         e.data['format'] == 'labeled_text')) ...[
                   _textProperty(
                     e.type == DesignElementType.qrCode

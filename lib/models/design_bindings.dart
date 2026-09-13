@@ -94,6 +94,22 @@ class DesignBindings {
     };
   }
 
+  bool _bindingApplies(Map<String, dynamic> data) {
+    if (personnel == null) return true;
+    return !{
+      'admission_no',
+      'roll_no',
+      'stream',
+      'father_name',
+      'mother_name',
+      'aadhaar',
+      'session',
+      'class',
+      'section',
+      'verification_url',
+    }.contains(data['field']);
+  }
+
   List<DesignQrFieldValue> qrFieldValues(DesignElement element) {
     final fields = element.data['fields'];
     if (!{
@@ -103,25 +119,32 @@ class DesignBindings {
         fields is! List) {
       return const [];
     }
-    return fields.whereType<Map>().map((source) {
-      final binding = Map<String, dynamic>.from(source);
-      final field = binding['field'] as String?;
-      final fieldUuid = binding['field_uuid'] as String?;
-      final key = field ?? 'custom:$fieldUuid';
-      final label = binding['label'] as String? ?? field ?? 'Custom field';
-      final raw = _rawBinding(binding);
-      final fallback = binding['fallback'] as String? ?? '';
-      return DesignQrFieldValue(
-        key: key,
-        label: label,
-        rawValue: raw,
-        value: raw.isEmpty ? fallback : raw,
-      );
-    }).toList();
+    return fields
+        .whereType<Map>()
+        .where((source) {
+          return _bindingApplies(Map<String, dynamic>.from(source));
+        })
+        .map((source) {
+          final binding = Map<String, dynamic>.from(source);
+          final field = binding['field'] as String?;
+          final fieldUuid = binding['field_uuid'] as String?;
+          final key = field ?? 'custom:$fieldUuid';
+          final label = binding['label'] as String? ?? field ?? 'Custom field';
+          final raw = _rawBinding(binding);
+          final fallback = binding['fallback'] as String? ?? '';
+          return DesignQrFieldValue(
+            key: key,
+            label: label,
+            rawValue: raw,
+            value: raw.isEmpty ? fallback : raw,
+          );
+        })
+        .toList();
   }
 
   String text(DesignElement element) {
     final data = element.data;
+    if (!_bindingApplies(data)) return '';
     if ({
           DesignElementType.qrCode,
           DesignElementType.barcode,
