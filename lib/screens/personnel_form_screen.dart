@@ -229,11 +229,13 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
                   controller: _employeeNo,
                   label: 'Employee number',
                   required: true,
+                  fieldKey: const Key('personnel-employee-number'),
                 ),
                 _field(
                   controller: _fullName,
                   label: 'Full name',
                   required: true,
+                  fieldKey: const Key('personnel-full-name'),
                 ),
                 _field(controller: _designation, label: 'Designation'),
                 _field(controller: _department, label: 'Department'),
@@ -302,7 +304,13 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
                     ),
                   ),
                 ),
-                _field(controller: _mobile, label: 'Mobile'),
+                _field(
+                  controller: _mobile,
+                  label: 'Mobile',
+                  keyboardType: TextInputType.phone,
+                  validator: _validateMobile,
+                  fieldKey: const Key('personnel-mobile'),
+                ),
                 _field(controller: _email, label: 'Email'),
                 SizedBox(
                   width: 656,
@@ -427,6 +435,7 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
+                key: const Key('personnel-save'),
                 onPressed: _saving ? null : _save,
                 icon: _saving
                     ? const SizedBox(
@@ -450,18 +459,36 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
     required TextEditingController controller,
     required String label,
     bool required = false,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+    Key? fieldKey,
   }) => SizedBox(
     width: 320,
     child: TextFormField(
+      key: fieldKey,
       controller: controller,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
       ),
-      validator: required
-          ? (value) =>
-                value?.trim().isEmpty == true ? '$label is required' : null
-          : null,
+      validator:
+          validator ??
+          (required
+              ? (value) =>
+                    value?.trim().isEmpty == true ? '$label is required' : null
+              : null),
     ),
   );
+
+  String? _validateMobile(String? input) {
+    final value = input?.trim() ?? '';
+    if (value.isEmpty) return null;
+    final isValidFormat = RegExp(r'^\+?[0-9][0-9 ().-]{4,24}$').hasMatch(value);
+    final digitCount = value.replaceAll(RegExp(r'\D'), '').length;
+    if (!isValidFormat || digitCount < 5) {
+      return 'Enter a valid mobile number';
+    }
+    return null;
+  }
 }

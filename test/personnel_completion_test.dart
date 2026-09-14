@@ -10,6 +10,8 @@ import 'package:idcard_flutter/models/bulk_photo_import.dart';
 import 'package:idcard_flutter/models/card_template.dart';
 import 'package:idcard_flutter/models/design_bindings.dart';
 import 'package:idcard_flutter/models/personnel_grid.dart';
+import 'package:idcard_flutter/models/student_field.dart';
+import 'package:idcard_flutter/screens/personnel_form_screen.dart';
 import 'package:idcard_flutter/screens/personnel_grid_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 
@@ -328,6 +330,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.saved.single.systemFields['full_name'], 'Asha Sharma');
   });
+
+  for (final personnelType in PersonnelType.values) {
+    testWidgets(
+      '${personnelType.apiValue} form rejects an invalid mobile number',
+      (tester) async {
+        final api = _PersonnelFormApi();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: PersonnelFormScreen(
+              schoolUuid: 'school-1',
+              api: api,
+              personnelType: personnelType,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final employeeNumber = find.byKey(
+          const Key('personnel-employee-number'),
+        );
+        final fullName = find.byKey(const Key('personnel-full-name'));
+        final mobile = find.byKey(const Key('personnel-mobile'));
+
+        await tester.enterText(employeeNumber, 'EMP-1');
+        await tester.enterText(fullName, 'Asha Singh');
+        await tester.enterText(mobile, '12abc');
+        final save = find.byKey(const Key('personnel-save'));
+        tester.widget<FilledButton>(save).onPressed!();
+        await tester.pump();
+
+        expect(find.text('Enter a valid mobile number'), findsOneWidget);
+        expect(api.createdMobiles, isEmpty);
+
+        await tester.enterText(mobile, '+91 98765-43210');
+        tester.widget<FilledButton>(save).onPressed!();
+        await tester.pumpAndSettle();
+        expect(api.createdMobiles, ['+91 98765-43210']);
+      },
+    );
+  }
 }
 
 class _GridApi extends ApiService {
@@ -352,5 +394,46 @@ class _GridApi extends ApiService {
   }) async {
     saved.addAll(rows);
     return const PersonnelGridPatchResult(updatedCount: 1, rows: []);
+  }
+}
+
+class _PersonnelFormApi extends ApiService {
+  final createdMobiles = <String?>[];
+
+  @override
+  Future<List<StudentFieldDefinition>> getPersonnelFields({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    bool includeInactive = false,
+  }) async => const [];
+
+  @override
+  Future<ApiPersonnel> createPersonnel({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    required String employeeNo,
+    required String fullName,
+    String? designation,
+    String? department,
+    DateTime? dob,
+    String? gender,
+    String? bloodGroup,
+    String? mobile,
+    String? email,
+    String? address,
+    List<StudentCustomFieldValue> customFields = const [],
+  }) async {
+    createdMobiles.add(mobile);
+    final now = DateTime.utc(2026, 9, 14).toIso8601String();
+    return ApiPersonnel.fromJson({
+      'uuid': 'person-1',
+      'personnel_type': personnelType.apiValue,
+      'employee_no': employeeNo,
+      'full_name': fullName,
+      'mobile': mobile,
+      'is_active': true,
+      'created_at': now,
+      'updated_at': now,
+    });
   }
 }
