@@ -13,6 +13,7 @@ import 'package:idcard_flutter/models/personnel_grid.dart';
 import 'package:idcard_flutter/models/student_field.dart';
 import 'package:idcard_flutter/screens/personnel_form_screen.dart';
 import 'package:idcard_flutter/screens/personnel_grid_screen.dart';
+import 'package:idcard_flutter/screens/personnel_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 
 Map<String, dynamic> _gridJson() => {
@@ -331,6 +332,39 @@ void main() {
     expect(api.saved.single.systemFields['full_name'], 'Asha Sharma');
   });
 
+  testWidgets('personnel print basket is cleared when its scope changes', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = _PersonnelListApi();
+    Widget screen(PersonnelType type) => MaterialApp(
+      home: PersonnelScreen(
+        schoolUuid: 'school-1',
+        schoolName: 'Campus School',
+        api: api,
+        personnelType: type,
+        canEdit: false,
+        canDelete: false,
+        canVerify: false,
+        canViewHistory: false,
+        canMarkPrinted: true,
+      ),
+    );
+
+    await tester.pumpWidget(screen(PersonnelType.teacher));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('personnel-add-to-print-basket')));
+    await tester.pump();
+    expect(find.text('Print Basket (1)'), findsOneWidget);
+
+    await tester.pumpWidget(screen(PersonnelType.staff));
+    await tester.pumpAndSettle();
+    expect(find.text('Print Basket (0)'), findsOneWidget);
+  });
+
   for (final personnelType in PersonnelType.values) {
     testWidgets(
       '${personnelType.apiValue} form rejects an invalid mobile number',
@@ -394,6 +428,41 @@ class _GridApi extends ApiService {
   }) async {
     saved.addAll(rows);
     return const PersonnelGridPatchResult(updatedCount: 1, rows: []);
+  }
+}
+
+class _PersonnelListApi extends ApiService {
+  @override
+  Future<ApiPersonnelPage> getPersonnel({
+    required String schoolUuid,
+    required PersonnelType personnelType,
+    int limit = 100,
+    int offset = 0,
+    String? search,
+    String? verificationStatus,
+    bool? printed,
+  }) async {
+    final type = personnelType.apiValue;
+    final now = DateTime.utc(2026, 9, 14).toIso8601String();
+    return ApiPersonnelPage.fromJson({
+      'items': [
+        {
+          'uuid': '$type-person-1',
+          'personnel_type': type,
+          'employee_no': type == 'teacher' ? 'T-1' : 'S-1',
+          'full_name': type == 'teacher' ? 'Asha Singh' : 'Mira Das',
+          'verification_status': 'verified',
+          'lifecycle_status': 'ready_for_print',
+          'is_active': true,
+          'created_at': now,
+          'updated_at': now,
+        },
+      ],
+      'total': 1,
+      'offset': 0,
+      'limit': 500,
+      'has_more': false,
+    });
   }
 }
 

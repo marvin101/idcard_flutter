@@ -64,6 +64,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
     if (oldWidget.personnelType != widget.personnelType ||
         oldWidget.schoolUuid != widget.schoolUuid) {
       _selected.clear();
+      _printBasket.clear();
       _load();
     }
   }
@@ -693,6 +694,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
   }) => SizedBox(
     width: 190,
     child: DropdownButtonFormField<T>(
+      isExpanded: true,
       initialValue: value,
       decoration: InputDecoration(
         labelText: label,
@@ -700,8 +702,10 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
       ),
       items: items.entries
           .map(
-            (entry) =>
-                DropdownMenuItem<T>(value: entry.key, child: Text(entry.value)),
+            (entry) => DropdownMenuItem<T>(
+              value: entry.key,
+              child: Text(entry.value, overflow: TextOverflow.ellipsis),
+            ),
           )
           .toList(),
       onChanged: onChanged,

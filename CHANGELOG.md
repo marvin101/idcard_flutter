@@ -8,6 +8,10 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-14
+
+### Added
+
 - Added first-class teacher/staff card data resolution, personnel-safe Designer
   and machine-readable bindings, type-partitioned personnel Print Baskets and
   individual/bulk PDF export, plus typed custom fields and audited photo flows.
@@ -22,6 +26,17 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 - Personnel Designer previews and machine-readable multi-field payloads now
   suppress student-only academic/identity bindings and offer type-appropriate
   employee fields and custom fields.
+
+### Security
+
+- Preserved backend-authorized school boundaries throughout Teacher/Staff CRUD,
+  lifecycle, audit, import, grid, photo, card, and export workflows.
+
+### Deferred
+
+- Personnel signed/public credentials are not part of 0.10.0 and require a
+  purpose-separated credential and disclosure design.
+- Student signed/public credentials remain unchanged in this release.
 
 ## [0.9.0] - 2026-09-11
 

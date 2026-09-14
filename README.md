@@ -2,13 +2,13 @@
 
 ## Current release
 
-**CampusID v0.9.0** is the print-production, barcode, and signed-credential release. The Flutter package version is `0.9.0+9`, where `+9` is the platform build number.
+**CampusID v0.10.0** is the Teacher/Staff personnel workflow release. The Flutter package version is `0.10.0+10`, where `+10` is the platform build number.
 
-CampusID remains pre-1.0 while identity, collaboration, and Designer-fidelity work continues. Version 0.9.0 adds two-sided cards, Print Basket, A4/Letter imposition, duplex and calibrated PDF production, supported barcode formats, and signed time-bounded student verification.
+CampusID remains pre-1.0 while credential, collaboration, and Designer-fidelity work continues. Version 0.10.0 adds first-class Teacher/Staff management, lifecycle and audit views, typed custom fields, photos, Excel import, bulk-photo import, Excel Grid, personnel-safe Designer/QR/barcode bindings, card previews, PDF export, and type-partitioned Print Baskets. Personnel signed/public credentials remain deferred; student signed credentials are unchanged.
 
 ## Overview
 
-This repository contains the CampusID Flutter client, with Flutter Web deployed to Vercel. It provides the authenticated school-management, student, card-design, and PDF user interface plus anonymous Public Form, design-preview, and student-verification routes.
+This repository contains the CampusID Flutter client, with Flutter Web deployed to Vercel. It provides the authenticated school-management, student, personnel, card-design, and PDF user interface plus anonymous Public Form, design-preview, and student-verification routes.
 
 The Flutter application never connects directly to PostgreSQL and is not the security boundary. All protected data and authorization decisions flow through the FastAPI backend.
 
@@ -27,8 +27,9 @@ FastAPI API
        |                         |
        v                         v
 Supabase PostgreSQL       Supabase Storage
-schools, users, students,  school logos, student photos,
-forms, templates, audits   and temporary bulk-photo objects
+schools, users, students,  school logos, student/personnel photos,
+personnel, templates,      and temporary bulk-photo objects
+forms, audits
 ```
 
 ## Current capabilities
@@ -38,9 +39,12 @@ forms, templates, audits   and temporary bulk-photo objects
 - School profile and logo viewing/administration
 - Academic session, class, and section workflows
 - Student search, filtering, creation, editing, photos, and administrator deletion
+- Teacher/Staff search, CRUD, lifecycle, audit history, photos, cards, and exports
 - Dynamic school-scoped student fields
+- Typed, school/type-scoped personnel custom fields
 - Excel template download, upload, preview, validation feedback, and confirmed student import
 - Bulk student-photo selection, upload, matching preview, progress, and commit
+- Teacher/Staff Excel import, bulk-photo import, and Excel Grid workflows
 - Pending / Needs Correction / Verified lifecycle UI, audit history, and individual/batch printed/reprint actions
 - Public Form administration plus a branded anonymous submission route with configured fields and photo policy
 - Excel Grid filters, bounded paging, inline edits, custom fields, academic dropdowns, dirty-state tracking, conflict handling, and structured cell errors
@@ -52,6 +56,8 @@ forms, templates, audits   and temporary bulk-photo objects
 - Signed, expiring, and revocable QR-based student verification with school-scoped disclosure and an anonymous `/verify/<token>` page
 - Code 128, Code 39, EAN-13, and Data Matrix barcode elements with fixed,
   single-field, custom-field, or scoped multi-field payloads
+- Personnel-safe Designer previews and QR/barcode binding selection that omit
+  student-only academic, identity, and verification fields
 - Clean web paths through `usePathUrlStrategy()` and Vercel SPA rewrites
 
 PDFs are assembled in the Flutter client from data authorized and returned by the backend.
@@ -112,9 +118,9 @@ Concurrent template saves use `updated_at` as an optimistic-concurrency token an
 
 | Role | Current UI access |
 | --- | --- |
-| Platform Admin | All active schools, users/assignments, school and academic setup, student/lifecycle/import/grid workflows, Public Forms, public-verification controls, Card Designer, cards, and printing |
-| School Admin | Assigned school(s); school and academic setup, ordinary Teacher/Staff assignments, student/lifecycle/import/grid workflows, Public Forms, public-verification controls, Card Designer, cards, and printing |
-| Card Operator | Assigned school(s); read-only school profile, students, imports, Excel Grid, cards, photos, and printing |
+| Platform Admin | All active schools, users/assignments, school and academic setup, student and personnel lifecycle/import/grid workflows, Public Forms, public-verification controls, Card Designer, cards, and printing |
+| School Admin | Assigned school(s); school and academic setup, ordinary Teacher/Staff assignments, student and personnel lifecycle/import/grid workflows, Public Forms, public-verification controls, Card Designer, cards, and printing |
+| Card Operator | Assigned school(s); read-only school profile, students, personnel, imports, Excel Grids, cards, photos, and printing |
 | Teacher / Staff | Assigned-school read access to school profile and academic structures; no current student/card workflow |
 
 Legacy `admin` assignments are treated as School Admin in the permission helpers. Inactive, revoked, pending, or unassigned access must not be treated as active school access.
@@ -134,6 +140,10 @@ Representative routes:
 | `/students/grid` | Excel Grid |
 | `/students/add` | Add student |
 | `/students/fields` | Dynamic student-field administration |
+| `/teachers` and `/staff` | Type-scoped personnel management, lifecycle, cards, and Print Basket |
+| `/teachers/import` and `/staff/import` | Personnel Excel import |
+| `/teachers/bulk-photos` and `/staff/bulk-photos` | Personnel bulk-photo import |
+| `/teachers/grid` and `/staff/grid` | Personnel Excel Grid |
 | `/public-forms` | Authenticated Public Form management |
 | `/public/forms/<token>` | Anonymous branded student submission |
 | `/public/designs/<token>` | Anonymous read-only saved-design preview with sample student data |
@@ -252,7 +262,7 @@ Copying `vercel.json` into `build/web` ensures the deployed static directory con
 
 Current production alias: `https://idcard-flutter-web.vercel.app`
 
-After deployment, verify direct navigation and browser refresh on protected and public clean paths, including `/verify/<token>`. Then smoke-test sign-in, school switching, role-specific navigation, students/photos, lifecycle, Public Forms, grid saves, Card Designer, verification disclosure/revocation, and PDFs.
+After deployment, verify direct navigation and browser refresh on protected and public clean paths, including `/verify/<token>`. Then smoke-test sign-in, school switching, role-specific navigation, student and Teacher/Staff CRUD/photos/lifecycle, personnel imports and grids, Public Forms, Card Designer, student verification disclosure/revocation, and PDFs.
 
 Deploy the backend migration and API before publishing this Flutter build. Render must set `PUBLIC_APP_URL=https://idcard-flutter-web.vercel.app` (or the approved canonical alias), otherwise generated student QR links will point at the wrong frontend origin.
 
@@ -260,15 +270,16 @@ Deploy the backend migration and API before publishing this Flutter build. Rende
 
 CampusID follows Semantic Versioning: `MAJOR.MINOR.PATCH`. Backend and Flutter currently share one product version. `pubspec.yaml` adds Flutter's platform build number after `+`.
 
-The current Flutter value is `0.9.0+9`: product release `0.9.0`, build number `9`. The 0.6.x milestone represented Public Forms, 0.7.0 added the Excel Grid, 0.8.0 delivered Designer v2 and flexible QR payloads, and 0.9.0 adds production printing, supported barcode formats, two-sided cards, and signed time-bounded credentials. Pre-1.0 minor releases may still introduce substantial product changes.
+The current Flutter value is `0.10.0+10`: product release `0.10.0`, build number `10`. Version 0.9.0 added production printing, supported barcode formats, two-sided cards, and signed time-bounded student credentials; 0.10.0 completes the first-class Teacher/Staff management, import, grid, photo, Designer, card, PDF, and Print Basket experience. Pre-1.0 minor releases may still introduce substantial product changes.
 
 ## Roadmap
 
-- Designer v2 remaining fidelity and contract hardening
-- Teacher and non-teaching staff workflows
-- School collaboration
+- Personnel signed/public credentials with purpose-separated disclosure policy
+- Collaboration and review workflows
 - Photo Studio
+- Designer fidelity polish
 - White-label and lanyard workflows
+- Security, performance, and UX hardening toward 1.0
 - AI OCR (deferred)
 
 ## Related service
