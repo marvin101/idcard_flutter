@@ -7,7 +7,7 @@ tokens, capability URLs, or secrets.
 
 ## Candidate validation
 
-- [ ] Backend reports `0.9.0`, Flutter reports `0.9.0+9`, and both changelogs contain the dated `0.9.0` release notes.
+- [ ] Backend reports `0.10.0`, Flutter reports `0.10.0+10`, and both changelogs contain the dated `0.10.0` release notes.
 - [ ] `flutter pub get`, `flutter analyze`, and `flutter test` pass.
 - [ ] A production build succeeds with the approved API origin:
 
@@ -20,7 +20,7 @@ tokens, capability URLs, or secrets.
 
 ## Backend dependency
 
-- [ ] Backend revision `c6d2e9f4a731` is reviewed and applied before this Flutter build is deployed.
+- [ ] Backend revision `d7e4a10b9c82` is reviewed and applied before this Flutter build is deployed.
 - [ ] Render sets `PUBLIC_APP_URL` to the exact canonical Vercel HTTPS origin.
 - [ ] Render includes the approved public-verification rate limit and production CORS origin.
 - [ ] Backend health and database-readiness checks pass after deployment.
