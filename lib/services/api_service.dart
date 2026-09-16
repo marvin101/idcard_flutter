@@ -1,3 +1,4 @@
+import 'session_http_client.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:convert';
@@ -139,15 +140,16 @@ class ApiStudentPage {
 
 class ApiService {
   ApiService({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      baseUrl =
+    : baseUrl =
           baseUrl ??
           const String.fromEnvironment(
             'API_BASE_URL',
             defaultValue: 'http://127.0.0.1:8000',
-          );
+          ) {
+    _client = SessionHttpClient(client ?? http.Client(), this.baseUrl);
+  }
 
-  final http.Client _client;
+  late final SessionHttpClient _client;
   final String baseUrl;
 
   Future<PublicFormConfig?> getPublicFormConfig(String schoolUuid) async {
@@ -347,12 +349,35 @@ class ApiService {
 
   void setToken(String? token) {
     _token = token;
+    _client.setTokens(token, null);
     if (token != null) _sessionInvalidationReported = false;
   }
 
+  void setRefreshToken(String? refresh) => _client.setTokens(_token, refresh);
+
   void setSessionInvalidatedCallback(void Function()? callback) {
     _onSessionInvalidated = callback;
+    _client.onInvalidated = () {
+      if (!_sessionInvalidationReported) {
+        _sessionInvalidationReported = true;
+        _token = null;
+        _onSessionInvalidated?.call();
+      }
+    };
   }
+
+  void setTokensRefreshedCallback(
+    Future<void> Function(String, String) callback, {
+    void Function()? onRefreshed,
+  }) {
+    _client.onTokens = (access, refresh) async {
+      _token = access;
+      await callback(access, refresh);
+    };
+    _client.onRefreshed = onRefreshed;
+  }
+
+  Future<void> revokeSession() => _client.revoke();
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
@@ -360,6 +385,70 @@ class ApiService {
   };
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
+
+  Future<List<dynamic>> getAdminSchools() async => _decodeList(
+    await _client.get(
+      _uri('/schools?include_inactive=true'),
+      headers: _headers,
+    ),
+  );
+  Future<Map<String, dynamic>> createSchool(String code, String name) async =>
+      _decodeMap(
+        await _client.post(
+          _uri('/schools'),
+          headers: _headers,
+          body: jsonEncode({'school_code': code, 'school_name': name}),
+        ),
+      );
+  Future<Map<String, dynamic>> setSchoolActivation(
+    String uuid,
+    bool active,
+  ) async => _decodeMap(
+    await _client.patch(
+      _uri('/schools/$uuid/activation'),
+      headers: _headers,
+      body: jsonEncode({'is_active': active}),
+    ),
+  );
+  Future<SchoolProfile> removeSchoolLogo(String uuid) async =>
+      SchoolProfile.fromJson(
+        _decodeMap(
+          await _client.delete(_uri('/schools/$uuid/logo'), headers: _headers),
+        ),
+      );
+  Future<List<dynamic>> getAccounts({
+    int offset = 0,
+    String search = '',
+  }) async => _decodeList(
+    await _client.get(
+      _uri('/users').replace(
+        queryParameters: {
+          'offset': '$offset',
+          'limit': '100',
+          'search': search,
+        },
+      ),
+      headers: _headers,
+    ),
+  );
+  Future<Map<String, dynamic>> createAccount(Map<String, dynamic> data) async =>
+      _decodeMap(
+        await _client.post(
+          _uri('/users/accounts'),
+          headers: _headers,
+          body: jsonEncode(data),
+        ),
+      );
+  Future<Map<String, dynamic>> updateAccount(
+    String uuid,
+    Map<String, dynamic> data,
+  ) async => _decodeMap(
+    await _client.patch(
+      _uri('/users/$uuid/account'),
+      headers: _headers,
+      body: jsonEncode(data),
+    ),
+  );
 
   Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await _client.post(
@@ -1779,13 +1868,6 @@ class ApiService {
   }
 
   ApiException _apiException(http.Response response) {
-    if (response.statusCode == 401 &&
-        _token != null &&
-        !_sessionInvalidationReported) {
-      _sessionInvalidationReported = true;
-      _onSessionInvalidated?.call();
-    }
-
     String message = 'Request failed (${response.statusCode}).';
     List<StudentGridCellError> gridErrors = const [];
 

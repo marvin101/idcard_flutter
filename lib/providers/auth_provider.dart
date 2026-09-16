@@ -9,6 +9,16 @@ import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({ApiService? api}) : _api = api ?? ApiService() {
+    _api.setTokensRefreshedCallback(
+      (access, refresh) async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(accessTokenPreferenceKey, access);
+        await prefs.setString(refreshTokenPreferenceKey, refresh);
+      },
+      onRefreshed: () {
+        if (_user != null) unawaited(refreshAuthority());
+      },
+    );
     _api.setSessionInvalidatedCallback(() {
       unawaited(invalidateSession());
     });
@@ -17,6 +27,7 @@ class AuthProvider extends ChangeNotifier {
   static const sessionExpiredMessage =
       'Your session has expired. Please sign in again.';
   static const accessTokenPreferenceKey = 'access_token';
+  static const refreshTokenPreferenceKey = 'refresh_token';
   static const selectedSchoolPreferenceKey = 'selected_school_uuid';
   static const lastSelectedSchoolPreferenceKey = 'last_selected_school_uuid';
 
@@ -26,6 +37,7 @@ class AuthProvider extends ChangeNotifier {
   List<SchoolSummary> _schools = const [];
   List<SchoolAccess> _accesses = const [];
   SchoolSummary? _selectedSchool;
+  int _authEpoch = 0;
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -93,6 +105,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _api.setToken(token);
+      _api.setRefreshToken(prefs.getString(refreshTokenPreferenceKey));
       await _loadCurrentUser();
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
@@ -109,6 +122,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> login(String username, String password) async {
+    _authEpoch++;
     _setBusy(true);
     _error = null;
     _sessionMessage = null;
@@ -123,8 +137,15 @@ class AuthProvider extends ChangeNotifier {
         );
       }
 
+      final refresh = result['refresh_token'] as String?;
       _api.setToken(token);
+      _api.setRefreshToken(refresh);
       final prefs = await SharedPreferences.getInstance();
+      if (refresh != null) {
+        await prefs.setString(refreshTokenPreferenceKey, refresh);
+      } else {
+        await prefs.remove(refreshTokenPreferenceKey);
+      }
       await prefs.setString(accessTokenPreferenceKey, token);
       await _loadCurrentUser();
     } on ApiException catch (e) {
@@ -135,30 +156,49 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  bool _refreshingAuthority = false;
+  Future<void> refreshAuthority() async {
+    if (_refreshingAuthority || _user == null) return;
+    _refreshingAuthority = true;
+    try {
+      await _loadCurrentUser();
+    } on ApiException catch (e) {
+      if (e.statusCode == 401 || e.statusCode == 403) await invalidateSession();
+    } catch (_) {
+      /* Keep local state during transient network failures. */
+    } finally {
+      _refreshingAuthority = false;
+    }
+  }
+
   Future<void> _loadCurrentUser() async {
+    final epoch = _authEpoch;
     final userJson = await _api.getMe();
-    _user = AuthUser.fromJson(userJson);
+    if (epoch != _authEpoch) return;
+    final user = AuthUser.fromJson(userJson);
 
     late final List<dynamic> schoolJson;
     late final List<dynamic> accessJson;
-    if (_user!.isPlatformAdministrator) {
+    if (user.isPlatformAdministrator) {
       schoolJson = await _api.getSchools();
       accessJson = const [];
     } else {
       final results = await Future.wait<List<dynamic>>([
         _api.getSchools(),
-        _api.getUserSchools(_user!.uuid),
+        _api.getUserSchools(user.uuid),
       ]);
       schoolJson = results[0];
       accessJson = results[1];
     }
 
+    if (epoch != _authEpoch) return;
+    _user = user;
     _schools = schoolJson
         .whereType<Map<String, dynamic>>()
         .map(SchoolSummary.fromJson)
         .toList();
 
-    if (_user!.isPlatformAdministrator) {
+    if (user.isPlatformAdministrator) {
       _accesses = const [];
     } else {
       _accesses = accessJson
@@ -167,12 +207,14 @@ class AuthProvider extends ChangeNotifier {
           .toList();
     }
 
-    await _restoreSchoolSelection();
+    await _restoreSchoolSelection(epoch: epoch);
+    if (epoch != _authEpoch) return;
     notifyListeners();
   }
 
-  Future<void> _restoreSchoolSelection() async {
+  Future<void> _restoreSchoolSelection({int? epoch}) async {
     final prefs = await SharedPreferences.getInstance();
+    if (epoch != null && epoch != _authEpoch) return;
     final activeSaved = prefs.getString(selectedSchoolPreferenceKey);
     final lastSaved = prefs.getString(lastSelectedSchoolPreferenceKey);
     final saved = activeSaved ?? lastSaved;
@@ -241,7 +283,15 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout({bool notify = true}) async {
     _sessionMessage = null;
     _sessionInvalidationFuture = null;
+    final revocation = _api.revokeSession();
     await _clearSession(notify: notify);
+    final logoutEpoch = _authEpoch;
+    await revocation;
+    if (logoutEpoch == _authEpoch) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(accessTokenPreferenceKey);
+      await prefs.remove(refreshTokenPreferenceKey);
+    }
   }
 
   Future<void> invalidateSession({bool notify = true}) {
@@ -252,6 +302,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearSession({bool notify = true, String? message}) async {
+    _authEpoch++;
     final lastSelectedSchoolUuid = _selectedSchool?.uuid;
     _api.setToken(null);
     _user = null;
@@ -267,6 +318,7 @@ class AuthProvider extends ChangeNotifier {
       );
     }
     await prefs.remove(accessTokenPreferenceKey);
+    await prefs.remove(refreshTokenPreferenceKey);
     await prefs.remove(selectedSchoolPreferenceKey);
     if (notify) notifyListeners();
   }

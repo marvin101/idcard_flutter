@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app_routes.dart';
@@ -43,6 +44,16 @@ class _StudentsScreenState extends State<StudentsScreen> {
   String? _error;
   List<ApiStudent> _students = [];
   String _search = '';
+  Timer? _searchTimer;
+  int _request = 0, _offset = 0, _total = 0;
+  bool _hasMore = false;
+
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _request++;
+    super.dispose();
+  }
 
   List<AcademicSession> _sessions = [];
   List<SchoolClass> _classes = [];
@@ -109,14 +120,18 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
-  Future<void> _loadStudents() async {
+  Future<void> _loadStudents({int offset = 0}) async {
+    final request = ++_request;
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final students = await widget.api.getStudents(
+      final page = await widget.api.getStudentsPage(
+        offset: offset,
+        limit: 100,
+        search: _search,
         schoolUuid: widget.schoolUuid,
         sessionUuid: _selectedSessionUuid,
         classUuid: _selectedClassUuid,
@@ -125,24 +140,28 @@ class _StudentsScreenState extends State<StudentsScreen> {
         printed: _printed,
       );
 
-      if (!mounted) return;
+      if (!mounted || request != _request) return;
+      final students = page.items;
 
       setState(() {
         _students = students;
+        _offset = offset;
+        _total = page.total;
+        _hasMore = page.hasMore;
         _selectedStudentUuids.removeWhere(
           (uuid) => !students.any((student) => student.uuid == uuid),
         );
         _loading = false;
       });
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted || request != _request) return;
 
       setState(() {
         _error = e.message;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || request != _request) return;
 
       setState(() {
         _error = e.toString();
@@ -458,6 +477,26 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     _buildHeader(),
                     const SizedBox(height: 20),
                     Expanded(child: _buildContent(students)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TextButton(
+                          key: const Key('students-previous-page'),
+                          onPressed: _loading || _offset == 0
+                              ? null
+                              : () => _loadStudents(offset: _offset - 100),
+                          child: const Text('Previous'),
+                        ),
+                        Text('$_total students · Page ${_offset ~/ 100 + 1}'),
+                        TextButton(
+                          key: const Key('students-next-page'),
+                          onPressed: _loading || !_hasMore
+                              ? null
+                              : () => _loadStudents(offset: _offset + 100),
+                          child: const Text('Next'),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -496,6 +535,11 @@ class _StudentsScreenState extends State<StudentsScreen> {
                   setState(() {
                     _search = value;
                   });
+                  _searchTimer?.cancel();
+                  _searchTimer = Timer(
+                    const Duration(milliseconds: 300),
+                    () => _loadStudents(),
+                  );
                 },
               ),
             ),

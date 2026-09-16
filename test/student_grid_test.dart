@@ -137,6 +137,37 @@ class _GridApi extends ApiService {
   Future<List<SchoolClass>> getClasses(String schoolUuid) async => const [];
 
   @override
+  Future<ApiStudentPage> getStudentsPage({
+    required String schoolUuid,
+    int limit = 100,
+    int offset = 0,
+    String? search,
+    String? sessionUuid,
+    String? classUuid,
+    String? sectionUuid,
+    DateTime? createdFrom,
+    DateTime? createdTo,
+    String? verificationStatus,
+    bool? printed,
+  }) async {
+    final items = await getStudents(
+      schoolUuid: schoolUuid,
+      sessionUuid: sessionUuid,
+      classUuid: classUuid,
+      sectionUuid: sectionUuid,
+      verificationStatus: verificationStatus,
+      printed: printed,
+    );
+    return ApiStudentPage(
+      items: items,
+      total: items.length,
+      offset: offset,
+      limit: limit,
+      hasMore: false,
+    );
+  }
+
+  @override
   Future<List<ApiStudent>> getStudents({
     required String schoolUuid,
     String? admissionNo,

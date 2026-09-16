@@ -105,6 +105,31 @@ class _SchoolProfileScreenState extends State<SchoolProfileScreen> {
     }
   }
 
+  Future<void> _removeLogo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove school logo?'),
+        content: const Text(
+          'The saved logo will be detached from this school.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && await _provider.removeLogo() && mounted) {
+      widget.onSaved?.call(_provider.profile!);
+    }
+  }
+
   Future<void> _save() async {
     final current = _provider.profile;
     if (current == null || !(_formKey.currentState?.validate() ?? false)) {
@@ -157,6 +182,7 @@ class _SchoolProfileScreenState extends State<SchoolProfileScreen> {
                         canEdit: widget.canEdit,
                         busy: _provider.saving,
                         onPickLogo: _pickLogo,
+                        onRemoveLogo: _removeLogo,
                       ),
                       if (_provider.error != null) ...[
                         const SizedBox(height: 16),
@@ -348,6 +374,7 @@ class _ProfileHeader extends StatelessWidget {
     required this.canEdit,
     required this.busy,
     required this.onPickLogo,
+    required this.onRemoveLogo,
   });
 
   final SchoolProfile profile;
@@ -355,6 +382,7 @@ class _ProfileHeader extends StatelessWidget {
   final bool canEdit;
   final bool busy;
   final VoidCallback onPickLogo;
+  final VoidCallback onRemoveLogo;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -412,6 +440,12 @@ class _ProfileHeader extends StatelessWidget {
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
                 if (canEdit) ...[
+                  if (profile.logoPath != null)
+                    TextButton(
+                      key: const Key('remove-school-logo'),
+                      onPressed: busy ? null : onRemoveLogo,
+                      child: const Text('Remove logo'),
+                    ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     key: const Key('choose-school-logo'),

@@ -1,3 +1,4 @@
+import 'screens/platform_administration_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -184,6 +185,13 @@ class _AuthenticatedRoute extends StatelessWidget {
       return const AuthenticatedShell(child: DashboardScreen());
     }
 
+    if (routeName == AppRoutes.administration) {
+      return AuthenticatedShell(
+        child: PlatformAdministrationScreen(
+          api: context.read<AuthProvider>().api,
+        ),
+      );
+    }
     final school = authState.selectedSchool;
     if (school == null) {
       return const _AuthenticatedRootRedirect();

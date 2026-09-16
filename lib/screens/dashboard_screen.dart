@@ -85,6 +85,19 @@ class DashboardScreen extends StatelessWidget {
                     access: access,
                   ),
                   const SizedBox(height: 24),
+                  if (auth.isPlatformAdmin)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: FilledButton.icon(
+                        key: const Key('platform-administration'),
+                        onPressed: () => AppNavigation.navigateToModule(
+                          context,
+                          AppRoutes.administration,
+                        ),
+                        icon: const Icon(Icons.admin_panel_settings),
+                        label: const Text('Manage schools and accounts'),
+                      ),
+                    ),
                   _ModuleGrid(auth: auth),
                 ],
               ),

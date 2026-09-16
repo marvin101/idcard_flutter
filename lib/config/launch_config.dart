@@ -1,6 +1,18 @@
 abstract final class LaunchConfig {
-  // Launch placeholder: replace this value once the real support destination
-  // has been approved. Keep the notice visible until that replacement happens.
-  static const supportEmail = 'support@example.com';
-  static const supportEmailNotice = '[Replace before launch]';
+  static const organizationName = String.fromEnvironment(
+    'ORGANIZATION_NAME',
+    defaultValue: 'CampusID',
+  );
+  // Keep drafts visible until the operator supplies approved launch content.
+  static const supportEmail = String.fromEnvironment(
+    'SUPPORT_EMAIL',
+    defaultValue: 'campusid@proton.me',
+  );
+  static const supportConfigured =
+      supportEmail != '';
+  static const supportEmailNotice = supportConfigured
+      ? ''
+      : '[Replace before launch]';
+  static const privacyNotice = String.fromEnvironment('PRIVACY_NOTICE');
+  static const termsNotice = String.fromEnvironment('TERMS_NOTICE');
 }

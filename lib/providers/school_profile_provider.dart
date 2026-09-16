@@ -66,6 +66,28 @@ class SchoolProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> removeLogo() async {
+    if (!canEdit || saving) return false;
+    saving = true;
+    error = null;
+    notifyListeners();
+    try {
+      profile = await api.removeSchoolLogo(schoolUuid);
+      selectedLogo = null;
+      selectedLogoBytes = null;
+      return true;
+    } on ApiException catch (e) {
+      error = e.message;
+      return false;
+    } catch (_) {
+      error = 'Unable to remove the school logo.';
+      return false;
+    } finally {
+      saving = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> save(SchoolProfile draft) async {
     if (!canEdit) {
       error = 'This school profile is read-only.';
