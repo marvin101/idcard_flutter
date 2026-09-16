@@ -3,16 +3,22 @@ abstract final class LaunchConfig {
     'ORGANIZATION_NAME',
     defaultValue: 'CampusID',
   );
-  // Keep drafts visible until the operator supplies approved launch content.
+
   static const supportEmail = String.fromEnvironment(
     'SUPPORT_EMAIL',
     defaultValue: 'campusid@proton.me',
   );
-  static const supportConfigured =
-      supportEmail != '';
+  static const supportConfigured = supportEmail != '';
   static const supportEmailNotice = supportConfigured
       ? ''
       : '[Replace before launch]';
-  static const privacyNotice = String.fromEnvironment('PRIVACY_NOTICE');
-  static const termsNotice = String.fromEnvironment('TERMS_NOTICE');
+
+  static const operatorName = 'Paul Lakra';
+
+  static const operatorAddress =
+      'P.O. Bijuliya, Ratu, 835222, Ranchi, Jharkhand, India';
+
+  static const jurisdiction = 'Ranchi, Jharkhand, India';
+
+  static const legalEffectiveDate = '16 September 2026';
 }
