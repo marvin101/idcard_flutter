@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../app_routes.dart';
+import '../navigation/app_navigation.dart';
+import '../widgets/campus_home_link.dart';
 import '../theme/app_colors.dart';
 
 class _RegistrationSchool {
@@ -95,7 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_submitting || !_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
     try {
       final result = await widget.api.register(
@@ -172,16 +175,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xff102f55),
         foregroundColor: Colors.white,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/campusid_logo.png',
-              width: 34,
-              height: 34,
-            ),
-            const SizedBox(width: 10),
-            const Text('CampusID'),
-          ],
+        title: CampusHomeLink(
+          child: Row(
+            children: [
+              Image.asset(
+                'assets/images/campusid_logo.png',
+                width: 34,
+                height: 34,
+              ),
+              const SizedBox(width: 10),
+              const Text('CampusID'),
+            ],
+          ),
         ),
       ),
       body: Center(
@@ -228,7 +233,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           (school) => school.uuid == _selectedSchoolUuid,
                         )
                         .name,
-                    onSignIn: () => Navigator.of(context).pop('sign-in'),
+                    onSignIn: () => AppNavigation.navigateToPublicRoute<void>(
+                      context,
+                      AppRoutes.signIn,
+                    ),
                   ),
           ),
         ),
@@ -521,7 +529,12 @@ class _RegistrationForm extends StatelessWidget {
             ),
             const SizedBox(height: 15),
             TextButton(
-              onPressed: submitting ? null : () => Navigator.of(context).pop(),
+              onPressed: submitting
+                  ? null
+                  : () => AppNavigation.navigateToPublicRoute<void>(
+                      context,
+                      AppRoutes.signIn,
+                    ),
               child: const Text('Already registered? Sign in'),
             ),
           ],

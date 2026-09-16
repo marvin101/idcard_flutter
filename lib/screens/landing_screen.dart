@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_routes.dart';
 import '../navigation/app_navigation.dart';
 import '../theme/app_colors.dart';
+import '../widgets/campus_home_link.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -33,12 +34,8 @@ class _LandingScreenState extends State<LandingScreen> {
     AppNavigation.navigateToPublicRoute<void>(context, AppRoutes.signIn);
   }
 
-  Future<void> _openRegistration() async {
-    final result = await AppNavigation.navigateToPublicRoute<String>(
-      context,
-      AppRoutes.register,
-    );
-    if (result == 'sign-in' && mounted) _openSignIn();
+  void _openRegistration() {
+    AppNavigation.navigateToPublicRoute<void>(context, AppRoutes.register);
   }
 
   @override
@@ -1014,21 +1011,23 @@ class _BrandMark extends StatelessWidget {
   final bool light;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const _LogoImage(size: 42),
-      const SizedBox(width: 11),
-      Text(
-        'CampusID',
-        style: TextStyle(
-          color: light ? Colors.white : AppColors.primary,
-          fontSize: 23,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -.5,
+  Widget build(BuildContext context) => CampusHomeLink(
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _LogoImage(size: 42),
+        const SizedBox(width: 11),
+        Text(
+          'CampusID',
+          style: TextStyle(
+            color: light ? Colors.white : AppColors.primary,
+            fontSize: 23,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.5,
+          ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }
 

@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/campus_home_link.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -89,11 +90,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Center(
-                          child: Image.asset(
-                            'assets/images/campusid_logo.png',
-                            width: 76,
-                            height: 76,
-                            fit: BoxFit.contain,
+                          child: CampusHomeLink(
+                            child: Image.asset(
+                              'assets/images/campusid_logo.png',
+                              width: 76,
+                              height: 76,
+                              fit: BoxFit.contain,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -188,6 +191,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                 : const Text('Sign in'),
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: auth.busy
+                              ? null
+                              : () => AppNavigation.navigateToPublicRoute<void>(
+                                  context,
+                                  AppRoutes.register,
+                                ),
+                          child: const Text("Don't have an account? Register"),
                         ),
                         const SizedBox(height: 18),
                         const Text(

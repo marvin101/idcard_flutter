@@ -7,6 +7,7 @@ import '../navigation/app_navigation.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import 'authenticated_shell.dart';
+import 'campus_home_link.dart';
 
 class AuthenticatedAppBar extends StatelessWidget
     implements PreferredSizeWidget {
@@ -57,11 +58,13 @@ class AuthenticatedAppBar extends StatelessWidget
       foregroundColor: Colors.white,
       title: Row(
         children: [
-          Image.asset(
-            'assets/images/campusid_logo.png',
-            width: 32,
-            height: 32,
-            fit: BoxFit.contain,
+          CampusHomeLink(
+            child: Image.asset(
+              'assets/images/campusid_logo.png',
+              width: 32,
+              height: 32,
+              fit: BoxFit.contain,
+            ),
           ),
           const SizedBox(width: 10),
           Flexible(child: title),
