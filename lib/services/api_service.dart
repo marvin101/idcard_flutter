@@ -1639,6 +1639,18 @@ class ApiService {
     _decodeMap(response);
   }
 
+
+  Future<void> removeStudentPhoto({
+    required String schoolUuid,
+    required String studentUuid,
+  }) async {
+    final response = await _client.delete(
+      _uri('/schools/$schoolUuid/students/$studentUuid/photo'),
+      headers: _headers,
+    );
+    _decodeMap(response);
+  }
+
   Future<ApiStudent> updateStudent({
     required String schoolUuid,
     required String studentUuid,

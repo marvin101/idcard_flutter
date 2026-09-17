@@ -65,14 +65,17 @@ class ApiStudentFormProvider extends ChangeNotifier {
   // ----------------------------------------------------------
 
   XFile? _selectedPhoto;
+  bool _removeExistingPhoto = false;
 
   XFile? get selectedPhoto => _selectedPhoto;
+  bool get removeExistingPhoto => _removeExistingPhoto;
 
   /// Existing photo already stored by the backend.
   ///
   /// The backend returns values such as:
   /// /media/students/`student-uuid`/photo.jpg
   String? get existingPhotoUrl {
+    if (_removeExistingPhoto) return null;
     final path = student?.photoPath;
 
     if (path == null || path.trim().isEmpty) {
@@ -96,11 +99,33 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
   void setSelectedPhoto(XFile photo) {
     _selectedPhoto = photo;
+    _removeExistingPhoto = false;
     notifyListeners();
   }
 
   void clearSelectedPhoto() {
     _selectedPhoto = null;
+    notifyListeners();
+  }
+
+  void removePhoto() {
+    _selectedPhoto = null;
+    _removeExistingPhoto =
+        student?.photoPath != null && student!.photoPath!.trim().isNotEmpty;
+    notifyListeners();
+  }
+
+  void removePhoto() {
+    _selectedPhoto = null;
+    _removeExistingPhoto =
+        student?.photoPath != null && student!.photoPath!.trim().isNotEmpty;
+    notifyListeners();
+  }
+
+  void removePhoto() {
+    _selectedPhoto = null;
+    _removeExistingPhoto =
+        student?.photoPath != null && student!.photoPath!.trim().isNotEmpty;
     notifyListeners();
   }
 
@@ -450,6 +475,11 @@ class ApiStudentFormProvider extends ChangeNotifier {
             schoolUuid: schoolUuid,
             studentUuid: student!.uuid,
             photo: _selectedPhoto!,
+          );
+        } else if (_removeExistingPhoto) {
+          await api.removeStudentPhoto(
+            schoolUuid: schoolUuid,
+            studentUuid: student!.uuid,
           );
         }
       }

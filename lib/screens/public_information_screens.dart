@@ -131,7 +131,7 @@ class TermsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const PublicInformationPage(
-    title: 'Terms',
+    title: 'Terms of Service',
     summary:
         'These Terms are governed by the laws of India, subject to applicable mandatory law. Courts having jurisdiction in Ranchi, Jharkhand, India will have jurisdiction over disputes arising from or relating to these Terms, subject to applicable law.',
     sections: [
@@ -147,13 +147,6 @@ class TermsScreen extends StatelessWidget {
         paragraphs: [
           'To the maximum extent permitted by applicable law, CampusID and its operator will not be liable for indirect, incidental, special, consequential, or similar losses arising from unauthorized account use, inaccurate information entered by a school or user, inappropriate issuance of an identity card, third-party infrastructure failure, or use of the service contrary to these Terms.',
           'Nothing in these Terms excludes or limits liability that cannot lawfully be excluded or limited.',
-        ],
-      ),
-      PublicInformationSection(
-        title: 'Status of this draft',
-        paragraphs: [
-          'These terms are a release-readiness draft, not finalized legal advice or a completed customer agreement.',
-          '[Service operator, effective date, and contracting entity: To be confirmed before public launch]',
         ],
       ),
       PublicInformationSection(
@@ -245,7 +238,7 @@ class SupportScreen extends StatelessWidget {
         title: 'When requesting help',
         paragraphs: [
           'Describe what you were trying to do, the school involved, and any error message you saw. Do not send passwords, access tokens, database credentials, or other secrets.',
-          '[Support hours and response targets: To be confirmed before public launch]',
+          'CampusID support is currently provided on a reasonable-efforts basis. Response times may vary depending on the nature and severity of the request.',
         ],
       ),
     ],

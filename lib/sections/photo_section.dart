@@ -54,19 +54,33 @@ class PhotoSection extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: provider.saving
-                        ? null
-                        : () => _selectPhoto(context, provider),
-                    icon: const Icon(Icons.upload_file),
-                    label: Text(
-                      localPhoto != null || existingPhotoUrl != null
-                          ? 'Change Photo'
-                          : 'Upload Photo',
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: provider.saving
+                            ? null
+                            : () => _selectPhoto(context, provider),
+                        icon: const Icon(Icons.upload_file),
+                        label: Text(
+                          localPhoto != null || existingPhotoUrl != null
+                              ? 'Change Photo'
+                              : 'Upload Photo',
+                        ),
+                      ),
                     ),
-                  ),
+                    if (localPhoto != null || existingPhotoUrl != null) ...[
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        key: const Key('remove-student-photo'),
+                        onPressed: provider.saving
+                            ? null
+                            : () => _confirmRemovePhoto(context, provider),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Remove'),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -162,6 +176,34 @@ class PhotoSection extends StatelessWidget {
         ],
       ),
     );
+  }
+
+
+  Future<void> _confirmRemovePhoto(
+    BuildContext context,
+    ApiStudentFormProvider provider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove student photo?'),
+        content: const Text(
+          'The stored photo will be permanently removed when you save the student.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm-remove-student-photo'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) provider.removePhoto();
   }
 
   Future<void> _selectPhoto(
