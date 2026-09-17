@@ -115,20 +115,6 @@ class ApiStudentFormProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void removePhoto() {
-    _selectedPhoto = null;
-    _removeExistingPhoto =
-        student?.photoPath != null && student!.photoPath!.trim().isNotEmpty;
-    notifyListeners();
-  }
-
-  void removePhoto() {
-    _selectedPhoto = null;
-    _removeExistingPhoto =
-        student?.photoPath != null && student!.photoPath!.trim().isNotEmpty;
-    notifyListeners();
-  }
-
   // ----------------------------------------------------------
   // State
   // ----------------------------------------------------------

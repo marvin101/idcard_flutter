@@ -307,7 +307,10 @@ void main() {
   ) async {
     await pumpApp(tester, initialRoute: AppRoutes.students);
 
-    await tester.tap(find.byKey(const Key('top-nav-/students/fields')));
+    await tester.tap(find.byKey(const Key('top-nav-more')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('more-nav-/students/fields')));
     await tester.pumpAndSettle();
     expect(
       ModalRoute.of(
@@ -431,26 +434,32 @@ void main() {
   testWidgets(
     'narrow desktop navigation exposes overflow controls and active module',
     (tester) async {
-      tester.view.physicalSize = const Size(960, 1080);
-      tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await pumpApp(tester, initialRoute: AppRoutes.users);
+      await pumpApp(tester, initialRoute: AppRoutes.cards);
+
+      // pumpApp sets the default test viewport to 1600x1000,
+      // so apply the narrow viewport after pumping the app.
+      tester.view.physicalSize = const Size(640, 1080);
+      tester.view.devicePixelRatio = 1;
+
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('top-nav-scroll-left')), findsOneWidget);
       expect(find.byKey(const Key('top-nav-scroll-right')), findsOneWidget);
-      expect(
-        find.byKey(const Key('top-nav-/users')).hitTestable(),
-        findsOneWidget,
-      );
+
       expect(
         find.byKey(const Key('top-nav-/cards')).hitTestable(),
         findsOneWidget,
       );
+
+      expect(
+        find.byKey(const Key('top-nav-more')).hitTestable(),
+        findsOneWidget,
+      );
     },
   );
-
   testWidgets('active module is highlighted and selected school survives', (
     tester,
   ) async {
@@ -557,13 +566,22 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, initialRoute: AppRoutes.studentFields);
-    expect(find.text('Student Fields'), findsWidgets);
-    final active = tester.widget<TextButton>(
-      find.byKey(const Key('top-nav-/students/fields')),
-    );
-    expect(active.onPressed, isNull);
-  });
 
+    expect(find.text('Student Fields'), findsWidgets);
+
+    final context = tester.element(find.text('Student Fields').last);
+
+    expect(ModalRoute.of(context)?.settings.name, AppRoutes.studentFields);
+
+    expect(_reportedLocation(context), AppRoutes.studentFields);
+
+    expect(find.byKey(const Key('top-nav-more')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('top-nav-more')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('more-nav-/students/fields')), findsOneWidget);
+  });
   test('Dashboard and Students are the only arrow-free modules', () {
     for (final route in [AppRoutes.dashboard, AppRoutes.students]) {
       expect(AppNavigation.showsLeadingBack(route), isFalse);
@@ -587,10 +605,14 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, initialRoute: AppRoutes.students);
-    final add = find.byKey(const Key('top-nav-/students/add'));
-    await tester.ensureVisible(add);
-    await tester.tap(add);
+
+    final addResult = AppNavigation.navigateToWorkflow<void>(
+      tester.element(find.byType(StudentsScreen)),
+      AppRoutes.addStudent,
+    );
+
     await tester.pumpAndSettle();
+
     expect(find.text('Add student'), findsWidgets);
     expect(find.byType(BackButton), findsOneWidget);
     expect(
@@ -600,6 +622,8 @@ void main() {
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
+    await addResult;
+
     expect(find.byType(StudentsScreen), findsOneWidget);
 
     const student = ApiStudent(
