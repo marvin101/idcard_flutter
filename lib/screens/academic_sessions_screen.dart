@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/academic_session.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
-import '../widgets/app_button.dart';
 import '../widgets/authenticated_app_bar.dart';
 
 class AcademicSessionsScreen extends StatefulWidget {
@@ -26,6 +25,7 @@ class AcademicSessionsScreen extends StatefulWidget {
 
 class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
   List<AcademicSession> _sessions = const [];
+
   bool _loading = true;
   String? _loadError;
   String? _busySessionId;
@@ -45,20 +45,28 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
     try {
       final sessions = await widget.api.getAcademicSessions(widget.schoolUuid);
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _sessions = sessions;
         _loading = false;
       });
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _loading = false;
         _loadError = e.message;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _loading = false;
         _loadError = e.toString();
@@ -69,9 +77,12 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
   Future<void> _addSession() async {
     final result = await showDialog<_SessionFormResult>(
       context: context,
-      builder: (_) => const _SessionFormDialog(),
+      builder: (context) => const _SessionFormDialog(),
     );
-    if (result == null) return;
+
+    if (result == null) {
+      return;
+    }
 
     try {
       await widget.api.createAcademicSession(
@@ -81,22 +92,35 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
         endDate: result.endDate,
         isCurrent: result.isCurrent,
       );
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       _showMessage('Academic session created.');
+
       await _loadSessions();
     } on ApiException catch (e) {
-      if (mounted) _showMessage(e.message, error: true);
+      if (mounted) {
+        _showMessage(e.message, error: true);
+      }
     }
   }
 
   Future<void> _editSession(AcademicSession session) async {
     final result = await showDialog<_SessionFormResult>(
       context: context,
-      builder: (_) => _SessionFormDialog(session: session),
+      builder: (context) => _SessionFormDialog(session: session),
     );
-    if (result == null) return;
 
-    setState(() => _busySessionId = session.uuid);
+    if (result == null) {
+      return;
+    }
+
+    setState(() {
+      _busySessionId = session.uuid;
+    });
+
     try {
       await widget.api.updateAcademicSession(
         schoolUuid: widget.schoolUuid,
@@ -106,19 +130,36 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
         endDate: result.endDate,
         isCurrent: result.isCurrent,
       );
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       _showMessage('Academic session updated.');
+
       await _loadSessions();
     } on ApiException catch (e) {
-      if (mounted) _showMessage(e.message, error: true);
+      if (mounted) {
+        _showMessage(e.message, error: true);
+      }
     } finally {
-      if (mounted) setState(() => _busySessionId = null);
+      if (mounted) {
+        setState(() {
+          _busySessionId = null;
+        });
+      }
     }
   }
 
   Future<void> _setCurrent(AcademicSession session) async {
-    if (session.isCurrent) return;
-    setState(() => _busySessionId = session.uuid);
+    if (session.isCurrent) {
+      return;
+    }
+
+    setState(() {
+      _busySessionId = session.uuid;
+    });
+
     try {
       await widget.api.updateAcademicSession(
         schoolUuid: widget.schoolUuid,
@@ -128,13 +169,24 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
         endDate: session.endDate,
         isCurrent: true,
       );
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       _showMessage('${session.name} is now the current session.');
+
       await _loadSessions();
     } on ApiException catch (e) {
-      if (mounted) _showMessage(e.message, error: true);
+      if (mounted) {
+        _showMessage(e.message, error: true);
+      }
     } finally {
-      if (mounted) setState(() => _busySessionId = null);
+      if (mounted) {
+        setState(() {
+          _busySessionId = null;
+        });
+      }
     }
   }
 
@@ -147,110 +199,210 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
     );
   }
 
+  AcademicSession? get _currentSession {
+    for (final session in _sessions) {
+      if (session.isCurrent) {
+        return session;
+      }
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final current = _sessions.where((session) => session.isCurrent).toList();
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const AuthenticatedAppBar(
-        title: Row(
-          children: [
-            Icon(Icons.calendar_month_outlined),
-            SizedBox(width: 10),
-            Text('Academic Sessions'),
-          ],
-        ),
-      ),
+      appBar: const AuthenticatedAppBar(title: Text('Academic Sessions')),
       body: SafeArea(
         top: false,
         child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: constraints.maxWidth > 900 ? 48 : 20,
-              vertical: 32,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Schools  /  ${widget.schoolName}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Academic sessions',
-                                style: theme.textTheme.headlineMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Create and manage the academic years used by this school.',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (widget.canManage)
-                          SizedBox(
-                            width: 170,
-                            child: AppButton(
-                              text: 'Add session',
-                              icon: Icons.add,
-                              onPressed: _addSession,
-                              height: 46,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _SummaryCard(
-                      total: _sessions.length,
-                      currentName: current.isEmpty ? null : current.first.name,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildContent(),
-                  ],
+          builder: (context, constraints) {
+            final horizontalPadding = constraints.maxWidth > 900 ? 48.0 : 20.0;
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontalPadding,
+                vertical: 28,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildPageHeading(),
+                      const SizedBox(height: 22),
+                      _buildSummary(),
+                      const SizedBox(height: 24),
+                      _buildSectionHeading(),
+                      const SizedBox(height: 14),
+                      _buildContent(),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
+  Widget _buildPageHeading() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 700;
+
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Academic sessions',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Manage the academic years and current session for '
+              '${widget.schoolName}.',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ],
+        );
+
+        final addButton = widget.canManage
+            ? FilledButton.icon(
+                key: const Key('add-academic-session'),
+                onPressed: _addSession,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add session'),
+              )
+            : null;
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              heading,
+              if (addButton != null) ...[
+                const SizedBox(height: 16),
+                Align(alignment: Alignment.centerLeft, child: addButton),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: heading),
+            ?addButton,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSummary() {
+    final current = _currentSession;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+
+        final totalCard = _SummaryMetricCard(
+          icon: Icons.calendar_month_outlined,
+          label: 'Total sessions',
+          value: '${_sessions.length}',
+          accentColor: AppColors.accent,
+          backgroundColor: AppColors.accentSoft,
+        );
+
+        final currentCard = _SummaryMetricCard(
+          icon: Icons.check_circle_outline,
+          label: 'Current session',
+          value: current?.name ?? 'None',
+          accentColor: AppColors.success,
+          backgroundColor: AppColors.successSoft,
+        );
+
+        if (compact) {
+          return Column(
+            children: [totalCard, const SizedBox(height: 12), currentCard],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: totalCard),
+            const SizedBox(width: 14),
+            Expanded(child: currentCard),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionHeading() {
+    return Row(
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sessions',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'Review session dates and choose which academic year is active.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        if (!_loading && _loadError == null && _sessions.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${_sessions.length} ${_sessions.length == 1 ? 'session' : 'sessions'}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildContent() {
     if (_loading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(48),
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const _LoadingState();
     }
 
     if (_loadError != null) {
       return _StateCard(
         icon: Icons.error_outline,
+        iconColor: AppColors.danger,
+        iconBackground: AppColors.dangerSoft,
         title: 'Unable to load academic sessions',
         message: _loadError!,
         action: OutlinedButton.icon(
@@ -264,14 +416,16 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
     if (_sessions.isEmpty) {
       return _StateCard(
         icon: Icons.calendar_today_outlined,
+        iconColor: AppColors.accent,
+        iconBackground: AppColors.accentSoft,
         title: 'No academic sessions yet',
         message: widget.canManage
             ? 'Create the first academic session for this school.'
             : 'No academic sessions have been configured for this school.',
         action: widget.canManage
-            ? OutlinedButton.icon(
+            ? FilledButton.icon(
                 onPressed: _addSession,
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add_rounded),
                 label: const Text('Add session'),
               )
             : null,
@@ -281,90 +435,94 @@ class _AcademicSessionsScreenState extends State<AcademicSessionsScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 900 ? 2 : 1;
+
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            mainAxisExtent: 188,
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
+            mainAxisExtent: 202,
           ),
           itemCount: _sessions.length,
-          itemBuilder: (_, index) => _SessionCard(
-            session: _sessions[index],
-            canManage: widget.canManage,
-            busy: _busySessionId == _sessions[index].uuid,
-            onEdit: () => _editSession(_sessions[index]),
-            onSetCurrent: () => _setCurrent(_sessions[index]),
-          ),
+          itemBuilder: (context, index) {
+            final session = _sessions[index];
+
+            return _SessionCard(
+              session: session,
+              canManage: widget.canManage,
+              busy: _busySessionId == session.uuid,
+              onEdit: () => _editSession(session),
+              onSetCurrent: () => _setCurrent(session),
+            );
+          },
         );
       },
     );
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.total, required this.currentName});
+class _SummaryMetricCard extends StatelessWidget {
+  const _SummaryMetricCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accentColor,
+    required this.backgroundColor,
+  });
 
-  final int total;
-  final String? currentName;
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accentColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xffe4e8f0)),
+        border: Border.all(color: AppColors.border),
       ),
-      child: Wrap(
-        spacing: 36,
-        runSpacing: 20,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Row(
         children: [
-          _Metric(value: '$total', label: 'Total sessions'),
-          _Metric(
-            value: currentName ?? 'None',
-            label: 'Current session',
-            wide: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.value, required this.label, this.wide = false});
-
-  final String value;
-  final String label;
-  final bool wide;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: wide ? 360 : 180),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(13),
             ),
+            child: Icon(icon, color: accentColor, size: 23),
           ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -385,36 +543,81 @@ class _SessionCard extends StatelessWidget {
   final AcademicSession session;
   final bool canManage;
   final bool busy;
+
   final VoidCallback onEdit;
   final VoidCallback onSetCurrent;
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = session.isCurrent
+        ? AppColors.success
+        : AppColors.border;
+
     return Card(
       elevation: 0,
-      color: Colors.white,
+      margin: EdgeInsets.zero,
+      color: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: session.isCurrent ? AppColors.accent : const Color(0xffe4e8f0),
-          width: session.isCurrent ? 1.5 : 1,
+          color: borderColor,
+          width: session.isCurrent ? 1.4 : 1,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: session.isCurrent
+                        ? AppColors.successSoft
+                        : AppColors.accentSoft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    session.isCurrent
+                        ? Icons.check_circle_outline
+                        : Icons.calendar_month_outlined,
+                    color: session.isCurrent
+                        ? AppColors.success
+                        : AppColors.accent,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    session.name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        session.isCurrent
+                            ? 'Active academic session'
+                            : 'Academic session',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 if (session.isCurrent)
@@ -424,34 +627,49 @@ class _SessionCard extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xffe8edff),
+                      color: AppColors.successSoft,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Text(
                       'CURRENT',
                       style: TextStyle(
-                        color: AppColors.accent,
+                        color: AppColors.success,
                         fontSize: 10,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                const Icon(
-                  Icons.date_range_outlined,
-                  size: 18,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _dateRange(session),
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-              ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.date_range_outlined,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _dateRange(session),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const Spacer(),
             if (canManage)
@@ -464,27 +682,24 @@ class _SessionCard extends StatelessWidget {
                       label: const Text('Edit'),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: session.isCurrent
-                        ? const SizedBox.shrink()
-                        : OutlinedButton.icon(
-                            onPressed: busy ? null : onSetCurrent,
-                            icon: busy
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.check_circle_outline,
-                                    size: 18,
-                                  ),
-                            label: const Text('Set current'),
-                          ),
-                  ),
+                  if (!session.isCurrent) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: busy ? null : onSetCurrent,
+                        icon: busy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('Set current'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
           ],
@@ -495,56 +710,130 @@ class _SessionCard extends StatelessWidget {
 
   String _dateRange(AcademicSession session) {
     final start = _formatDate(session.startDate);
+
     final end = _formatDate(session.endDate);
-    if (start == null && end == null) return 'Dates not specified';
-    if (start == null) return 'Until ${end!}';
-    if (end == null) return 'From $start';
-    return '$start  –  $end';
+
+    if (start == null && end == null) {
+      return 'Dates not specified';
+    }
+
+    if (start == null) {
+      return 'Until $end';
+    }
+
+    if (end == null) {
+      return 'From $start';
+    }
+
+    return '$start - $end';
   }
 
   String? _formatDate(DateTime? date) {
-    if (date == null) return null;
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    if (date == null) {
+      return null;
+    }
+
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+  }
+}
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(42),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          SizedBox(height: 14),
+          Text(
+            'Loading academic sessions...',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
   }
 }
 
 class _StateCard extends StatelessWidget {
   const _StateCard({
     required this.icon,
+    required this.iconColor,
+    required this.iconBackground,
     required this.title,
     required this.message,
     this.action,
   });
 
   final IconData icon;
+  final Color iconColor;
+  final Color iconBackground;
+
   final String title;
   final String message;
+
   final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(36),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 38),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xffe4e8f0)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 44, color: AppColors.accent),
-          const SizedBox(height: 14),
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: iconBackground,
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: Icon(icon, size: 29, color: iconColor),
+          ),
+          const SizedBox(height: 16),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textSecondary),
+          const SizedBox(height: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
           ),
           if (action != null) ...[const SizedBox(height: 18), action!],
         ],
@@ -578,9 +867,12 @@ class _SessionFormDialog extends StatefulWidget {
 
 class _SessionFormDialogState extends State<_SessionFormDialog> {
   final _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _nameController;
+
   DateTime? _startDate;
   DateTime? _endDate;
+
   late bool _isCurrent;
 
   bool get _editing => widget.session != null;
@@ -588,10 +880,15 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
   @override
   void initState() {
     super.initState();
+
     final session = widget.session;
+
     _nameController = TextEditingController(text: session?.name ?? '');
+
     _startDate = session?.startDate;
+
     _endDate = session?.endDate;
+
     _isCurrent = session?.isCurrent ?? false;
   }
 
@@ -603,25 +900,41 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
 
   Future<void> _pickStartDate() async {
     final date = await _pickDate(_startDate);
-    if (date == null) return;
-    setState(() => _startDate = date);
+
+    if (date == null) {
+      return;
+    }
+
+    setState(() {
+      _startDate = date;
+    });
   }
 
   Future<void> _pickEndDate() async {
     final date = await _pickDate(_endDate);
-    if (date == null) return;
-    setState(() => _endDate = date);
+
+    if (date == null) {
+      return;
+    }
+
+    setState(() {
+      _endDate = date;
+    });
   }
 
-  Future<DateTime?> _pickDate(DateTime? initial) => showDatePicker(
-    context: context,
-    initialDate: initial ?? DateTime.now(),
-    firstDate: DateTime(2000),
-    lastDate: DateTime(2100),
-  );
+  Future<DateTime?> _pickDate(DateTime? initial) {
+    return showDatePicker(
+      context: context,
+      initialDate: initial ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+  }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     if (_startDate != null &&
         _endDate != null &&
@@ -632,6 +945,7 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
           backgroundColor: AppColors.danger,
         ),
       );
+
       return;
     }
 
@@ -656,19 +970,21 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextFormField(
                   controller: _nameController,
                   maxLength: 30,
                   decoration: const InputDecoration(
                     labelText: 'Session name',
-                    hintText: 'e.g. 2026–27',
+                    hintText: 'e.g. 2026-27',
                     prefixIcon: Icon(Icons.label_outline),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Enter a session name.';
                     }
+
                     return null;
                   },
                 ),
@@ -677,26 +993,50 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
                   label: 'Start date',
                   value: _startDate,
                   onTap: _pickStartDate,
-                  onClear: () => setState(() => _startDate = null),
+                  onClear: () {
+                    setState(() {
+                      _startDate = null;
+                    });
+                  },
                 ),
                 const SizedBox(height: 12),
                 _DateField(
                   label: 'End date',
                   value: _endDate,
                   onTap: _pickEndDate,
-                  onClear: () => setState(() => _endDate = null),
+                  onClear: () {
+                    setState(() {
+                      _endDate = null;
+                    });
+                  },
                 ),
-                const SizedBox(height: 8),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _isCurrent,
-                  onChanged: (value) =>
-                      setState(() => _isCurrent = value ?? false),
-                  title: const Text('Set as current session'),
-                  subtitle: const Text(
-                    'Any other current session for this school will be unset automatically.',
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  controlAffinity: ListTileControlAffinity.leading,
+                  child: CheckboxListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    value: _isCurrent,
+                    onChanged: (value) {
+                      setState(() {
+                        _isCurrent = value ?? false;
+                      });
+                    },
+                    title: const Text(
+                      'Set as current session',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: const Text(
+                      'Any other current session for this school will be unset automatically.',
+                    ),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
                 ),
               ],
             ),
@@ -727,6 +1067,7 @@ class _DateField extends StatelessWidget {
 
   final String label;
   final DateTime? value;
+
   final VoidCallback onTap;
   final VoidCallback onClear;
 
@@ -734,7 +1075,7 @@ class _DateField extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
@@ -759,6 +1100,9 @@ class _DateField extends StatelessWidget {
     );
   }
 
-  String _format(DateTime date) =>
-      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  String _format(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+  }
 }

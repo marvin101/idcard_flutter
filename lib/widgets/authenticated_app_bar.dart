@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_routes.dart';
-import '../navigation/authenticated_modules.dart';
 import '../navigation/app_navigation.dart';
+import '../navigation/authenticated_modules.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import 'authenticated_shell.dart';
@@ -38,7 +38,9 @@ class AuthenticatedAppBar extends StatelessWidget
         leading: leading,
       );
     }
+
     final routeName = ModalRoute.of(context)?.settings.name;
+
     final navigation =
         persistentAuthenticatedNavigationOf(context) ??
         const AuthenticatedNavigationStrip();
@@ -79,10 +81,21 @@ class AuthenticatedAppBar extends StatelessWidget
           tooltip: 'Sign out',
           onPressed: () async {
             final guard = AppNavigationGuard.maybeOf(context);
-            if (guard != null && !await guard.onNavigateAway()) return;
-            if (!context.mounted) return;
+
+            if (guard != null && !await guard.onNavigateAway()) {
+              return;
+            }
+
+            if (!context.mounted) {
+              return;
+            }
+
             await context.read<AuthProvider>().logout();
-            if (!context.mounted) return;
+
+            if (!context.mounted) {
+              return;
+            }
+
             AppNavigation.resetToPublicRoot(context);
           },
           icon: const Icon(Icons.logout_rounded),
@@ -114,17 +127,24 @@ class AuthenticatedNavigationStrip extends StatefulWidget {
 class _AuthenticatedNavigationStripState
     extends State<AuthenticatedNavigationStrip> {
   static const _motionDuration = Duration(milliseconds: 480);
+
   static const _motionCurve = Curves.easeInOutCubic;
+
   static const _navigationBackground = AppColors.navigation;
 
   final ScrollController _scrollController = ScrollController();
+
   final GlobalKey _activeItemKey = GlobalKey();
+
   String? _lastRevealedRoute;
   String? _currentRoute;
   String? _itemSignature;
+
   double? _lastViewportWidth;
+
   bool _refreshScheduled = false;
   bool _revealAfterRefresh = false;
+
   bool _hasOverflow = false;
   bool _canScrollBack = false;
   bool _canScrollForward = false;
@@ -132,6 +152,7 @@ class _AuthenticatedNavigationStripState
   @override
   void initState() {
     super.initState();
+
     _scrollController.addListener(_refreshScrollState);
   }
 
@@ -140,6 +161,7 @@ class _AuthenticatedNavigationStripState
     _scrollController
       ..removeListener(_refreshScrollState)
       ..dispose();
+
     super.dispose();
   }
 
@@ -148,18 +170,24 @@ class _AuthenticatedNavigationStripState
     final authState = context.select<AuthProvider, _NavigationAuthState>(
       _NavigationAuthState.from,
     );
+
     final routeName = ModalRoute.of(context)?.settings.name;
+
     final items = _navigationItems(authState);
+
     final moreItems = _moreNavigationItems(authState);
 
     final itemSignature = [
       ...items,
       ...moreItems,
     ].map((item) => item.route).join('|');
+
     if (_currentRoute != routeName || _itemSignature != itemSignature) {
       _currentRoute = routeName;
       _itemSignature = itemSignature;
+
       _lastRevealedRoute = null;
+
       _scheduleRefresh(revealActive: true);
     }
 
@@ -168,12 +196,14 @@ class _AuthenticatedNavigationStripState
         if (_lastViewportWidth != constraints.maxWidth) {
           _lastViewportWidth = constraints.maxWidth;
 
-          // A resize can move the active navigation item outside the
-          // visible viewport. Allow it to be revealed again.
+          // A resize can move the active item outside
+          // the visible viewport. Allow it to be
+          // revealed again.
           _lastRevealedRoute = null;
 
           _scheduleRefresh(revealActive: true);
         }
+
         return Row(
           children: [
             if (_hasOverflow)
@@ -183,10 +213,7 @@ class _AuthenticatedNavigationStripState
                 tooltip: 'Previous modules',
                 onPressed: _canScrollBack ? () => _scrollBy(-1) : null,
               ),
-            if (moreItems.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              _MoreNavigationButton(items: moreItems, currentRoute: routeName),
-            ],
+
             Expanded(
               child: Stack(
                 children: [
@@ -231,6 +258,7 @@ class _AuthenticatedNavigationStripState
                 ],
               ),
             ),
+
             if (_hasOverflow)
               _NavigationScrollButton(
                 key: const Key('top-nav-scroll-right'),
@@ -238,6 +266,11 @@ class _AuthenticatedNavigationStripState
                 tooltip: 'More modules',
                 onPressed: _canScrollForward ? () => _scrollBy(1) : null,
               ),
+
+            if (moreItems.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              _MoreNavigationButton(items: moreItems, currentRoute: routeName),
+            ],
           ],
         );
       },
@@ -246,14 +279,25 @@ class _AuthenticatedNavigationStripState
 
   void _scheduleRefresh({required bool revealActive}) {
     _revealAfterRefresh = _revealAfterRefresh || revealActive;
-    if (_refreshScheduled) return;
+
+    if (_refreshScheduled) {
+      return;
+    }
+
     _refreshScheduled = true;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshScheduled = false;
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       final layoutChanged = _refreshScrollState();
+
       if (_revealAfterRefresh) {
         _revealAfterRefresh = false;
+
         if (layoutChanged) {
           _scheduleRefresh(revealActive: true);
         } else {
@@ -264,33 +308,59 @@ class _AuthenticatedNavigationStripState
   }
 
   bool _refreshScrollState() {
-    if (!mounted || !_scrollController.hasClients) return false;
+    if (!mounted || !_scrollController.hasClients) {
+      return false;
+    }
+
     final position = _scrollController.position;
-    if (!position.hasContentDimensions) return false;
+
+    if (!position.hasContentDimensions) {
+      return false;
+    }
+
     final hasOverflow = position.maxScrollExtent > 1;
+
     final canScrollBack = hasOverflow && position.pixels > 1;
+
     final canScrollForward =
         hasOverflow && position.pixels < position.maxScrollExtent - 1;
+
     if (_hasOverflow == hasOverflow &&
         _canScrollBack == canScrollBack &&
         _canScrollForward == canScrollForward) {
       return false;
     }
+
     setState(() {
       _hasOverflow = hasOverflow;
       _canScrollBack = canScrollBack;
       _canScrollForward = canScrollForward;
     });
+
     return true;
   }
 
   void _revealActiveItem() {
-    if (_lastRevealedRoute == _currentRoute) return;
-    if (!_scrollController.hasClients) return;
-    if (!_scrollController.position.hasContentDimensions) return;
+    if (_lastRevealedRoute == _currentRoute) {
+      return;
+    }
+
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    if (!_scrollController.position.hasContentDimensions) {
+      return;
+    }
+
     final renderObject = _activeItemKey.currentContext?.findRenderObject();
-    if (renderObject == null) return;
+
+    if (renderObject == null) {
+      return;
+    }
+
     _lastRevealedRoute = _currentRoute;
+
     _scrollController.position
         .ensureVisible(
           renderObject,
@@ -306,11 +376,15 @@ class _AuthenticatedNavigationStripState
         !_scrollController.position.hasContentDimensions) {
       return;
     }
+
     final position = _scrollController.position;
+
     final distance = (position.viewportDimension * 0.72).clamp(240.0, 520.0);
+
     final target = (position.pixels + (distance * direction))
         .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
+
     _scrollController
         .animateTo(target, duration: _motionDuration, curve: _motionCurve)
         .then((_) => _refreshScrollState());
@@ -443,24 +517,28 @@ List<_NavigationItem> _navigationItems(_NavigationAuthState auth) {
     schoolRole: auth.schoolRole,
     hasSelectedSchool: auth.hasSelectedSchool,
   );
+
   return [
     const _NavigationItem(
       'Dashboard',
       Icons.dashboard_outlined,
       AppRoutes.dashboard,
     ),
+
     if (modules.contains(DashboardModuleKind.students))
       const _NavigationItem(
         'Students',
         Icons.people_outline,
         AppRoutes.students,
       ),
+
     if (modules.contains(DashboardModuleKind.teachers))
       const _NavigationItem(
         'Teachers',
         Icons.co_present_outlined,
         AppRoutes.teachers,
       ),
+
     if (modules.contains(DashboardModuleKind.staff))
       const _NavigationItem('Staff', Icons.badge_outlined, AppRoutes.staff),
 
@@ -470,6 +548,7 @@ List<_NavigationItem> _navigationItems(_NavigationAuthState auth) {
         Icons.calendar_month_outlined,
         AppRoutes.academicSessions,
       ),
+
     if (modules.contains(DashboardModuleKind.classesAndSections))
       const _NavigationItem(
         'Classes',
@@ -479,6 +558,7 @@ List<_NavigationItem> _navigationItems(_NavigationAuthState auth) {
 
     if (auth.canDesignCards)
       const _NavigationItem('Design', Icons.palette_outlined, AppRoutes.design),
+
     if (modules.contains(DashboardModuleKind.idCards))
       const _NavigationItem('Cards', Icons.badge_outlined, AppRoutes.cards),
   ];
@@ -498,18 +578,21 @@ List<_NavigationItem> _moreNavigationItems(_NavigationAuthState auth) {
         Icons.dynamic_form_outlined,
         AppRoutes.studentFields,
       ),
+
     if (modules.contains(DashboardModuleKind.publicForms))
       const _NavigationItem(
         'Public Forms',
         Icons.public_outlined,
         AppRoutes.publicForms,
       ),
+
     if (modules.contains(DashboardModuleKind.schoolProfile))
       const _NavigationItem(
         'School Profile',
         Icons.domain_outlined,
         AppRoutes.schoolProfile,
       ),
+
     if (modules.contains(DashboardModuleKind.users))
       const _NavigationItem(
         'Users',
@@ -629,6 +712,7 @@ bool _isRouteActive(String itemRoute, String? currentRoute) {
       currentRoute == AppRoutes.editStudent) {
     return true;
   }
+
   return itemRoute == currentRoute;
 }
 
@@ -686,9 +770,11 @@ class _NavigationButton extends StatelessWidget {
             if (states.contains(WidgetState.hovered)) {
               return Colors.white.withValues(alpha: 0.10);
             }
+
             if (states.contains(WidgetState.pressed)) {
               return Colors.white.withValues(alpha: 0.16);
             }
+
             return Colors.transparent;
           }),
         ),
