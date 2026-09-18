@@ -816,7 +816,7 @@ class _CardsScreenState extends State<CardsScreen> {
   Future<void> _runBulkExport(BulkPdfFilter filter) async {
     setState(() {
       _exportingBulk = true;
-      _bulkExportStatus = 'Preparing cards…';
+      _bulkExportStatus = 'Preparing cardsâ€¦';
     });
     try {
       final loaded = switch (filter.scope) {
@@ -853,7 +853,7 @@ class _CardsScreenState extends State<CardsScreen> {
       if (confirmed != true || !mounted) return;
 
       setState(
-        () => _bulkExportStatus = 'Generating PDF… 0/${students.length}',
+        () => _bulkExportStatus = 'Generating PDFâ€¦ 0/${students.length}',
       );
 
       final cards = students
@@ -870,7 +870,7 @@ class _CardsScreenState extends State<CardsScreen> {
       void onCardPrepared(int completed, int total) {
         if (mounted) {
           setState(
-            () => _bulkExportStatus = 'Generating PDF… $completed/$total',
+            () => _bulkExportStatus = 'Generating PDFâ€¦ $completed/$total',
           );
         }
       }
@@ -897,7 +897,7 @@ class _CardsScreenState extends State<CardsScreen> {
           printSettings: filter.printSettings,
           onCardPrepared: onCardPrepared,
         );
-        if (mounted) setState(() => _bulkExportStatus = 'Opening download…');
+        if (mounted) setState(() => _bulkExportStatus = 'Opening downloadâ€¦');
         await Printing.sharePdf(
           bytes: bytes,
           filename:
@@ -1278,8 +1278,9 @@ class _CardsScreenState extends State<CardsScreen> {
   @override
   Widget build(BuildContext context) {
     final selection = _selection;
+
     return Scaffold(
-      backgroundColor: const Color(0xfff5f7fb),
+      backgroundColor: AppColors.background,
       appBar: AuthenticatedAppBar(
         actions: [
           if (widget.canPrint)
@@ -1344,90 +1345,35 @@ class _CardsScreenState extends State<CardsScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
+          final pagePadding = constraints.maxWidth > 900 ? 28.0 : 16.0;
+
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1400),
               child: Padding(
-                padding: EdgeInsets.all(constraints.maxWidth > 700 ? 24 : 14),
+                padding: EdgeInsets.all(pagePadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _buildPageHeading(),
+                    const SizedBox(height: 18),
                     _buildToolbar(),
-
+                    const SizedBox(height: 12),
+                    _buildLifecycleNotice(),
+                    if (_bulkExportStatus != null) ...[
+                      const SizedBox(height: 10),
+                      _buildBulkExportStatus(),
+                    ],
+                    if (_selectedStudentUuids.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      _buildSelectionBar(selection),
+                    ],
+                    const SizedBox(height: 14),
+                    _buildResultsHeader(),
                     const SizedBox(height: 10),
-
-                    const Card(
-                      key: Key('pdf-lifecycle-explanation'),
-                      elevation: 0,
-                      color: Color(0xffeef5ff),
-                      child: Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text(
-                          'PDF export is non-destructive and does not mark cards printed. '
-                          'Use Mark Printed only after physical production.',
-                        ),
-                      ),
+                    Expanded(
+                      child: _buildContent(),
                     ),
-
-                    if (_bulkExportStatus != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          _bulkExportStatus!,
-                          key: const Key('bulk-export-status'),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-
-                    if (widget.canVerify && selection.verifyIneligibleCount > 0)
-                      Text(
-                        '${selection.verifyIneligibleCount} of ${selection.selectedCount} selected '
-                        'record(s) are already verified. Deselect them before batch Verify.',
-                        key: const Key('cards-batch-verify-ineligible-message'),
-                        style: const TextStyle(
-                          color: AppColors.danger,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-
-                    if (widget.canMarkPrinted &&
-                        selection.printIneligibleCount > 0)
-                      Text(
-                        '${selection.printIneligibleCount} of ${selection.selectedCount} selected '
-                        'record(s) are not verified. Deselect them before Mark Selected Printed.',
-                        key: const Key('cards-batch-print-ineligible-message'),
-                        style: const TextStyle(
-                          color: AppColors.danger,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-
-                    const SizedBox(height: 14),
-
-                    Text(
-                      _totalStudents == 0
-                          ? 'Showing 0 students'
-                          : 'Showing ${_students.length} of $_totalStudents students',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-
-                    if (_selectedStudentUuids.isNotEmpty)
-                      Text(
-                        '${_selectedStudentUuids.length} selected. Add them to Print Basket to keep them across search and filter changes.',
-                        key: const Key('cards-selection-scope-note'),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-
-                    const SizedBox(height: 14),
-
-                    Expanded(child: _buildContent()),
                   ],
                 ),
               ),
@@ -1438,178 +1384,536 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
-  // ------------------------------------------------------------
-  // Toolbar
-  // ------------------------------------------------------------
-
-  Widget _buildToolbar() {
-    if (_loadingFilters) {
-      return const Card(
-        elevation: 0,
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 12),
-              Text('Loading card filters...'),
-            ],
-          ),
-        ),
-      );
-    }
-
+  Widget _buildPageHeading() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final narrow = constraints.maxWidth < 900;
+        final compact = constraints.maxWidth < 760;
 
-        final search = TextField(
-          decoration: InputDecoration(
-            hintText: 'Search student, admission no. or roll no.',
-            prefixIcon: const Icon(Icons.search),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xffdfe4ec)),
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ID cards',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xffdfe4ec)),
+            const SizedBox(height: 6),
+            Text(
+              'Preview, verify and prepare student ID cards for '
+              '${widget.schoolName}.',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
             ),
-          ),
-          onChanged: _onSearchChanged,
+          ],
         );
 
-        final filters = [
-          _dropdown<String>(
-            label: 'Academic Session',
-            value: _selectedSessionUuid,
-            items: [
-              const DropdownMenuItem(value: null, child: Text('All Sessions')),
-              ..._sessions.map(
-                (session) => DropdownMenuItem(
-                  value: session.uuid,
-                  child: Text(session.name),
+        final actions = Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (widget.canDesign)
+              OutlinedButton.icon(
+                onPressed: _openDesigner,
+                icon: const Icon(Icons.design_services_outlined),
+                label: const Text('Design card'),
+              ),
+            if (widget.canPrint)
+              OutlinedButton.icon(
+                onPressed: _showPrintBasket,
+                icon: Badge.count(
+                  count: _printBasketStudents.length,
+                  isLabelVisible: _printBasketStudents.isNotEmpty,
+                  child: const Icon(Icons.shopping_basket_outlined),
                 ),
+                label: const Text('Print Basket'),
               ),
-            ],
-            onChanged: _selectSession,
-          ),
-          _dropdown<String>(
-            label: 'Class',
-            value: _selectedClassUuid,
-            items: [
-              const DropdownMenuItem(value: null, child: Text('All Classes')),
-              ..._classes.map(
-                (schoolClass) => DropdownMenuItem(
-                  value: schoolClass.uuid,
-                  child: Text(schoolClass.name),
-                ),
+            if (widget.canPrint)
+              FilledButton.icon(
+                onPressed: _exportingBulk ? null : _downloadFilteredCards,
+                icon: _exportingBulk
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Bulk PDF'),
               ),
-            ],
-            onChanged: _selectClass,
-          ),
-          _dropdown<String>(
-            label: 'Section',
-            value: _selectedSectionUuid,
-            items: [
-              const DropdownMenuItem(value: null, child: Text('All Sections')),
-              ..._sections.map(
-                (section) => DropdownMenuItem(
-                  value: section.uuid,
-                  child: Text(section.name),
-                ),
-              ),
-            ],
-            onChanged: _selectSection,
-            enabled: _selectedClassUuid != null && _sections.isNotEmpty,
-          ),
-          _dropdown<String>(
-            label: 'Verification',
-            value: _verificationStatus,
-            items: const [
-              DropdownMenuItem(value: null, child: Text('All Statuses')),
-              DropdownMenuItem(value: 'pending', child: Text('Pending')),
-              DropdownMenuItem(
-                value: 'needs_correction',
-                child: Text('Needs Correction'),
-              ),
-              DropdownMenuItem(value: 'verified', child: Text('Verified')),
-            ],
-            onChanged: (value) {
-              setState(() => _verificationStatus = value);
-              _loadStudents(reset: true);
-            },
-          ),
-          _dropdown<bool>(
-            label: 'Printed',
-            value: _printed,
-            items: const [
-              DropdownMenuItem(value: null, child: Text('All Records')),
-              DropdownMenuItem(value: false, child: Text('Not Printed')),
-              DropdownMenuItem(value: true, child: Text('Printed')),
-            ],
-            onChanged: (value) {
-              setState(() => _printed = value);
-              _loadStudents(reset: true);
-            },
-          ),
-        ];
+          ],
+        );
 
-        final filterRow = Wrap(spacing: 10, runSpacing: 10, children: filters);
-
-        if (narrow) {
+        if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              search,
-              const SizedBox(height: 10),
-              filterRow,
-              if (_sectionError != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _sectionError!,
-                  style: const TextStyle(color: AppColors.danger, fontSize: 12),
-                ),
+              heading,
+              if (actions.children.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                actions,
               ],
             ],
           );
         }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Expanded(flex: 2, child: search),
-                const SizedBox(width: 10),
-                Expanded(child: filters[0]),
-                const SizedBox(width: 10),
-                Expanded(child: filters[1]),
-                const SizedBox(width: 10),
-                Expanded(child: filters[2]),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: filters.skip(3).toList(),
-            ),
+            Expanded(child: heading),
+            if (actions.children.isNotEmpty) actions,
           ],
         );
       },
     );
   }
 
-  // ------------------------------------------------------------
-  // Dropdown
-  // ------------------------------------------------------------
+  Widget _buildToolbar() {
+    if (_loadingFilters) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Loading card filters...',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 900;
+
+          final search = TextField(
+            decoration: InputDecoration(
+              hintText: 'Search student, admission no. or roll no.',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: AppColors.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+            ),
+            onChanged: _onSearchChanged,
+          );
+
+          final session = _dropdown<String>(
+            label: 'Academic Session',
+            value: _selectedSessionUuid,
+            items: [
+              const DropdownMenuItem(
+                value: null,
+                child: Text('All Sessions'),
+              ),
+              ..._sessions.map(
+                (item) => DropdownMenuItem(
+                  value: item.uuid,
+                  child: Text(item.name),
+                ),
+              ),
+            ],
+            onChanged: _selectSession,
+          );
+
+          final schoolClass = _dropdown<String>(
+            label: 'Class',
+            value: _selectedClassUuid,
+            items: [
+              const DropdownMenuItem(
+                value: null,
+                child: Text('All Classes'),
+              ),
+              ..._classes.map(
+                (item) => DropdownMenuItem(
+                  value: item.uuid,
+                  child: Text(item.name),
+                ),
+              ),
+            ],
+            onChanged: _selectClass,
+          );
+
+          final section = _dropdown<String>(
+            label: 'Section',
+            value: _selectedSectionUuid,
+            items: [
+              const DropdownMenuItem(
+                value: null,
+                child: Text('All Sections'),
+              ),
+              ..._sections.map(
+                (item) => DropdownMenuItem(
+                  value: item.uuid,
+                  child: Text(item.name),
+                ),
+              ),
+            ],
+            onChanged: _selectSection,
+            enabled: _selectedClassUuid != null && _sections.isNotEmpty,
+          );
+
+          final verification = _dropdown<String>(
+            label: 'Verification',
+            value: _verificationStatus,
+            items: const [
+              DropdownMenuItem(
+                value: null,
+                child: Text('All Statuses'),
+              ),
+              DropdownMenuItem(
+                value: 'pending',
+                child: Text('Pending'),
+              ),
+              DropdownMenuItem(
+                value: 'needs_correction',
+                child: Text('Needs Correction'),
+              ),
+              DropdownMenuItem(
+                value: 'verified',
+                child: Text('Verified'),
+              ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _verificationStatus = value;
+              });
+              _loadStudents(reset: true);
+            },
+          );
+
+          final printed = _dropdown<bool>(
+            label: 'Printed',
+            value: _printed,
+            items: const [
+              DropdownMenuItem(
+                value: null,
+                child: Text('All Records'),
+              ),
+              DropdownMenuItem(
+                value: false,
+                child: Text('Not Printed'),
+              ),
+              DropdownMenuItem(
+                value: true,
+                child: Text('Printed'),
+              ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _printed = value;
+              });
+              _loadStudents(reset: true);
+            },
+          );
+
+          if (narrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                search,
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    session,
+                    schoolClass,
+                    section,
+                    verification,
+                    printed,
+                  ],
+                ),
+                if (_sectionError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _sectionError!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: search,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: session),
+                  const SizedBox(width: 10),
+                  Expanded(child: schoolClass),
+                  const SizedBox(width: 10),
+                  Expanded(child: section),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  verification,
+                  printed,
+                ],
+              ),
+              if (_sectionError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _sectionError!,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLifecycleNotice() {
+    return Container(
+      key: const Key('pdf-lifecycle-explanation'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 12,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.infoSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.info.withValues(alpha: 0.18),
+        ),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 20,
+            color: AppColors.info,
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'PDF export is non-destructive and does not mark cards printed. '
+              'Use Mark Printed only after physical production.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBulkExportStatus() {
+    return Container(
+      key: const Key('bulk-export-status'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 10,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _bulkExportStatus!,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionBar(
+    StudentLifecycleSelection selection,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.accentSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.accent.withValues(alpha: 0.20),
+        ),
+      ),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            '${_selectedStudentUuids.length} selected',
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (widget.canVerify)
+            OutlinedButton.icon(
+              onPressed: selection.canBatchVerify
+                  ? () => _runSelectedLifecycle(verify: true)
+                  : null,
+              icon: const Icon(Icons.verified_outlined, size: 18),
+              label: const Text('Verify selected'),
+            ),
+          if (widget.canPrint)
+            OutlinedButton.icon(
+              onPressed: _addSelectionToPrintBasket,
+              icon: const Icon(
+                Icons.add_shopping_cart_outlined,
+                size: 18,
+              ),
+              label: const Text('Add to Print Basket'),
+            ),
+          if (widget.canMarkPrinted)
+            OutlinedButton.icon(
+              onPressed: selection.canBatchMarkPrinted
+                  ? () => _runSelectedLifecycle(verify: false)
+                  : null,
+              icon: const Icon(Icons.done_all, size: 18),
+              label: const Text('Mark printed'),
+            ),
+          if (widget.canVerify && selection.verifyIneligibleCount > 0)
+            Text(
+              '${selection.verifyIneligibleCount} selected record(s) are '
+              'already verified.',
+              key: const Key('cards-batch-verify-ineligible-message'),
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (widget.canMarkPrinted &&
+              selection.printIneligibleCount > 0)
+            Text(
+              '${selection.printIneligibleCount} selected record(s) are '
+              'not verified.',
+              key: const Key('cards-batch-print-ineligible-message'),
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          Text(
+            'Selection is cleared when search or filters change. '
+            'Add cards to Print Basket to keep them.',
+            key: const Key('cards-selection-scope-note'),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultsHeader() {
+    final resultText = _totalStudents == 0
+        ? 'No students'
+        : '${_students.length} of $_totalStudents students loaded';
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Card previews',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                resultText,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_hasMore && !_loadingStudents)
+          const Text(
+            'Scroll to load more',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 12,
+            ),
+          ),
+      ],
+    );
+  }
 
   Widget _dropdown<T>({
     required String label,
@@ -1626,8 +1930,21 @@ class _CardsScreenState extends State<CardsScreen> {
         decoration: InputDecoration(
           labelText: label,
           filled: true,
-          fillColor: enabled ? Colors.white : const Color(0xfff1f3f6),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          fillColor: enabled
+              ? AppColors.surface
+              : AppColors.surfaceMuted,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(
+              color: AppColors.border,
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(
+              color: AppColors.border,
+            ),
+          ),
         ),
         items: items,
         onChanged: enabled ? onChanged : null,
@@ -1635,55 +1952,51 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
-  // ------------------------------------------------------------
-  // Content
-  // ------------------------------------------------------------
-
   Widget _buildContent() {
     if (_loadingStudents) {
-      return const Center(child: CircularProgressIndicator());
+      return const _CardsLoadingState();
     }
 
     if (_error != null && _students.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.danger),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => _loadStudents(reset: true),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
+      return _CardsStateCard(
+        icon: Icons.error_outline,
+        iconColor: AppColors.danger,
+        iconBackground: AppColors.dangerSoft,
+        title: 'Unable to load cards',
+        message: _error!,
+        action: FilledButton.icon(
+          onPressed: () => _loadStudents(reset: true),
+          icon: const Icon(Icons.refresh),
+          label: const Text('Retry'),
         ),
       );
     }
 
     if (_students.isEmpty) {
-      return const Center(
-        child: Text(
-          'No students found for the selected filters.',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
+      return const _CardsStateCard(
+        icon: Icons.badge_outlined,
+        iconColor: AppColors.accent,
+        iconBackground: AppColors.accentSoft,
+        title: 'No cards found',
+        message:
+            'No students match the current search and filter selection.',
       );
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = 16.0;
+
         final columns = math.max(
           1,
           (constraints.maxWidth / (250 + spacing)).ceil(),
         );
+
         final tileWidth =
             (constraints.maxWidth - (columns - 1) * spacing) / columns;
+
         final canvas = _cardTemplate.document.canvas;
+
         return GridView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.only(bottom: 24),
@@ -1691,18 +2004,19 @@ class _CardsScreenState extends State<CardsScreen> {
             crossAxisCount: columns,
             mainAxisExtent:
                 tileWidth * canvas.height / canvas.width +
-                IdCardPreview.actionsHeight,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+                    IdCardPreview.actionsHeight,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
           ),
           itemCount: _students.length + (_loadingMore ? 1 : 0),
           itemBuilder: (context, index) {
-            // Loading indicator at the bottom of the grid.
             if (index >= _students.length) {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
                 ),
               );
             }
@@ -1718,57 +2032,205 @@ class _CardsScreenState extends State<CardsScreen> {
               }
             }
 
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: IdCardPreview(
-                    student: student,
-                    schoolName: widget.schoolName,
-                    api: widget.api,
-                    template: _cardTemplate,
-                    sessionName: session?.name,
-                    className: _className(student),
-                    sectionName: _sectionName(student),
-                    logoUrl: _schoolLogoUrl,
-                    schoolProfile: _schoolProfile,
-                    onEdit: widget.canEdit ? () => _editStudent(student) : null,
-                    onPrint: widget.canPrint
-                        ? () => _printStudentCard(student, session?.name)
-                        : null,
-                    onMarkPrinted: widget.canMarkPrinted && student.isVerified
-                        ? () => _markPrinted(student)
-                        : null,
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.035),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: IdCardPreview(
+                        student: student,
+                        schoolName: widget.schoolName,
+                        api: widget.api,
+                        template: _cardTemplate,
+                        sessionName: session?.name,
+                        className: _className(student),
+                        sectionName: _sectionName(student),
+                        logoUrl: _schoolLogoUrl,
+                        schoolProfile: _schoolProfile,
+                        onEdit:
+                            widget.canEdit ? () => _editStudent(student) : null,
+                        onPrint: widget.canPrint
+                            ? () => _printStudentCard(
+                                  student,
+                                  session?.name,
+                                )
+                            : null,
+                        onMarkPrinted:
+                            widget.canMarkPrinted && student.isVerified
+                                ? () => _markPrinted(student)
+                                : null,
+                      ),
+                    ),
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.surface.withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Checkbox(
+                          value: _selectedStudentUuids.contains(student.uuid),
+                          onChanged: widget.canPrint ||
+                                  widget.canVerify ||
+                                  widget.canMarkPrinted
+                              ? (value) {
+                                  setState(() {
+                                    if (value == true) {
+                                      _selectedStudentUuids.add(student.uuid);
+                                    } else {
+                                      _selectedStudentUuids.remove(student.uuid);
+                                    }
+                                  });
+                                }
+                              : null,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: StudentLifecycleBadge(
+                        status: student.lifecycleStatus,
+                      ),
+                    ),
+                  ],
                 ),
-                Positioned(
-                  top: 6,
-                  left: 6,
-                  child: Checkbox(
-                    value: _selectedStudentUuids.contains(student.uuid),
-                    onChanged:
-                        widget.canPrint ||
-                            widget.canVerify ||
-                            widget.canMarkPrinted
-                        ? (value) => setState(() {
-                            if (value == true) {
-                              _selectedStudentUuids.add(student.uuid);
-                            } else {
-                              _selectedStudentUuids.remove(student.uuid);
-                            }
-                          })
-                        : null,
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: StudentLifecycleBadge(status: student.lifecycleStatus),
-                ),
-              ],
+              ),
             );
           },
         );
       },
+    );
+  }
+}
+
+class _CardsLoadingState extends StatelessWidget {
+  const _CardsLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 420,
+        ),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox.square(
+              dimension: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+              ),
+            ),
+            SizedBox(height: 14),
+            Text(
+              'Loading card previews...',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardsStateCard extends StatelessWidget {
+  const _CardsStateCard({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBackground,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBackground;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 520,
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 28,
+          vertical: 34,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: iconBackground,
+                borderRadius: BorderRadius.circular(17),
+              ),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 29,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 18),
+              action!,
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
