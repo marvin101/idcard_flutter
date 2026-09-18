@@ -76,6 +76,6 @@ void main() {
     expect(veryNarrow.columns, 2);
 
     final desktop = dashboardGridLayoutFor(900);
-    expect(desktop.compact, isFalse);
+    expect(desktop.mainAxisExtent, 176);
   });
 }

@@ -34,7 +34,7 @@ DashboardGridLayout dashboardGridLayoutFor(double width) {
   return const DashboardGridLayout(
     compact: false,
     columns: 0,
-    mainAxisExtent: 155,
+    mainAxisExtent: 176,
   );
 }
 
@@ -49,7 +49,7 @@ class DashboardScreen extends StatelessWidget {
     final access = auth.selectedSchoolAccess;
 
     return Scaffold(
-      backgroundColor: const Color(0xfff5f7fb),
+      backgroundColor: AppColors.background,
       appBar: const AuthenticatedAppBar(title: Text('CampusID')),
       body: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
@@ -63,22 +63,98 @@ class DashboardScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Dashboard',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
                       color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 700;
+
+                        final content = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Welcome back, ${user.fullName}',
+                              style: Theme.of(context).textTheme.headlineMedium
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              school == null
+                                  ? 'Choose a school to continue managing CampusID.'
+                                  : 'Manage ${school.name} from one place.',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.78),
+                                fontSize: 15,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        );
+
+                        final badge = Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.14),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.verified_user_outlined,
+                                color: Colors.white,
+                                size: 17,
+                              ),
+                              const SizedBox(width: 7),
+                              Text(
+                                auth.isPlatformAdmin
+                                    ? 'Platform Admin'
+                                    : (access?.role ?? 'School User'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        return compact
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  content,
+                                  const SizedBox(height: 18),
+                                  badge,
+                                ],
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(child: content),
+                                  const SizedBox(width: 24),
+                                  badge,
+                                ],
+                              );
+                      },
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Welcome, ${user.fullName}.',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
                   _SchoolContextCard(
                     auth: auth,
                     school: school,
@@ -122,9 +198,16 @@ class _SchoolContextCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xffe4e8f0)),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -170,22 +253,42 @@ class _SchoolContextCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Current school',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 13,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentSoft,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.school_outlined,
+                                  color: AppColors.accent,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Current school',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 12),
                           Text(
                             school?.name ??
                                 (needsSelection
                                     ? 'Select a school to continue'
                                     : 'No school assigned'),
                             style: const TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               fontSize: 20,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 5),
@@ -195,6 +298,7 @@ class _SchoolContextCard extends StatelessWidget {
                                 : (access?.role ?? 'No school role'),
                             style: const TextStyle(
                               color: AppColors.textSecondary,
+                              fontSize: 13,
                             ),
                           ),
                         ],
@@ -213,8 +317,9 @@ class _SchoolContextCard extends StatelessWidget {
                               ? 'Select a school to continue'
                               : 'No school assigned'),
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         fontSize: 20,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -222,7 +327,10 @@ class _SchoolContextCard extends StatelessWidget {
                       auth.isPlatformAdmin
                           ? 'Platform-wide access'
                           : (access?.role ?? 'No school role'),
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
                     ),
                     if (auth.schools.length > 1) ...[
                       const SizedBox(height: 18),
@@ -386,10 +494,10 @@ class _ModuleGrid extends StatelessWidget {
                 mainAxisSpacing: 8,
               )
             : SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 360,
+                maxCrossAxisExtent: 340,
                 mainAxisExtent: layout.mainAxisExtent,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
               );
         return GridView.builder(
           shrinkWrap: true,
@@ -421,65 +529,136 @@ class _DashboardModule {
 
 class _ModuleCard extends StatelessWidget {
   const _ModuleCard({required this.module, required this.compact});
+
   final _DashboardModule module;
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => Card(
-    elevation: 0,
-    color: Colors.white,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: const BorderSide(color: Color(0xffe4e8f0)),
-    ),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: module.enabled ? module.onTap : null,
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 10 : 20),
-        child: Column(
-          mainAxisAlignment: compact
-              ? MainAxisAlignment.center
-              : MainAxisAlignment.start,
-          crossAxisAlignment: compact
-              ? CrossAxisAlignment.center
-              : CrossAxisAlignment.start,
-          children: [
-            Icon(
-              module.icon,
-              color: module.enabled ? AppColors.primary : AppColors.disabled,
-              size: compact ? 28 : 30,
-            ),
-            SizedBox(height: compact ? 8 : 12),
-            Text(
-              module.title,
-              textAlign: compact ? TextAlign.center : TextAlign.start,
-              maxLines: compact ? 2 : 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: compact ? 12 : 14,
-                fontWeight: FontWeight.w700,
-                color: module.enabled
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
-              ),
-            ),
-            if (!compact) ...[
-              const SizedBox(height: 4),
-              Text(
-                module.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ],
+  Widget build(BuildContext context) {
+    final enabled = module.enabled;
+
+    return Card(
+      elevation: 0,
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: enabled ? module.onTap : null,
+        borderRadius: BorderRadius.circular(16),
+        hoverColor: AppColors.accentSoft.withValues(alpha: 0.45),
+        splashColor: AppColors.accentSoft,
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 10 : 18),
+          child: compact
+              ? _CompactModuleContent(module: module)
+              : _DesktopModuleContent(module: module),
         ),
       ),
-    ),
+    );
+  }
+}
+
+class _CompactModuleContent extends StatelessWidget {
+  const _CompactModuleContent({required this.module});
+
+  final _DashboardModule module;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: module.enabled ? AppColors.accentSoft : AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          module.icon,
+          size: 22,
+          color: module.enabled ? AppColors.accent : AppColors.disabled,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        module.title,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: module.enabled
+              ? AppColors.textPrimary
+              : AppColors.textSecondary,
+        ),
+      ),
+    ],
+  );
+}
+
+class _DesktopModuleContent extends StatelessWidget {
+  const _DesktopModuleContent({required this.module});
+
+  final _DashboardModule module;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: module.enabled
+                  ? AppColors.accentSoft
+                  : AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              module.icon,
+              size: 23,
+              color: module.enabled ? AppColors.accent : AppColors.disabled,
+            ),
+          ),
+          const Spacer(),
+          Icon(
+            Icons.arrow_forward_rounded,
+            size: 18,
+            color: module.enabled ? AppColors.textMuted : AppColors.disabled,
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Text(
+        module.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: module.enabled
+              ? AppColors.textPrimary
+              : AppColors.textSecondary,
+        ),
+      ),
+      const SizedBox(height: 5),
+      Text(
+        module.description,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 13,
+          height: 1.4,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    ],
   );
 }
