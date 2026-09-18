@@ -324,7 +324,11 @@ void main() {
     );
 
     await pumpApp(tester, initialRoute: AppRoutes.students);
-    await tester.tap(find.text('Bulk Import'));
+
+    await tester.tap(find.byKey(const Key('student-more-actions')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('student-import-action')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Bulk Student Import'), findsWidgets);
     expect(
@@ -345,6 +349,8 @@ void main() {
     );
 
     await pumpApp(tester, initialRoute: AppRoutes.students);
+    await tester.tap(find.byKey(const Key('student-more-actions')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('bulk-photo-import-action')));
     await tester.pumpAndSettle();
     final photoImportContext = tester.element(
@@ -516,13 +522,20 @@ void main() {
 
   testWidgets('Bulk Photos action follows canManageCardData', (tester) async {
     await pumpApp(tester, initialRoute: AppRoutes.students, role: 'teacher');
-    expect(find.byKey(const Key('bulk-photo-import-action')), findsNothing);
+
+    expect(find.byKey(const Key('student-more-actions')), findsNothing);
 
     await pumpApp(
       tester,
       initialRoute: AppRoutes.students,
       role: 'card_operator',
     );
+
+    expect(find.byKey(const Key('student-more-actions')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('student-more-actions')));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('bulk-photo-import-action')), findsOneWidget);
   });
 
@@ -623,7 +636,6 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     await addResult;
-
     expect(find.byType(StudentsScreen), findsOneWidget);
 
     const student = ApiStudent(
@@ -653,7 +665,10 @@ void main() {
     await editResult;
     expect(find.byType(StudentsScreen), findsOneWidget);
 
-    await tester.tap(find.text('Bulk Import'));
+    await tester.tap(find.byKey(const Key('student-more-actions')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('student-import-action')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Bulk Student Import'), findsWidgets);
     expect(find.byType(BackButton), findsOneWidget);
@@ -661,6 +676,9 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byType(StudentsScreen), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('student-more-actions')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('bulk-photo-import-action')));
     await tester.pumpAndSettle();
@@ -686,6 +704,10 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, initialRoute: AppRoutes.students);
+
+    await tester.tap(find.byKey(const Key('student-more-actions')));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('bulk-photo-import-action')));
     await tester.pumpAndSettle();
 

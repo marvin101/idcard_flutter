@@ -167,6 +167,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(requests.single.queryParameters['limit'], '100');
+    await tester.ensureVisible(find.byKey(const Key('students-next-page')));
     await tester.tap(find.byKey(const Key('students-next-page')));
     await tester.pumpAndSettle();
     expect(requests.last.queryParameters['offset'], '100');

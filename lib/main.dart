@@ -198,6 +198,9 @@ class _AuthenticatedRoute extends StatelessWidget {
     }
 
     final auth = context.read<AuthProvider>();
+    debugPrint(
+      'AUTH_ROUTE routeName=$routeName role=${auth.selectedSchoolAccess?.role} canManageCardData=${auth.canManageCardData} canManageUsers=${auth.canManageUsers}',
+    );
 
     final modules = dashboardModulesFor(
       isPlatformAdmin: authState.isPlatformAdmin,

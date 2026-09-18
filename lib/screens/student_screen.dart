@@ -1,17 +1,18 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_routes.dart';
-import '../models/api_student.dart';
 import '../models/academic_session.dart';
+import '../models/api_student.dart';
 import '../models/school_class.dart';
 import '../models/section.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
-import '../widgets/student_verification_link_dialog.dart';
 import '../widgets/student_lifecycle_badge.dart';
+import '../widgets/student_verification_link_dialog.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({
@@ -42,18 +43,17 @@ class StudentsScreen extends StatefulWidget {
 class _StudentsScreenState extends State<StudentsScreen> {
   bool _loading = true;
   String? _error;
+
   List<ApiStudent> _students = [];
+
   String _search = '';
   Timer? _searchTimer;
-  int _request = 0, _offset = 0, _total = 0;
-  bool _hasMore = false;
 
-  @override
-  void dispose() {
-    _searchTimer?.cancel();
-    _request++;
-    super.dispose();
-  }
+  int _request = 0;
+  int _offset = 0;
+  int _total = 0;
+
+  bool _hasMore = false;
 
   List<AcademicSession> _sessions = [];
   List<SchoolClass> _classes = [];
@@ -62,21 +62,31 @@ class _StudentsScreenState extends State<StudentsScreen> {
   String? _selectedSessionUuid;
   String? _selectedClassUuid;
   String? _selectedSectionUuid;
+
   String? _verificationStatus;
   bool? _printed;
-  final Set<String> _selectedStudentUuids = {};
 
-  StudentLifecycleSelection get _selection =>
-      StudentLifecycleSelection.from(_students, _selectedStudentUuids);
+  final Set<String> _selectedStudentUuids = {};
 
   bool _loadingFilters = true;
   bool _loadingSections = false;
+
   String? _sectionError;
+
+  StudentLifecycleSelection get _selection =>
+      StudentLifecycleSelection.from(_students, _selectedStudentUuids);
 
   @override
   void initState() {
     super.initState();
     _loadFilterData();
+  }
+
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _request++;
+    super.dispose();
   }
 
   Future<void> _loadFilterData() async {
@@ -90,28 +100,37 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
       final classes = await widget.api.getClasses(widget.schoolUuid);
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _sessions = sessions;
         _classes = classes;
+
         _selectedSessionUuid = null;
         _selectedClassUuid = null;
         _selectedSectionUuid = null;
+
         _sections = [];
+
         _loadingFilters = false;
       });
 
       await _loadStudents();
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _loadingFilters = false;
         _error = e.message;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _loadingFilters = false;
@@ -122,6 +141,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
   Future<void> _loadStudents({int offset = 0}) async {
     final request = ++_request;
+
     setState(() {
       _loading = true;
       _error = null;
@@ -140,28 +160,38 @@ class _StudentsScreenState extends State<StudentsScreen> {
         printed: _printed,
       );
 
-      if (!mounted || request != _request) return;
+      if (!mounted || request != _request) {
+        return;
+      }
+
       final students = page.items;
 
       setState(() {
         _students = students;
+
         _offset = offset;
         _total = page.total;
         _hasMore = page.hasMore;
+
         _selectedStudentUuids.removeWhere(
           (uuid) => !students.any((student) => student.uuid == uuid),
         );
+
         _loading = false;
       });
     } on ApiException catch (e) {
-      if (!mounted || request != _request) return;
+      if (!mounted || request != _request) {
+        return;
+      }
 
       setState(() {
         _error = e.message;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted || request != _request) return;
+      if (!mounted || request != _request) {
+        return;
+      }
 
       setState(() {
         _error = e.toString();
@@ -173,8 +203,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
   Future<void> _selectSession(String? sessionUuid) async {
     setState(() {
       _selectedSessionUuid = sessionUuid;
+
       _selectedClassUuid = null;
       _selectedSectionUuid = null;
+
       _sections = [];
       _sectionError = null;
     });
@@ -186,6 +218,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
     setState(() {
       _selectedClassUuid = classUuid;
       _selectedSectionUuid = null;
+
       _sections = [];
       _sectionError = null;
     });
@@ -201,21 +234,27 @@ class _StudentsScreenState extends State<StudentsScreen> {
           classUuid: classUuid,
         );
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         setState(() {
           _sections = sections;
           _loadingSections = false;
         });
       } on ApiException catch (e) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         setState(() {
           _loadingSections = false;
           _sectionError = e.message;
         });
       } catch (e) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         setState(() {
           _loadingSections = false;
@@ -269,19 +308,25 @@ class _StudentsScreenState extends State<StudentsScreen> {
         content: Text('Are you sure you want to delete ${student.fullName}?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
             child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
             child: const Text('Delete'),
           ),
         ],
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      return;
+    }
 
     try {
       await widget.api.deleteStudent(
@@ -289,7 +334,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
         studentUuid: student.uuid,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Student deleted successfully')),
@@ -297,7 +344,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
       await _loadStudents();
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message), backgroundColor: AppColors.danger),
@@ -322,7 +371,11 @@ class _StudentsScreenState extends State<StudentsScreen> {
       builder: (context) =>
           _CorrectionNoteDialog(initialNote: student.correctionNote),
     );
-    if (note == null || !mounted) return;
+
+    if (note == null || !mounted) {
+      return;
+    }
+
     await _runLifecycleAction(
       () => widget.api.updateStudentVerification(
         schoolUuid: widget.schoolUuid,
@@ -343,23 +396,32 @@ class _StudentsScreenState extends State<StudentsScreen> {
           student.isPrinted ? 'Record card reprint?' : 'Mark card printed?',
         ),
         content: Text(
-          'This records print #${student.printCount + 1} for ${student.fullName}. '
+          'This records print #${student.printCount + 1} for '
+          '${student.fullName}. '
           'Downloading a PDF does not mark a card printed.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
             child: const Text('Cancel'),
           ),
           FilledButton(
             key: const Key('confirm-mark-printed-action'),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
             child: Text(student.isPrinted ? 'Record Reprint' : 'Mark Printed'),
           ),
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     await _runLifecycleAction(
       () => widget.api.markStudentPrinted(
         schoolUuid: widget.schoolUuid,
@@ -375,28 +437,45 @@ class _StudentsScreenState extends State<StudentsScreen> {
   ) async {
     try {
       await action();
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(success)));
+
       await _loadStudents();
     } on ApiException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.message),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+      if (!mounted) {
+        return;
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: AppColors.danger,
+        ),
+      );
     }
   }
 
   Future<void> _runBatch(bool verify) async {
-    if (_selectedStudentUuids.isEmpty) return;
+    if (_selectedStudentUuids.isEmpty) {
+      return;
+    }
+
     final selection = _selection;
-    if (verify && !selection.canBatchVerify) return;
-    if (!verify && !selection.canBatchMarkPrinted) return;
+
+    if (verify && !selection.canBatchVerify) {
+      return;
+    }
+
+    if (!verify && !selection.canBatchMarkPrinted) {
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -410,12 +489,17 @@ class _StudentsScreenState extends State<StudentsScreen> {
         ),
         content: Text(
           verify
-              ? 'All selected Pending and Needs Correction records will become Verified.'
-              : '${selection.reprintCount} selected card(s) are reprints. This action records production; PDF download alone does not.',
+              ? 'All selected Pending and Needs Correction records '
+                    'will become Verified.'
+              : '${selection.reprintCount} selected card(s) are '
+                    'reprints. This action records production; '
+                    'PDF download alone does not.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
             child: const Text('Cancel'),
           ),
           FilledButton(
@@ -424,13 +508,19 @@ class _StudentsScreenState extends State<StudentsScreen> {
                   ? 'confirm-batch-verify-action'
                   : 'confirm-batch-print-action',
             ),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
             child: Text(verify ? 'Verify All' : 'Mark All Printed'),
           ),
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     try {
       if (verify) {
         await widget.api.batchVerifyStudents(
@@ -443,15 +533,22 @@ class _StudentsScreenState extends State<StudentsScreen> {
           studentUuids: _selectedStudentUuids.toList(),
         );
       }
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       setState(_selectedStudentUuids.clear);
+
       await _loadStudents();
     } on ApiException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+      if (!mounted) {
+        return;
       }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 
@@ -460,7 +557,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
     final students = _filteredStudents;
 
     return Scaffold(
-      backgroundColor: const Color(0xfff5f7fb),
+      backgroundColor: AppColors.background,
       appBar: AuthenticatedAppBar(
         title: Text('Students — ${widget.schoolName}'),
       ),
@@ -469,34 +566,22 @@ class _StudentsScreenState extends State<StudentsScreen> {
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1200),
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: EdgeInsets.all(constraints.maxWidth > 700 ? 28 : 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _buildPageHeading(),
+                    const SizedBox(height: 20),
                     _buildHeader(),
                     const SizedBox(height: 20),
-                    Expanded(child: _buildContent(students)),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton(
-                          key: const Key('students-previous-page'),
-                          onPressed: _loading || _offset == 0
-                              ? null
-                              : () => _loadStudents(offset: _offset - 100),
-                          child: const Text('Previous'),
-                        ),
-                        Text('$_total students · Page ${_offset ~/ 100 + 1}'),
-                        TextButton(
-                          key: const Key('students-next-page'),
-                          onPressed: _loading || !_hasMore
-                              ? null
-                              : () => _loadStudents(offset: _offset + 100),
-                          child: const Text('Next'),
-                        ),
-                      ],
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 260),
+                      child: _buildContent(students),
                     ),
+                    const SizedBox(height: 12),
+                    _buildPagination(),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -507,111 +592,139 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
+  Widget _buildPageHeading() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Students',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Manage student records, verification and '
+              'ID-card preparation.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ],
+        );
+
+        final addButton = widget.canEdit
+            ? FilledButton.icon(
+                key: const Key('add-student-primary-action'),
+                onPressed: () async {
+                  await AppNavigation.navigateToWorkflow<void>(
+                    context,
+                    AppRoutes.addStudent,
+                  );
+
+                  if (mounted) {
+                    await _loadStudents();
+                  }
+                },
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add Student'),
+              )
+            : null;
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              heading,
+              if (addButton != null) ...[
+                const SizedBox(height: 16),
+                Align(alignment: Alignment.centerLeft, child: addButton),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: heading),
+            ?addButton,
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildHeader() {
     final selection = _selection;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search by name, admission number or roll number',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xffe4e8f0)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xffe4e8f0)),
-                  ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 700;
+
+            final searchField = TextField(
+              decoration: InputDecoration(
+                hintText: 'Search by name, admission number or roll number',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: AppColors.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
-                onChanged: (value) {
-                  setState(() {
-                    _search = value;
-                  });
-                  _searchTimer?.cancel();
-                  _searchTimer = Timer(
-                    const Duration(milliseconds: 300),
-                    () => _loadStudents(),
-                  );
-                },
-              ),
-            ),
-            if (widget.canEdit) ...[
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      OutlinedButton.icon(
-                        key: const Key('student-grid-action'),
-                        onPressed: () async {
-                          await AppNavigation.navigateToWorkflow<void>(
-                            context,
-                            AppRoutes.studentGrid,
-                          );
-                          if (mounted) await _loadStudents();
-                        },
-                        icon: const Icon(Icons.grid_on_outlined),
-                        label: const Text('Excel Grid'),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        key: const Key('bulk-photo-import-action'),
-                        onPressed: () async {
-                          final imported =
-                              await AppNavigation.navigateToWorkflow<bool>(
-                                context,
-                                AppRoutes.bulkPhotoImport,
-                              );
-                          if (imported == true && mounted) {
-                            await _loadStudents();
-                          }
-                        },
-                        icon: const Icon(Icons.add_a_photo_outlined),
-                        label: const Text('Bulk Photos'),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final imported =
-                              await AppNavigation.navigateToWorkflow<bool>(
-                                context,
-                                AppRoutes.studentImport,
-                              );
-                          if (imported == true && mounted) {
-                            await _loadStudents();
-                          }
-                        },
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text('Bulk Import'),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton.icon(
-                        onPressed: () async {
-                          await AppNavigation.navigateToWorkflow<void>(
-                            context,
-                            AppRoutes.addStudent,
-                          );
-                          if (mounted) await _loadStudents();
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Student'),
-                      ),
-                    ],
-                  ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
               ),
-            ],
-          ],
+              onChanged: (value) {
+                setState(() {
+                  _search = value;
+                });
+
+                _searchTimer?.cancel();
+
+                _searchTimer = Timer(
+                  const Duration(milliseconds: 300),
+                  () => _loadStudents(),
+                );
+              },
+            );
+
+            final moreActions = widget.canEdit ? _buildMoreActions() : null;
+
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  searchField,
+                  if (moreActions != null) ...[
+                    const SizedBox(height: 12),
+                    Align(alignment: Alignment.centerLeft, child: moreActions),
+                  ],
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: searchField),
+                if (moreActions != null) ...[
+                  const SizedBox(width: 12),
+                  moreActions,
+                ],
+              ],
+            );
+          },
         ),
         const SizedBox(height: 12),
         _buildFilters(),
@@ -636,7 +749,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
                   DropdownMenuItem(value: 'verified', child: Text('Verified')),
                 ],
                 onChanged: (value) async {
-                  setState(() => _verificationStatus = value);
+                  setState(() {
+                    _verificationStatus = value;
+                  });
+
                   await _loadStudents();
                 },
               ),
@@ -652,7 +768,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
                   DropdownMenuItem(value: true, child: Text('Printed')),
                 ],
                 onChanged: (value) async {
-                  setState(() => _printed = value);
+                  setState(() {
+                    _printed = value;
+                  });
+
                   await _loadStudents();
                 },
               ),
@@ -665,7 +784,8 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     : null,
                 icon: const Icon(Icons.verified_outlined),
                 label: Text(
-                  'Verify Selected (${_selectedStudentUuids.length})',
+                  'Verify Selected '
+                  '(${_selectedStudentUuids.length})',
                 ),
               ),
             if (_selectedStudentUuids.isNotEmpty && widget.canMarkPrinted)
@@ -682,8 +802,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
         if (widget.canVerify && selection.verifyIneligibleCount > 0) ...[
           const SizedBox(height: 8),
           Text(
-            '${selection.verifyIneligibleCount} of ${selection.selectedCount} selected '
-            'record(s) are already verified. Deselect them before batch Verify.',
+            '${selection.verifyIneligibleCount} of '
+            '${selection.selectedCount} selected '
+            'record(s) are already verified. '
+            'Deselect them before batch Verify.',
             key: const Key('batch-verify-ineligible-message'),
             style: const TextStyle(
               color: AppColors.danger,
@@ -694,8 +816,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
         if (widget.canMarkPrinted && selection.printIneligibleCount > 0) ...[
           const SizedBox(height: 8),
           Text(
-            '${selection.printIneligibleCount} of ${selection.selectedCount} selected '
-            'record(s) are not verified. Deselect them before Mark Selected Printed.',
+            '${selection.printIneligibleCount} of '
+            '${selection.selectedCount} selected '
+            'record(s) are not verified. '
+            'Deselect them before Mark Selected Printed.',
             key: const Key('batch-print-ineligible-message'),
             style: const TextStyle(
               color: AppColors.danger,
@@ -707,11 +831,118 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
+  Widget _buildMoreActions() {
+    return PopupMenuButton<String>(
+      key: const Key('student-more-actions'),
+      tooltip: 'More actions',
+      onSelected: (value) async {
+        if (value == 'grid') {
+          await AppNavigation.navigateToWorkflow<void>(
+            context,
+            AppRoutes.studentGrid,
+          );
+
+          if (mounted) {
+            await _loadStudents();
+          }
+
+          return;
+        }
+
+        if (value == 'photos') {
+          final imported = await AppNavigation.navigateToWorkflow<bool>(
+            context,
+            AppRoutes.bulkPhotoImport,
+          );
+
+          if (imported == true && mounted) {
+            await _loadStudents();
+          }
+
+          return;
+        }
+
+        if (value == 'import') {
+          final imported = await AppNavigation.navigateToWorkflow<bool>(
+            context,
+            AppRoutes.studentImport,
+          );
+
+          if (imported == true && mounted) {
+            await _loadStudents();
+          }
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          key: Key('student-grid-action'),
+          value: 'grid',
+          child: ListTile(
+            leading: Icon(Icons.grid_on_outlined),
+            title: Text('Excel Grid'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        PopupMenuItem(
+          key: Key('bulk-photo-import-action'),
+          value: 'photos',
+          child: ListTile(
+            leading: Icon(Icons.add_a_photo_outlined),
+            title: Text('Bulk Photos'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        PopupMenuItem(
+          key: Key('student-import-action'),
+          value: 'import',
+          child: ListTile(
+            leading: Icon(Icons.upload_file_outlined),
+            title: Text('Bulk Import'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+      child: Container(
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderStrong),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.more_horiz_rounded,
+              size: 18,
+              color: AppColors.textPrimary,
+            ),
+            SizedBox(width: 8),
+            Text(
+              'More actions',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilters() {
     if (_loadingFilters) {
       return const Card(
         elevation: 0,
-        color: Colors.white,
+        color: AppColors.surface,
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Row(
@@ -728,6 +959,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
         ),
       );
     }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 750;
@@ -852,14 +1084,14 @@ class _StudentsScreenState extends State<StudentsScreen> {
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppColors.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xffe4e8f0)),
+          borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xffe4e8f0)),
+          borderSide: const BorderSide(color: AppColors.border),
         ),
       ),
       items: items,
@@ -877,26 +1109,60 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
 
     if (students.isEmpty) {
-      return const Center(
-        child: Text(
-          'No students found.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.groups_2_outlined,
+                  size: 28,
+                  color: AppColors.accent,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'No students found.',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Adjust the current filters or add a student to get started.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0xffe4e8f0)),
+        side: const BorderSide(color: AppColors.border),
       ),
+      clipBehavior: Clip.antiAlias,
       child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         padding: const EdgeInsets.all(8),
         itemCount: students.length,
-        // ignore: unnecessary_underscores
-        separatorBuilder: (_, __) => const Divider(height: 1),
+        separatorBuilder: (context, index) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final student = students[index];
 
@@ -904,13 +1170,15 @@ class _StudentsScreenState extends State<StudentsScreen> {
             leading: Checkbox(
               value: _selectedStudentUuids.contains(student.uuid),
               onChanged: widget.canVerify || widget.canMarkPrinted
-                  ? (selected) => setState(() {
-                      if (selected == true) {
-                        _selectedStudentUuids.add(student.uuid);
-                      } else {
-                        _selectedStudentUuids.remove(student.uuid);
-                      }
-                    })
+                  ? (selected) {
+                      setState(() {
+                        if (selected == true) {
+                          _selectedStudentUuids.add(student.uuid);
+                        } else {
+                          _selectedStudentUuids.remove(student.uuid);
+                        }
+                      });
+                    }
                   : null,
             ),
             title: Row(
@@ -964,7 +1232,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                         );
                       }
                     },
-                    itemBuilder: (_) => [
+                    itemBuilder: (context) => [
                       if (widget.canEdit)
                         const PopupMenuItem(value: 'edit', child: Text('Edit')),
                       if (widget.canDelete)
@@ -1012,6 +1280,43 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
     );
   }
+
+  Widget _buildPagination() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton(
+          key: const Key('students-previous-page'),
+          onPressed: _loading || _offset == 0
+              ? null
+              : () {
+                  _loadStudents(offset: _offset - 100);
+                },
+          child: const Text('Previous'),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            '$_total students · '
+            'Page ${_offset ~/ 100 + 1}',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        TextButton(
+          key: const Key('students-next-page'),
+          onPressed: _loading || !_hasMore
+              ? null
+              : () {
+                  _loadStudents(offset: _offset + 100);
+                },
+          child: const Text('Next'),
+        ),
+      ],
+    );
+  }
 }
 
 class _ErrorView extends StatelessWidget {
@@ -1054,6 +1359,7 @@ class _CorrectionNoteDialogState extends State<_CorrectionNoteDialog> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialNote,
   );
+
   String? _error;
 
   @override
@@ -1063,35 +1369,44 @@ class _CorrectionNoteDialogState extends State<_CorrectionNoteDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Needs Correction'),
-    content: TextField(
-      key: const Key('correction-note-field'),
-      controller: _controller,
-      autofocus: true,
-      maxLines: 4,
-      decoration: InputDecoration(
-        labelText: 'Correction note',
-        errorText: _error,
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Needs Correction'),
+      content: TextField(
+        key: const Key('correction-note-field'),
+        controller: _controller,
+        autofocus: true,
+        maxLines: 4,
+        decoration: InputDecoration(
+          labelText: 'Correction note',
+          errorText: _error,
+        ),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const Key('save-correction-note'),
-        onPressed: () {
-          final value = _controller.text.trim();
-          if (value.isEmpty) {
-            setState(() => _error = 'Correction note is required');
-            return;
-          }
-          Navigator.pop(context, value);
-        },
-        child: const Text('Save'),
-      ),
-    ],
-  );
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('save-correction-note'),
+          onPressed: () {
+            final value = _controller.text.trim();
+
+            if (value.isEmpty) {
+              setState(() {
+                _error = 'Correction note is required';
+              });
+
+              return;
+            }
+
+            Navigator.pop(context, value);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
 }

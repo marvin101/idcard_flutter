@@ -557,6 +557,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('student-more-actions')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('student-more-actions')));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('student-grid-action')), findsOneWidget);
   });
 }
