@@ -1901,6 +1901,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               schoolUuid: widget.schoolUuid,
               api: widget.api,
             ),
+          if (widget.canManagePublicShare) _appBarDivider(),
 
           _section(
             () => (_editingBack, _template.hasBackDesign),
@@ -1984,91 +1985,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               ],
             ),
           ),
+          _appBarDivider(),
 
           _section(
             () => (_saveState, _saving, _dirty, _localDuplicate),
-            () => Center(
-              child: Container(
-                key: const Key('designer-save-state'),
-                margin: const EdgeInsets.symmetric(horizontal: 6),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: _dirty
-                      ? Colors.white.withValues(alpha: 0.12)
-                      : Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.16),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _saving
-                          ? Icons.sync_rounded
-                          : _dirty
-                          ? Icons.edit_outlined
-                          : Icons.check_circle_outline_rounded,
-                      size: 14,
-                      color: Colors.white70,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _saveState,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 4),
-
-          _section(
-            () => (_saveState, _saving, _dirty, _localDuplicate),
-            () => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton.icon(
-                key: const Key('designer-save'),
-                onPressed: _dirty && !_saving && !_localDuplicate
-                    ? _save
-                    : null,
-                icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Save'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  disabledForegroundColor: Colors.white38,
-                  backgroundColor: Colors.white.withValues(alpha: 0.10),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.18),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            _designerSaveControls,
           ),
         ],
       ),
@@ -2483,6 +2404,104 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ),
     ),
   );
+  Widget _appBarDivider() => Center(
+    child: Container(
+      width: 1,
+      height: 24,
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      color: Colors.white.withValues(alpha: .16),
+    ),
+  );
+
+  Widget _designerSaveControls() {
+    final canSave = _dirty && !_saving && !_localDuplicate;
+
+    final statusColour = _saving
+        ? Colors.white70
+        : _dirty
+        ? AppColors.warning
+        : Colors.white70;
+
+    return Center(
+      child: Container(
+        height: 38,
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .07),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: .15)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              key: const Key('designer-save-state'),
+              padding: const EdgeInsets.only(left: 10, right: 9),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _saving
+                        ? Icons.sync_rounded
+                        : _dirty
+                        ? Icons.edit_outlined
+                        : Icons.check_circle_outline_rounded,
+                    size: 14,
+                    color: statusColour,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _saveState,
+                    style: TextStyle(
+                      color: statusColour,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Container(
+              width: 1,
+              height: 20,
+              color: Colors.white.withValues(alpha: .14),
+            ),
+
+            SizedBox(
+              height: 32,
+              child: TextButton.icon(
+                key: const Key('designer-save'),
+                onPressed: canSave ? _save : null,
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.save_outlined, size: 16),
+                label: const Text('Save'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: Colors.white38,
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  textStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _tool(
     IconData icon,
