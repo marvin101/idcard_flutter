@@ -2095,7 +2095,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   return Row(
                     children: [
                       Container(
-                        width: 250,
+                        width: 280,
                         decoration: const BoxDecoration(
                           color: AppColors.surface,
                           border: Border(
@@ -2176,209 +2176,267 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     color: AppColors.surface,
     surfaceTintColor: Colors.transparent,
     child: Container(
-      height: 62,
+      height: 72,
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         children: [
-          IconButton(
-            onPressed: _canUndo ? _undo : null,
-            icon: const Icon(Icons.undo_rounded),
-            tooltip: 'Undo',
-            style: IconButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              disabledForegroundColor: AppColors.disabled,
-            ),
-          ),
-          IconButton(
-            onPressed: _canRedo ? _redo : null,
-            icon: const Icon(Icons.redo_rounded),
-            tooltip: 'Redo',
-            style: IconButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              disabledForegroundColor: AppColors.disabled,
-            ),
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 6),
-            child: VerticalDivider(color: AppColors.border),
-          ),
-
-          _tool(
-            Icons.text_fields_rounded,
-            'Text',
-            () => _add(DesignElementType.text),
-            key: 'add-text',
+          _toolbarActionGroup(
+            label: 'HISTORY',
+            children: [
+              IconButton(
+                onPressed: _canUndo ? _undo : null,
+                icon: const Icon(Icons.undo_rounded),
+                tooltip: 'Undo',
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  disabledForegroundColor: AppColors.disabled,
+                ),
+              ),
+              IconButton(
+                onPressed: _canRedo ? _redo : null,
+                icon: const Icon(Icons.redo_rounded),
+                tooltip: 'Redo',
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  disabledForegroundColor: AppColors.disabled,
+                ),
+              ),
+            ],
           ),
 
-          _tool(
-            Icons.badge_outlined,
-            'Identity field',
-            () => _add(DesignElementType.boundText),
-            key: 'add-student-field',
+          _toolbarDivider(),
+
+          _toolbarActionGroup(
+            label: 'TEXT & DATA',
+            children: [
+              _tool(
+                Icons.text_fields_rounded,
+                'Text',
+                () => _add(DesignElementType.text),
+                key: 'add-text',
+              ),
+              _tool(
+                Icons.badge_outlined,
+                'Identity field',
+                () => _add(DesignElementType.boundText),
+                key: 'add-student-field',
+              ),
+              _customFieldTool(),
+            ],
           ),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: PopupMenuButton<StudentFieldDefinition>(
-              tooltip: 'Custom field',
-              enabled: _availableCustomFields.isNotEmpty,
-              onSelected: (field) =>
-                  _add(DesignElementType.customFieldText, customField: field),
-              itemBuilder: (context) => [
-                for (final field in _availableCustomFields)
-                  PopupMenuItem<StudentFieldDefinition>(
-                    value: field,
-                    child: Text(field.label),
+          _toolbarDivider(),
+
+          _toolbarActionGroup(
+            label: 'MEDIA',
+            children: [
+              _tool(
+                Icons.person_outline_rounded,
+                'Photo',
+                () => _add(DesignElementType.studentPhoto),
+                key: 'add-photo',
+              ),
+              _tool(
+                Icons.school_outlined,
+                'Logo',
+                () => _add(DesignElementType.schoolLogo),
+                key: 'add-logo',
+              ),
+            ],
+          ),
+
+          _toolbarDivider(),
+
+          _toolbarActionGroup(
+            label: 'SHAPES',
+            children: [
+              _tool(
+                Icons.rectangle_outlined,
+                'Rectangle',
+                () => _add(DesignElementType.rectangle),
+                key: 'add-rectangle',
+              ),
+              _tool(
+                Icons.horizontal_rule_rounded,
+                'Line',
+                () => _add(DesignElementType.line),
+                key: 'add-line',
+              ),
+            ],
+          ),
+
+          _toolbarDivider(),
+
+          _toolbarActionGroup(
+            label: 'CODES',
+            children: [
+              _tool(
+                Icons.qr_code_2_rounded,
+                'QR code',
+                () => _add(DesignElementType.qrCode),
+                key: 'add-qr-code',
+              ),
+              _tool(
+                Icons.view_week_outlined,
+                'Barcode',
+                () => _add(DesignElementType.barcode),
+                key: 'add-barcode',
+              ),
+            ],
+          ),
+
+          _toolbarDivider(),
+
+          _toolbarActionGroup(
+            label: 'ELEMENT',
+            children: [
+              IconButton(
+                onPressed: _selected == null ? null : _duplicate,
+                icon: const Icon(Icons.copy_outlined),
+                tooltip: 'Duplicate element',
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  disabledForegroundColor: AppColors.disabled,
+                ),
+              ),
+              IconButton(
+                onPressed: _selected == null ? null : _remove,
+                icon: const Icon(Icons.delete_outline_rounded),
+                tooltip: 'Delete',
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.danger,
+                  disabledForegroundColor: AppColors.disabled,
+                ),
+              ),
+            ],
+          ),
+
+          _toolbarDivider(),
+
+          _toolbarActionGroup(
+            label: 'ALIGN',
+            children: [
+              ...['left', 'hcenter', 'right', 'top', 'vcenter', 'bottom'].map(
+                (value) => IconButton(
+                  onPressed: _selected == null ? null : () => _align(value),
+                  icon: Icon(switch (value) {
+                    'left' => Icons.align_horizontal_left_rounded,
+                    'hcenter' => Icons.align_horizontal_center_rounded,
+                    'right' => Icons.align_horizontal_right_rounded,
+                    'top' => Icons.align_vertical_top_rounded,
+                    'vcenter' => Icons.align_vertical_center_rounded,
+                    _ => Icons.align_vertical_bottom_rounded,
+                  }, size: 19),
+                  tooltip: switch (value) {
+                    'left' => 'Align left',
+                    'hcenter' => 'Align horizontal center',
+                    'right' => 'Align right',
+                    'top' => 'Align top',
+                    'vcenter' => 'Align vertical center',
+                    _ => 'Align bottom',
+                  },
+                  style: IconButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    disabledForegroundColor: AppColors.disabled,
                   ),
-              ],
-              child: Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: _availableCustomFields.isNotEmpty
-                      ? AppColors.surfaceSoft
-                      : AppColors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.dynamic_form_outlined,
-                      size: 18,
-                      color: _availableCustomFields.isNotEmpty
-                          ? AppColors.textPrimary
-                          : AppColors.disabled,
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      'Custom field',
-                      style: TextStyle(
-                        color: _availableCustomFields.isNotEmpty
-                            ? AppColors.textPrimary
-                            : AppColors.disabled,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 17,
-                      color: _availableCustomFields.isNotEmpty
-                          ? AppColors.textSecondary
-                          : AppColors.disabled,
-                    ),
-                  ],
                 ),
               ),
-            ),
-          ),
-
-          _tool(
-            Icons.person_outline_rounded,
-            'Photo',
-            () => _add(DesignElementType.studentPhoto),
-            key: 'add-photo',
-          ),
-
-          _tool(
-            Icons.school_outlined,
-            'Logo',
-            () => _add(DesignElementType.schoolLogo),
-            key: 'add-logo',
-          ),
-
-          _tool(
-            Icons.rectangle_outlined,
-            'Rectangle',
-            () => _add(DesignElementType.rectangle),
-            key: 'add-rectangle',
-          ),
-
-          _tool(
-            Icons.horizontal_rule_rounded,
-            'Line',
-            () => _add(DesignElementType.line),
-            key: 'add-line',
-          ),
-
-          _tool(
-            Icons.qr_code_2_rounded,
-            'QR code',
-            () => _add(DesignElementType.qrCode),
-            key: 'add-qr-code',
-          ),
-
-          _tool(
-            Icons.view_week_outlined,
-            'Barcode',
-            () => _add(DesignElementType.barcode),
-            key: 'add-barcode',
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 6),
-            child: VerticalDivider(color: AppColors.border),
-          ),
-
-          IconButton(
-            onPressed: _selected == null ? null : _duplicate,
-            icon: const Icon(Icons.copy_outlined),
-            tooltip: 'Duplicate element',
-            style: IconButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              disabledForegroundColor: AppColors.disabled,
-            ),
-          ),
-
-          IconButton(
-            onPressed: _selected == null ? null : _remove,
-            icon: const Icon(Icons.delete_outline_rounded),
-            tooltip: 'Delete',
-            style: IconButton.styleFrom(
-              foregroundColor: AppColors.danger,
-              disabledForegroundColor: AppColors.disabled,
-            ),
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 6),
-            child: VerticalDivider(color: AppColors.border),
-          ),
-
-          ...['left', 'hcenter', 'right', 'top', 'vcenter', 'bottom'].map(
-            (value) => IconButton(
-              onPressed: _selected == null ? null : () => _align(value),
-              icon: Icon(switch (value) {
-                'left' => Icons.align_horizontal_left_rounded,
-                'hcenter' => Icons.align_horizontal_center_rounded,
-                'right' => Icons.align_horizontal_right_rounded,
-                'top' => Icons.align_vertical_top_rounded,
-                'vcenter' => Icons.align_vertical_center_rounded,
-                _ => Icons.align_vertical_bottom_rounded,
-              }),
-              tooltip: switch (value) {
-                'left' => 'Align left',
-                'hcenter' => 'Align horizontal center',
-                'right' => 'Align right',
-                'top' => 'Align top',
-                'vcenter' => 'Align vertical center',
-                _ => 'Align bottom',
-              },
-              style: IconButton.styleFrom(
-                foregroundColor: AppColors.textSecondary,
-                disabledForegroundColor: AppColors.disabled,
-              ),
-            ),
+            ],
           ),
         ],
+      ),
+    ),
+  );
+  Widget _toolbarActionGroup({
+    required String label,
+    required List<Widget> children,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 3),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 3),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .65,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ),
+        Row(mainAxisSize: MainAxisSize.min, children: children),
+      ],
+    ),
+  );
+
+  Widget _toolbarDivider() => const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 5),
+    child: VerticalDivider(color: AppColors.border, indent: 4, endIndent: 4),
+  );
+
+  Widget _customFieldTool() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 3),
+    child: PopupMenuButton<StudentFieldDefinition>(
+      tooltip: 'Custom field',
+      enabled: _availableCustomFields.isNotEmpty,
+      onSelected: (field) =>
+          _add(DesignElementType.customFieldText, customField: field),
+      itemBuilder: (context) => [
+        for (final field in _availableCustomFields)
+          PopupMenuItem<StudentFieldDefinition>(
+            value: field,
+            child: Text(field.label),
+          ),
+      ],
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
+        decoration: BoxDecoration(
+          color: _availableCustomFields.isNotEmpty
+              ? AppColors.surfaceSoft
+              : AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.dynamic_form_outlined,
+              size: 17,
+              color: _availableCustomFields.isNotEmpty
+                  ? AppColors.textPrimary
+                  : AppColors.disabled,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Custom field',
+              style: TextStyle(
+                color: _availableCustomFields.isNotEmpty
+                    ? AppColors.textPrimary
+                    : AppColors.disabled,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: _availableCustomFields.isNotEmpty
+                  ? AppColors.textSecondary
+                  : AppColors.disabled,
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -2436,21 +2494,20 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     child: TextButton.icon(
       key: Key(key),
       onPressed: onTap,
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: 17),
       label: Text(label),
       style: TextButton.styleFrom(
         foregroundColor: AppColors.textPrimary,
         backgroundColor: AppColors.surfaceSoft,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(9),
           side: const BorderSide(color: AppColors.border),
         ),
       ),
     ),
   );
-
   Widget _workspace() => Column(
     children: [
       Container(
@@ -2763,6 +2820,17 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     final elements = [..._document.elements]
       ..sort((a, b) => b.zIndex.compareTo(a.zIndex));
 
+    final selectedIndex = elements.indexWhere(
+      (element) => element.id == _selectedId,
+    );
+
+    final hasSelection = selectedIndex >= 0;
+
+    // Elements are displayed from highest z-index to lowest.
+    final canMoveForward = hasSelection && selectedIndex > 0;
+
+    final canMoveBackward = hasSelection && selectedIndex < elements.length - 1;
+
     return Material(
       color: AppColors.surface,
       surfaceTintColor: Colors.transparent,
@@ -2865,66 +2933,107 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                               ? AppColors.accentSoft
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
-                          child: ListTile(
-                            key: Key('layer-${element.id}'),
-                            selected: selected,
-                            dense: true,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(
+                              color: selected
+                                  ? AppColors.accent.withValues(alpha: .24)
+                                  : Colors.transparent,
                             ),
-                            onTap: () {
-                              _select(element.id);
-                            },
-                            leading: IconButton(
-                              tooltip: element.visible ? 'Hide' : 'Show',
-                              icon: Icon(
-                                element.visible
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                                size: 18,
-                                color: element.visible
-                                    ? AppColors.textSecondary
-                                    : AppColors.textMuted,
+                          ),
+                          child: Stack(
+                            children: [
+                              if (selected)
+                                Positioned(
+                                  left: 0,
+                                  top: 8,
+                                  bottom: 8,
+                                  child: Container(
+                                    width: 3,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accent,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ),
+                                ),
+                              ListTile(
+                                key: Key('layer-${element.id}'),
+                                selected: selected,
+                                dense: true,
+                                contentPadding: const EdgeInsets.only(
+                                  left: 8,
+                                  right: 4,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                onTap: () {
+                                  _select(element.id);
+                                },
+                                leading: IconButton(
+                                  tooltip: element.visible ? 'Hide' : 'Show',
+                                  icon: Icon(
+                                    element.visible
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    size: 18,
+                                    color: selected
+                                        ? AppColors.accent
+                                        : element.visible
+                                        ? AppColors.textSecondary
+                                        : AppColors.textMuted,
+                                  ),
+                                  onPressed: () {
+                                    _updateElement(
+                                      element.id,
+                                      (live) =>
+                                          live.copyWith(visible: !live.visible),
+                                    );
+                                  },
+                                ),
+                                title: Tooltip(
+                                  message: _elementLabel(element),
+                                  waitDuration: const Duration(
+                                    milliseconds: 500,
+                                  ),
+                                  child: Text(
+                                    _elementLabel(element),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: selected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                      color: selected
+                                          ? AppColors.accent
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  tooltip: element.locked ? 'Unlock' : 'Lock',
+                                  icon: Icon(
+                                    element.locked
+                                        ? Icons.lock_outline_rounded
+                                        : Icons.lock_open_rounded,
+                                    size: 18,
+                                    color: element.locked
+                                        ? AppColors.warning
+                                        : selected
+                                        ? AppColors.accent
+                                        : AppColors.textMuted,
+                                  ),
+                                  onPressed: () {
+                                    _updateElement(
+                                      element.id,
+                                      (live) =>
+                                          live.copyWith(locked: !live.locked),
+                                    );
+                                  },
+                                ),
                               ),
-                              onPressed: () {
-                                _updateElement(
-                                  element.id,
-                                  (live) =>
-                                      live.copyWith(visible: !live.visible),
-                                );
-                              },
-                            ),
-                            title: Text(
-                              _elementLabel(element),
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: selected
-                                    ? AppColors.accent
-                                    : AppColors.textPrimary,
-                              ),
-                            ),
-                            trailing: IconButton(
-                              tooltip: element.locked ? 'Unlock' : 'Lock',
-                              icon: Icon(
-                                element.locked
-                                    ? Icons.lock_outline_rounded
-                                    : Icons.lock_open_rounded,
-                                size: 18,
-                                color: element.locked
-                                    ? AppColors.warning
-                                    : AppColors.textMuted,
-                              ),
-                              onPressed: () {
-                                _updateElement(
-                                  element.id,
-                                  (live) => live.copyWith(locked: !live.locked),
-                                );
-                              },
-                            ),
+                            ],
                           ),
                         ),
                       );
@@ -2933,51 +3042,157 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
             decoration: const BoxDecoration(
+              color: AppColors.surface,
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: _selected == null ? null : () => _layer('front'),
-                  icon: const Icon(Icons.vertical_align_top_rounded),
-                  tooltip: 'Bring to front',
-                  style: IconButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    disabledForegroundColor: AppColors.disabled,
+                const Padding(
+                  padding: EdgeInsets.only(left: 2, bottom: 8),
+                  child: Text(
+                    'LAYER ORDER',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .7,
+                      color: AppColors.textMuted,
+                    ),
                   ),
                 ),
-                IconButton(
-                  onPressed: _selected == null ? null : () => _layer('forward'),
-                  icon: const Icon(Icons.arrow_upward_rounded),
-                  tooltip: 'Bring forward',
-                  style: IconButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    disabledForegroundColor: AppColors.disabled,
-                  ),
-                ),
-                IconButton(
-                  onPressed: _selected == null
-                      ? null
-                      : () => _layer('backward'),
-                  icon: const Icon(Icons.arrow_downward_rounded),
-                  tooltip: 'Send backward',
-                  style: IconButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    disabledForegroundColor: AppColors.disabled,
-                  ),
-                ),
-                IconButton(
-                  onPressed: _selected == null ? null : () => _layer('back'),
-                  icon: const Icon(Icons.vertical_align_bottom_rounded),
-                  tooltip: 'Send to back',
-                  style: IconButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    disabledForegroundColor: AppColors.disabled,
-                  ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final buttonWidth = (constraints.maxWidth - 8) / 2;
+
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton.icon(
+                            key: const Key('layer-bring-front'),
+                            onPressed: canMoveForward
+                                ? () => _layer('front')
+                                : null,
+                            icon: const Icon(
+                              Icons.vertical_align_top_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('Bring front'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton.icon(
+                            key: const Key('layer-bring-forward'),
+                            onPressed: canMoveForward
+                                ? () => _layer('forward')
+                                : null,
+                            icon: const Icon(
+                              Icons.arrow_upward_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('Forward'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton.icon(
+                            key: const Key('layer-send-backward'),
+                            onPressed: canMoveBackward
+                                ? () => _layer('backward')
+                                : null,
+                            icon: const Icon(
+                              Icons.arrow_downward_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('Backward'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton.icon(
+                            key: const Key('layer-send-back'),
+                            onPressed: canMoveBackward
+                                ? () => _layer('back')
+                                : null,
+                            icon: const Icon(
+                              Icons.vertical_align_bottom_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('Send back'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -2987,10 +3202,141 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     );
   }
 
-  String _elementLabel(DesignElement element) =>
-      element.type == DesignElementType.text
-      ? (element.data['text'] as String? ?? 'Text')
-      : element.type.wire.replaceAll('_', ' ');
+  String _elementLabel(DesignElement element) {
+    // Give the migrated/default CampusID template meaningful names.
+    switch (element.id) {
+      case 'legacy-header':
+        return 'Header background';
+      case 'legacy-title':
+        return 'School name';
+      case 'legacy-subtitle':
+        return 'School address';
+      case 'legacy-photo':
+        return _identityPhotoLabel;
+      case 'legacy-name':
+        return 'Full name';
+      case 'legacy-admission':
+        return 'Admission number';
+      case 'legacy-father':
+        return "Father's name";
+      case 'legacy-dob':
+        return 'Date of birth';
+      case 'legacy-footer':
+        return 'Footer background';
+      case 'legacy-signature':
+        return 'Principal signature';
+    }
+
+    return switch (element.type) {
+      DesignElementType.text => _staticTextLayerLabel(element),
+
+      DesignElementType.boundText => _boundTextLayerLabel(element),
+
+      DesignElementType.customFieldText => _customFieldLayerLabel(element),
+
+      DesignElementType.studentPhoto => _identityPhotoLabel,
+
+      DesignElementType.schoolLogo => 'School logo',
+
+      DesignElementType.rectangle => 'Rectangle',
+
+      DesignElementType.line => 'Line',
+
+      DesignElementType.qrCode => _codeLayerLabel(element, codeName: 'QR code'),
+
+      DesignElementType.barcode => _codeLayerLabel(
+        element,
+        codeName: 'Barcode',
+      ),
+    };
+  }
+
+  String get _identityPhotoLabel => switch (_previewIdentityType) {
+    'teacher' => 'Teacher photo',
+    'staff' => 'Staff photo',
+    _ => 'Student photo',
+  };
+
+  String _staticTextLayerLabel(DesignElement element) {
+    final text = (element.data['text'] as String?)?.trim();
+
+    if (text == null || text.isEmpty) {
+      return 'Text';
+    }
+
+    if (text.toLowerCase() == 'principal sig.') {
+      return 'Principal signature';
+    }
+
+    return text;
+  }
+
+  String _boundTextLayerLabel(DesignElement element) {
+    final field = element.data['field'];
+
+    if (field is String) {
+      final label = _systemFields[field];
+
+      if (label != null) {
+        return label;
+      }
+    }
+
+    final fallback = (element.data['fallback'] as String?)?.trim();
+
+    if (fallback != null && fallback.isNotEmpty) {
+      return fallback;
+    }
+
+    return 'Identity field';
+  }
+
+  String _customFieldLayerLabel(DesignElement element) {
+    final label = (element.data['label'] as String?)?.trim();
+
+    if (label != null && label.isNotEmpty) {
+      return label;
+    }
+
+    return 'Custom field';
+  }
+
+  String _codeLayerLabel(DesignElement element, {required String codeName}) {
+    final source = _effectiveQrSource(element);
+
+    switch (source) {
+      case 'verification_link':
+        return 'Verification $codeName';
+
+      case 'multiple_fields':
+        return 'Multi-field $codeName';
+
+      case 'custom_field':
+        final label = (element.data['label'] as String?)?.trim();
+
+        if (label != null && label.isNotEmpty) {
+          return '$label $codeName';
+        }
+
+        return 'Custom field $codeName';
+
+      case 'system_field':
+        final field = element.data['field'];
+
+        if (field is String) {
+          final label = _systemFields[field];
+
+          if (label != null) {
+            return '$label $codeName';
+          }
+        }
+
+        return 'Identity $codeName';
+
+      default:
+        return 'Static $codeName';
+    }
+  }
 
   String _qrSource(DesignElement element) {
     if (element.data['fields'] is List) {
