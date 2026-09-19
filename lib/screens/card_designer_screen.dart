@@ -2511,147 +2511,208 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   Widget _workspace() => Column(
     children: [
       Container(
-        height: 58,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: const BoxDecoration(
           color: AppColors.surface,
           border: Border(bottom: BorderSide(color: AppColors.border)),
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.zoom_out_rounded,
-              size: 19,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 180,
-              child: Slider(
-                value: _zoom,
-                min: .5,
-                max: 2,
-                divisions: 15,
-                label: '${(_zoom * 100).round()}%',
-                onChanged: (value) {
-                  _updateUi(() => _zoom = value);
-                },
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.zoom_in_rounded,
-              size: 19,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Text(
-                '${(_zoom * 100).round()}%',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-            const Spacer(),
-            Container(
+              height: 46,
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: AppColors.surfaceSoft,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 border: Border.all(color: AppColors.border),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  key: const Key('designer-preview-identity-type'),
-                  value: _previewIdentityType,
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'ZOOM',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .65,
+                      color: AppColors.textMuted,
+                    ),
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'student',
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.school_outlined,
-                            size: 17,
-                            color: AppColors.textSecondary,
-                          ),
-                          SizedBox(width: 7),
-                          Text('Student preview'),
-                        ],
+                  const SizedBox(width: 10),
+                  const Icon(
+                    Icons.zoom_out_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                  SizedBox(
+                    width: 150,
+                    child: Slider(
+                      value: _zoom,
+                      min: .5,
+                      max: 2,
+                      divisions: 15,
+                      label: '${(_zoom * 100).round()}%',
+                      onChanged: (value) {
+                        _updateUi(() => _zoom = value);
+                      },
+                    ),
+                  ),
+                  const Icon(
+                    Icons.zoom_in_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 54,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Text(
+                      '${(_zoom * 100).round()}%',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    DropdownMenuItem(
-                      value: 'teacher',
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.person_outline_rounded,
-                            size: 17,
-                            color: AppColors.textSecondary,
-                          ),
-                          SizedBox(width: 7),
-                          Text('Teacher preview'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 'staff',
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.badge_outlined,
-                            size: 17,
-                            color: AppColors.textSecondary,
-                          ),
-                          SizedBox(width: 7),
-                          Text('Staff preview'),
-                        ],
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      _updateUi(() {
-                        _previewIdentityType = value;
-                      });
-                    }
-                  },
-                ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 10),
-            OutlinedButton.icon(
-              onPressed: () {
-                _updateUi(() {
-                  _zoom = 1;
-                  _viewTransform.value = Matrix4.identity();
-                });
-              },
-              icon: const Icon(Icons.fit_screen_outlined, size: 18),
-              label: const Text('Fit'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                side: const BorderSide(color: AppColors.border),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+
+            const Spacer(),
+
+            Container(
+              height: 46,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'PREVIEW',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .65,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  const Icon(
+                    Icons.visibility_outlined,
+                    size: 17,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: const Key('designer-preview-identity-type'),
+                      value: _previewIdentityType,
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                      ),
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'student',
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.school_outlined,
+                                size: 17,
+                                color: AppColors.textSecondary,
+                              ),
+                              SizedBox(width: 7),
+                              Text('Student'),
+                            ],
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'teacher',
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.person_outline_rounded,
+                                size: 17,
+                                color: AppColors.textSecondary,
+                              ),
+                              SizedBox(width: 7),
+                              Text('Teacher'),
+                            ],
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'staff',
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.badge_outlined,
+                                size: 17,
+                                color: AppColors.textSecondary,
+                              ),
+                              SizedBox(width: 7),
+                              Text('Staff'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          _updateUi(() {
+                            _previewIdentityType = value;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            SizedBox(
+              height: 46,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  _updateUi(() {
+                    _zoom = 1;
+                    _viewTransform.value = Matrix4.identity();
+                  });
+                },
+                icon: const Icon(Icons.fit_screen_outlined, size: 18),
+                label: const Text('Fit canvas'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  backgroundColor: AppColors.surface,
+                  side: const BorderSide(color: AppColors.border),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
                 ),
               ),
             ),
