@@ -5,13 +5,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../widgets/designer_numeric_field.dart';
-import '../widgets/designer_shortcuts.dart';
-import '../widgets/designer_guides.dart';
-import '../widgets/designer_colour_field.dart';
-
-import '../models/api_student.dart';
 import '../models/api_personnel.dart';
+import '../models/api_student.dart';
 import '../models/card_template.dart';
 import '../models/design_barcode.dart';
 import '../models/design_geometry.dart';
@@ -19,9 +14,14 @@ import '../models/school_profile.dart';
 import '../models/student_field.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_scale_viewport.dart';
 import '../widgets/authenticated_app_bar.dart';
 import '../widgets/design_document_view.dart';
-import '../widgets/app_scale_viewport.dart';
+import '../widgets/designer_colour_field.dart';
+import '../widgets/designer_guides.dart';
+import '../widgets/designer_numeric_field.dart';
+import '../widgets/designer_shortcuts.dart';
 import '../widgets/public_design_share_button.dart';
 import '../widgets/public_verification_settings_button.dart';
 
@@ -33,55 +33,81 @@ class CardDesignerScreen extends StatefulWidget {
     required this.initialTemplate,
     this.canManagePublicShare = false,
   });
-  // Logical pixels; shared by the entry warning and editor layout.
-  static const minimumEditorWidth = 600.0;
-  static const recommendedEditorWidth = 1050.0;
-  static const recommendedEditorHeight = 600.0;
-  static const smallScreenMessage =
-      'Card Designer works best on a larger screen. Please open this page on a desktop or larger display for easier editing.';
+
+  // Logical pixels shared by the entry warning and editor layout.
+  static const double minimumEditorWidth = 600;
+  static const double recommendedEditorWidth = 1050;
+  static const double recommendedEditorHeight = 600;
+
+  static const String smallScreenMessage =
+      'Card Designer works best on a larger screen. '
+      'Open this page on a desktop or larger display for easier editing.';
 
   final String schoolUuid;
   final ApiService api;
   final CardTemplate initialTemplate;
   final bool canManagePublicShare;
+
   @override
   State<CardDesignerScreen> createState() => _CardDesignerScreenState();
 }
 
 class _CardDesignerScreenState extends State<CardDesignerScreen> {
   late CardTemplate _template;
+  late CardTemplate _savedTemplate;
+
   late final TextEditingController _name;
   late final TextEditingController _canvasWidth;
   late final TextEditingController _canvasHeight;
   late final TextEditingController _canvasBackground;
+
   final TransformationController _viewTransform = TransformationController();
+
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'designer canvas');
-  final List<_DesignerSnapshot> _history = [];
-  final _canvasCoordinates = GlobalKey();
-  final _guides = ValueNotifier<List<DesignerGuide>>([]);
-  final List<String> _recentColours = [];
-  final ValueNotifier<int> _revision = ValueNotifier(0);
+
+  final GlobalKey _canvasCoordinates = GlobalKey();
+
+  final ValueNotifier<List<DesignerGuide>> _guides =
+      ValueNotifier<List<DesignerGuide>>(<DesignerGuide>[]);
+
+  final ValueNotifier<int> _revision = ValueNotifier<int>(0);
+
+  final List<_DesignerSnapshot> _history = <_DesignerSnapshot>[];
+
+  final List<String> _recentColours = <String>[];
+
   CardTemplate? _gestureStart;
+
   String? _gestureId;
+  String? _selectedId;
+  String? _logoUrl;
+
   Offset _gestureRemainder = Offset.zero;
+
+  SchoolProfile? _schoolProfile;
+
+  List<StudentFieldDefinition> _customFields = const <StudentFieldDefinition>[];
+
+  int _historyIndex = 0;
+
+  double _zoom = 1;
+
   bool _syncingName = false;
   bool _smallScreenAccepted = false;
   bool _dirtyValue = false;
-  late CardTemplate _savedTemplate;
-  int _historyIndex = 0;
-  String? _selectedId, _logoUrl;
-  SchoolProfile? _schoolProfile;
-  List<StudentFieldDefinition> _customFields = const [];
-  double _zoom = 1;
   bool _saving = false;
   bool _localDuplicate = false;
   bool _editingBack = false;
   bool _allowPop = false;
   bool _leaveDialogOpen = false;
+
   String _previewIdentityType = 'student';
 
   Map<String, String> get _availableSystemFields {
-    if (_previewIdentityType == 'student') return _systemFields;
+    if (_previewIdentityType == 'student') {
+      return _systemFields;
+    }
+
     const studentOnly = {
       'admission_no',
       'roll_no',
@@ -93,6 +119,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       'class',
       'section',
     };
+
     return Map.fromEntries(
       _systemFields.entries.where((entry) => !studentOnly.contains(entry.key)),
     );
@@ -104,17 +131,23 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       'staff' => 'Staff • ',
       _ => null,
     };
+
     return _customFields.where((field) {
-      if (!field.isActive) return false;
+      if (!field.isActive) {
+        return false;
+      }
+
       final personnelField =
           field.label.startsWith('Teacher • ') ||
           field.label.startsWith('Staff • ');
+
       return prefix == null ? !personnelField : field.label.startsWith(prefix);
     });
   }
 
   String _saveState = 'Saved';
   String? _canvasError;
+
   int _idCounter = 0;
 
   static final _sampleStudent = ApiStudent(
@@ -137,6 +170,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         'https://idcard-flutter-web.vercel.app/verify/sample-verification-token',
     isActive: true,
   );
+
   static final _samplePersonnel = ApiPersonnel(
     uuid: 'personnel-preview',
     personnelType: PersonnelType.teacher,
@@ -167,32 +201,43 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   DesignDocument get _document => _editingBack
       ? (_template.backDocument ?? _template.document)
       : _template.document;
+
   DesignElement? get _selected => _document.elements
       .where((element) => element.id == _selectedId)
       .firstOrNull;
+
   bool get _dirty => _dirtyValue;
+
   bool get _canUndo =>
       _historyIndex > 0 ||
       (_gestureStart != null && !identical(_gestureStart, _template));
+
   bool get _canRedo =>
       _gestureStart == null && _historyIndex + 1 < _history.length;
 
   @override
   void initState() {
     super.initState();
+
     _template = widget.initialTemplate.deepCopy();
+    _savedTemplate = _template.deepCopy();
+
     _name = TextEditingController(text: _template.name)..addListener(_rename);
+
     _canvasWidth = TextEditingController(
       text: _document.canvas.width.toStringAsFixed(2),
     );
+
     _canvasHeight = TextEditingController(
       text: _document.canvas.height.toStringAsFixed(2),
     );
+
     _canvasBackground = TextEditingController(
       text: _document.canvas.backgroundColor,
     );
+
     _history.add(_DesignerSnapshot(_template, _selectedId, false));
-    _savedTemplate = _template.deepCopy();
+
     _loadAssets();
   }
 
@@ -202,15 +247,18 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         widget.api
             .getStudentFields(widget.schoolUuid)
             .catchError((_) => <StudentFieldDefinition>[]),
+
         widget.api
             .getSchoolProfile(widget.schoolUuid)
             .then<SchoolProfile?>((profile) => profile, onError: (_) => null),
+
         widget.api
             .getPersonnelFields(
               schoolUuid: widget.schoolUuid,
               personnelType: PersonnelType.teacher,
             )
             .catchError((_) => <StudentFieldDefinition>[]),
+
         widget.api
             .getPersonnelFields(
               schoolUuid: widget.schoolUuid,
@@ -218,55 +266,72 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             )
             .catchError((_) => <StudentFieldDefinition>[]),
       ]);
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       _updateUi(() {
         _customFields = [
           ...(results[0] as List<StudentFieldDefinition>),
+
           ..._labeledFields(
             results[2] as List<StudentFieldDefinition>,
             'Teacher',
           ),
+
           ..._labeledFields(
             results[3] as List<StudentFieldDefinition>,
             'Staff',
           ),
         ];
+
         _schoolProfile = results[1] as SchoolProfile?;
+
         _logoUrl = _schoolProfile?.logoUrl;
       });
     } catch (_) {
-      /* The editor remains usable when optional metadata is unavailable. */
+      // Optional metadata is not required for the designer
+      // to remain usable.
     }
   }
 
   static List<StudentFieldDefinition> _labeledFields(
     List<StudentFieldDefinition> fields,
     String identityLabel,
-  ) => fields
-      .map(
-        (field) => StudentFieldDefinition(
-          uuid: field.uuid,
-          fieldKey: field.fieldKey,
-          label: '$identityLabel • ${field.label}',
-          dataType: field.dataType,
-          isRequired: field.isRequired,
-          displayOrder: field.displayOrder,
-          isActive: field.isActive,
-        ),
-      )
-      .toList();
+  ) {
+    return fields
+        .map(
+          (field) => StudentFieldDefinition(
+            uuid: field.uuid,
+            fieldKey: field.fieldKey,
+            label: '$identityLabel • ${field.label}',
+            dataType: field.dataType,
+            isRequired: field.isRequired,
+            displayOrder: field.displayOrder,
+            isActive: field.isActive,
+          ),
+        )
+        .toList();
+  }
 
   @override
   void dispose() {
     _name.removeListener(_rename);
+
     _name.dispose();
+
     _canvasWidth.dispose();
     _canvasHeight.dispose();
     _canvasBackground.dispose();
+
     _canvasFocus.dispose();
+
     _viewTransform.dispose();
+
     _revision.dispose();
     _guides.dispose();
+
     super.dispose();
   }
 
@@ -276,15 +341,25 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _rename() {
-    if (!_syncingName) _commitTemplate(_template.copyWith(name: _name.text));
+    if (_syncingName) {
+      return;
+    }
+
+    _commitTemplate(_template.copyWith(name: _name.text));
   }
 
   void _select(String? id) {
     _canvasFocus.requestFocus();
-    if (_selectedId == id) return;
+
+    if (_selectedId == id) {
+      return;
+    }
+
     _endGesture();
+
     _updateUi(() {
       _selectedId = id;
+
       _history[_historyIndex] = _DesignerSnapshot(
         _template,
         id,
@@ -295,7 +370,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Future<void> _applyCanvasDimensions() async {
     final width = double.tryParse(_canvasWidth.text.trim());
+
     final height = double.tryParse(_canvasHeight.text.trim());
+
     if (width == null ||
         height == null ||
         !width.isFinite ||
@@ -308,8 +385,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         _canvasError =
             'Width and height must be greater than 10 and at most 2000 mm.';
       });
+
       return;
     }
+
     await _changeCanvasGeometry(
       _document.canvas.copyWith(width: width, height: height),
     );
@@ -317,8 +396,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Future<void> _setCanvasOrientation(String orientation) async {
     final canvas = _document.canvas;
-    if (orientation == canvas.orientation) return;
+
+    if (orientation == canvas.orientation) {
+      return;
+    }
+
     final next = canvas.copyWith(width: canvas.height, height: canvas.width);
+
     await _changeCanvasGeometry(next);
   }
 
@@ -330,24 +414,33 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Future<void> _changeCanvasGeometry(DesignCanvas nextCanvas) async {
     final current = _document.canvas;
+
     if (current.width == nextCanvas.width &&
         current.height == nextCanvas.height) {
       _syncCanvasControllers();
       return;
     }
+
     final strategy = _document.elements.isEmpty
         ? CanvasResizeStrategy.keepPositions
         : await _chooseCanvasResizeStrategy(
             orientationChanged: current.orientation != nextCanvas.orientation,
           );
+
     if (!mounted || strategy == null) {
-      if (mounted) _syncCanvasControllers();
+      if (mounted) {
+        _syncCanvasControllers();
+      }
+
       return;
     }
+
     final next = resizeDesignDocument(_document, nextCanvas, strategy);
+
     final otherDocument = _editingBack
         ? _template.document
         : _template.backDocument;
+
     final resizedOther = otherDocument == null
         ? null
         : resizeDesignDocument(
@@ -358,13 +451,19 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             ),
             strategy,
           );
-    _updateUi(() => _canvasError = null);
+
+    _updateUi(() {
+      _canvasError = null;
+    });
+
     _commitTemplate(
       _editingBack
           ? _template.copyWith(document: resizedOther, backDocument: next)
           : _template.copyWith(document: next, backDocument: resizedOther),
     );
+
     _syncCanvasControllers();
+
     if (strategy == CanvasResizeStrategy.keepPositions &&
         hasElementsOutsideCanvas(next)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -379,6 +478,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     required bool orientationChanged,
   }) async {
     var selected = CanvasResizeStrategy.keepPositions;
+
     return showDialog<CanvasResizeStrategy>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -397,7 +497,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               RadioGroup<CanvasResizeStrategy>(
                 groupValue: selected,
                 onChanged: (value) {
-                  if (value != null) setDialogState(() => selected = value);
+                  if (value != null) {
+                    setDialogState(() {
+                      selected = value;
+                    });
+                  }
                 },
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -422,12 +526,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+              },
               child: const Text('Cancel'),
             ),
             FilledButton(
               key: const Key('canvas-resize-apply'),
-              onPressed: () => Navigator.pop(context, selected),
+              onPressed: () {
+                Navigator.pop(context, selected);
+              },
               child: const Text('Apply'),
             ),
           ],
@@ -442,17 +550,23 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   void _syncCanvasControllers() {
     _canvasWidth.text = _document.canvas.width.toStringAsFixed(2);
+
     _canvasHeight.text = _document.canvas.height.toStringAsFixed(2);
+
     _canvasBackground.text = _document.canvas.backgroundColor;
   }
 
   bool _sameTemplate(CardTemplate a, CardTemplate b) {
-    if (identical(a, b)) return true;
+    if (identical(a, b)) {
+      return true;
+    }
+
     final sameBack =
         a.backDocument == null && b.backDocument == null ||
         a.backDocument != null &&
             b.backDocument != null &&
             _sameDocument(a.backDocument!, b.backDocument!);
+
     return a.name == b.name &&
         _sameDocument(a.document, b.document) &&
         sameBack;
@@ -464,9 +578,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           _sameJson(a.settings, b.settings) &&
           a.elements.length == b.elements.length &&
           Iterable<int>.generate(a.elements.length).every(
-            (i) =>
-                identical(a.elements[i], b.elements[i]) ||
-                _sameElement(a.elements[i], b.elements[i]),
+            (index) =>
+                identical(a.elements[index], b.elements[index]) ||
+                _sameElement(a.elements[index], b.elements[index]),
           ));
 
   bool _sameElement(DesignElement a, DesignElement b) =>
@@ -484,19 +598,24 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       _sameJson(a.data, b.data);
 
   bool _sameJson(Object? a, Object? b) {
-    if (identical(a, b) || a == b) return true;
+    if (identical(a, b) || a == b) {
+      return true;
+    }
+
     if (a is List && b is List) {
       return a.length == b.length &&
           Iterable<int>.generate(
             a.length,
           ).every((index) => _sameJson(a[index], b[index]));
     }
+
     if (a is Map && b is Map) {
       return a.length == b.length &&
           a.keys.every(
             (key) => b.containsKey(key) && _sameJson(a[key], b[key]),
           );
     }
+
     return false;
   }
 
@@ -507,13 +626,19 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   void _refreshDirtyState() {
     _dirtyValue = !_sameTemplate(_template, _savedTemplate);
+
     _saveState = _dirty ? _dirtyState : _cleanState;
   }
 
   void _record(CardTemplate next) {
     _history.removeRange(_historyIndex + 1, _history.length);
+
     _history.add(_DesignerSnapshot(next, _selectedId, _localDuplicate));
-    if (_history.length > 80) _history.removeAt(0);
+
+    if (_history.length > 80) {
+      _history.removeAt(0);
+    }
+
     _historyIndex = _history.length - 1;
   }
 
@@ -534,36 +659,69 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     String? selectedId,
     bool gestureUpdate = false,
   }) {
-    if (!gestureUpdate) _endGesture();
-    if (_sameTemplate(next, _template)) return;
+    if (!gestureUpdate) {
+      _endGesture();
+    }
+
+    if (_sameTemplate(next, _template)) {
+      return;
+    }
+
     _updateUi(() {
       _template = next;
-      if (selectedId != null) _selectedId = selectedId;
-      if (_selected == null) _selectedId = null;
-      if (_gestureStart == null) _record(next);
-      // Avoid full-document serialization/comparison for every pointer event.
+
+      if (selectedId != null) {
+        _selectedId = selectedId;
+      }
+
+      if (_selected == null) {
+        _selectedId = null;
+      }
+
+      if (_gestureStart == null) {
+        _record(next);
+      }
+
+      // Avoid full-document serialization/comparison
+      // for every pointer event.
       _dirtyValue =
           _gestureStart != null || !_sameTemplate(next, _savedTemplate);
+
       _saveState = _dirty ? _dirtyState : _cleanState;
     });
   }
 
   void _beginGesture(String id) {
     _endGesture();
+
     _gestureStart = _template;
+
     _gestureId = id;
+
     _gestureRemainder = Offset.zero;
   }
 
   void _endGesture() {
-    if (_guides.value.isNotEmpty) _guides.value = [];
+    if (_guides.value.isNotEmpty) {
+      _guides.value = [];
+    }
+
     final start = _gestureStart;
-    if (start == null) return;
+
+    if (start == null) {
+      return;
+    }
+
     _updateUi(() {
       _gestureStart = null;
       _gestureId = null;
+
       _gestureRemainder = Offset.zero;
-      if (!_sameTemplate(start, _template)) _record(_template);
+
+      if (!_sameTemplate(start, _template)) {
+        _record(_template);
+      }
+
       _refreshDirtyState();
     });
   }
@@ -571,71 +729,113 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   void _restore(int index) {
     _updateUi(() {
       _historyIndex = index;
+
       _template = _history[index].template;
-      if (_editingBack && !_template.hasBackDesign) _editingBack = false;
+
+      if (_editingBack && !_template.hasBackDesign) {
+        _editingBack = false;
+      }
+
       _selectedId = _history[index].selectedId;
+
       _localDuplicate = _history[index].localDuplicate;
+
       _syncingName = true;
+
       _name.text = _template.name;
+
       _syncingName = false;
+
       _syncCanvasControllers();
+
       _canvasError = null;
+
       _refreshDirtyState();
     });
   }
 
   void _switchSide(bool showBack) {
-    if (_editingBack == showBack) return;
+    if (_editingBack == showBack) {
+      return;
+    }
+
     _endGesture();
+
     if (showBack && !_template.hasBackDesign) {
       _commitTemplate(_template.withBlankBack());
     }
+
     _updateUi(() {
       _editingBack = showBack;
+
       _selectedId = null;
+
       _syncCanvasControllers();
+
       _canvasError = null;
     });
   }
 
   Future<void> _removeBackDesign() async {
-    if (!_template.hasBackDesign) return;
+    if (!_template.hasBackDesign) {
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove back design?'),
         content: const Text(
-          'This removes the complete back side from this template. You can still use Undo before saving.',
+          'This removes the complete back side from this template. '
+          'You can still use Undo before saving.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
             child: const Text('Cancel'),
           ),
           FilledButton(
             key: const Key('confirm-remove-back-design'),
-            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
             child: const Text('Remove back'),
           ),
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     _endGesture();
+
     _selectedId = null;
     _editingBack = false;
+
     _commitTemplate(_template.copyWith(clearBackDocument: true));
+
     _syncCanvasControllers();
   }
 
   void _undo() {
     _endGesture();
-    if (_canUndo) _restore(_historyIndex - 1);
+
+    if (_canUndo) {
+      _restore(_historyIndex - 1);
+    }
   }
 
   void _redo() {
     _endGesture();
-    if (_canRedo) _restore(_historyIndex + 1);
+
+    if (_canRedo) {
+      _restore(_historyIndex + 1);
+    }
   }
 
   void _updateElement(
@@ -643,20 +843,26 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     DesignElement Function(DesignElement) change, {
     bool gestureUpdate = false,
   }) {
-    final live = _document.elements.where((e) => e.id == id).firstOrNull;
-    if (live != null) _replace(change(live), gestureUpdate: gestureUpdate);
+    final live = _document.elements
+        .where((element) => element.id == id)
+        .firstOrNull;
+
+    if (live != null) {
+      _replace(change(live), gestureUpdate: gestureUpdate);
+    }
   }
 
-  void _replace(DesignElement replacement, {bool gestureUpdate = false}) =>
-      _commit(
-        _document.copyWith(
-          elements: [
-            for (final element in _document.elements)
-              if (element.id == replacement.id) replacement else element,
-          ],
-        ),
-        gestureUpdate: gestureUpdate,
-      );
+  void _replace(DesignElement replacement, {bool gestureUpdate = false}) {
+    _commit(
+      _document.copyWith(
+        elements: [
+          for (final element in _document.elements)
+            if (element.id == replacement.id) replacement else element,
+        ],
+      ),
+      gestureUpdate: gestureUpdate,
+    );
+  }
 
   void _add(DesignElementType type, {StudentFieldDefinition? customField}) {
     if (_document.elements.length >= DesignDocument.maxElements) {
@@ -665,24 +871,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           content: Text('A design can contain at most 250 elements.'),
         ),
       );
+
       return;
     }
+
     final id =
         '${type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
+
     final z = _document.elements.fold<int>(
       0,
       (value, element) => math.max(value, element.zIndex + 1),
     );
+
     final isImage =
         type == DesignElementType.studentPhoto ||
         type == DesignElementType.schoolLogo;
+
     final isQr = type == DesignElementType.qrCode;
+
     final isBarcode = type == DesignElementType.barcode;
+
     final defaultWidth = isImage || isQr
         ? 20.0
         : isBarcode
         ? 35.0
         : 30.0;
+
     final defaultHeight = isQr
         ? 20.0
         : isImage
@@ -692,6 +906,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         : type == DesignElementType.line
         ? 1.0
         : 6.0;
+
     final element = DesignElement(
       id: id,
       type: type,
@@ -761,6 +976,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         _ => const {},
       },
     );
+
     _commit(
       _document.copyWith(elements: [..._document.elements, element]),
       selectedId: id,
@@ -768,105 +984,169 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _move(String id, double dx, double dy) {
-    if (!dx.isFinite || !dy.isFinite) return;
+    if (!dx.isFinite || !dy.isFinite) {
+      return;
+    }
+
     _updateElement(id, (element) {
-      if (element.locked) return element;
+      if (element.locked) {
+        return element;
+      }
+
       final maxX = math.max(0.0, _document.canvas.width - element.width);
+
       final maxY = math.max(0.0, _document.canvas.height - element.height);
+
       final remainder = _gestureId == id ? _gestureRemainder : Offset.zero;
+
       final rawX = (element.x + dx + remainder.dx).clamp(0.0, maxX);
+
       final rawY = (element.y + dy + remainder.dy).clamp(0.0, maxY);
+
       var x = rawX;
       var y = rawY;
+
       if (_document.settings['snap_enabled'] != false) {
         final grid = (_document.settings['grid_size'] as num?)?.toDouble() ?? 2;
+
         if (grid.isFinite && grid > 0) {
           x = (x / grid).round() * grid;
+
           y = (y / grid).round() * grid;
         }
       }
+
       x = x.clamp(0.0, maxX);
+
       y = y.clamp(0.0, maxY);
-      if (_gestureId == id) _gestureRemainder = Offset(rawX - x, rawY - y);
+
+      if (_gestureId == id) {
+        _gestureRemainder = Offset(rawX - x, rawY - y);
+      }
+
       final next = element.copyWith(x: x, y: y);
+
       _updateGuides(next);
+
       return next;
     }, gestureUpdate: true);
   }
 
   void _resize(String id, double dw, double dh) {
-    if (!dw.isFinite || !dh.isFinite) return;
+    if (!dw.isFinite || !dh.isFinite) {
+      return;
+    }
+
     _updateElement(id, (element) {
-      if (element.locked) return element;
+      if (element.locked) {
+        return element;
+      }
+
       final maxW = math.max(2.0, _document.canvas.width - element.x);
+
       final maxH = math.max(1.0, _document.canvas.height - element.y);
+
       var width = (element.width + dw).clamp(2.0, maxW);
+
       var height = (element.height + dh).clamp(1.0, maxH);
+
       if (element.type == DesignElementType.studentPhoto ||
           element.type == DesignElementType.schoolLogo ||
           element.type == DesignElementType.qrCode) {
         final ratio = element.width / element.height;
+
         height = (width / ratio).clamp(1.0, maxH);
+
         width = (height * ratio).clamp(2.0, maxW);
       }
+
       final next = element.copyWith(width: width, height: height);
+
       _updateGuides(next);
+
       return next;
     }, gestureUpdate: true);
   }
 
   void _remove() {
     final selected = _selected;
-    if (selected == null || selected.locked) return;
+
+    if (selected == null || selected.locked) {
+      return;
+    }
+
     _commit(
       _document.copyWith(
-        elements: _document.elements.where((e) => e.id != selected.id).toList(),
+        elements: _document.elements
+            .where((element) => element.id != selected.id)
+            .toList(),
       ),
     );
   }
 
   void _duplicate() {
     final selected = _selected;
-    if (selected == null) return;
+
+    if (selected == null) {
+      return;
+    }
+
     if (_document.elements.length >= DesignDocument.maxElements) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('A design can contain at most 250 elements.'),
         ),
       );
+
       return;
     }
+
     final id =
         '${selected.type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
+
     final copy = selected.copyWith(
       id: id,
       x: math.min(selected.x + 2, _document.canvas.width - selected.width),
       y: math.min(selected.y + 2, _document.canvas.height - selected.height),
       zIndex: _topZ(),
     );
+
     _commit(
       _document.copyWith(elements: [..._document.elements, copy]),
       selectedId: id,
     );
   }
 
-  int _topZ() =>
-      _document.elements.fold<int>(0, (v, e) => math.max(v, e.zIndex + 1));
+  int _topZ() {
+    return _document.elements.fold<int>(
+      0,
+      (value, element) => math.max(value, element.zIndex + 1),
+    );
+  }
 
   void _layer(String operation) {
     final selected = _selected;
-    if (selected == null) return;
+
+    if (selected == null) {
+      return;
+    }
+
     final ordered = [..._document.elements]
       ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
-    var index = ordered.indexWhere((e) => e.id == selected.id);
+
+    final index = ordered.indexWhere((element) => element.id == selected.id);
+
     final target = switch (operation) {
       'front' => ordered.length - 1,
       'back' => 0,
       'forward' => math.min(index + 1, ordered.length - 1),
       _ => math.max(index - 1, 0),
     };
+
     ordered.removeAt(index);
+
     ordered.insert(target, selected);
+
     _commit(
       _document.copyWith(
         elements: [
@@ -878,35 +1158,47 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _align(String where) {
-    final e = _selected;
-    if (e == null || e.locked) return;
+    final element = _selected;
+
+    if (element == null || element.locked) {
+      return;
+    }
+
     _replace(
-      e.copyWith(
+      element.copyWith(
         x: switch (where) {
           'left' => 0,
-          'hcenter' => (_document.canvas.width - e.width) / 2,
-          'right' => _document.canvas.width - e.width,
-          _ => e.x,
+          'hcenter' => (_document.canvas.width - element.width) / 2,
+          'right' => _document.canvas.width - element.width,
+          _ => element.x,
         },
         y: switch (where) {
           'top' => 0,
-          'vcenter' => (_document.canvas.height - e.height) / 2,
-          'bottom' => _document.canvas.height - e.height,
-          _ => e.y,
+          'vcenter' => (_document.canvas.height - element.height) / 2,
+          'bottom' => _document.canvas.height - element.height,
+          _ => element.y,
         },
       ),
     );
   }
 
   void _updateGuides(DesignElement next) {
-    if (_gestureId != next.id) return;
+    if (_gestureId != next.id) {
+      return;
+    }
+
     final box = _canvasCoordinates.currentContext?.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
+
+    if (box is! RenderBox || !box.hasSize) {
+      return;
+    }
+
     final pixelsPerMm =
         (box.localToGlobal(Offset(box.size.width, 0)) -
                 box.localToGlobal(Offset.zero))
             .distance /
         _document.canvas.width;
+
     _guides.value = DesignerGuides.detect(
       moving: next,
       elements: _document.elements,
@@ -918,33 +1210,45 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     switch (command) {
       case DesignerCommand.undo:
         _undo();
+
       case DesignerCommand.redo:
         _redo();
+
       case DesignerCommand.save:
         _save();
+
       case DesignerCommand.delete:
         _remove();
+
       case DesignerCommand.duplicate:
         _duplicate();
+
       case DesignerCommand.deselect:
         _select(null);
+
       case DesignerCommand.nudge:
         _endGesture();
+
         final id = _selectedId;
-        if (id == null) return;
-        // Keyboard nudges are precise even when pointer grid snapping is on.
+
+        if (id == null) {
+          return;
+        }
+
+        // Keyboard nudges remain precise even when
+        // pointer grid snapping is enabled.
         _updateElement(
           id,
-          (e) => e.locked
-              ? e
-              : e.copyWith(
-                  x: (e.x + delta.dx).clamp(
+          (element) => element.locked
+              ? element
+              : element.copyWith(
+                  x: (element.x + delta.dx).clamp(
                     0.0,
-                    math.max(0.0, _document.canvas.width - e.width),
+                    math.max(0.0, _document.canvas.width - element.width),
                   ),
-                  y: (e.y + delta.dy).clamp(
+                  y: (element.y + delta.dy).clamp(
                     0.0,
-                    math.max(0.0, _document.canvas.height - e.height),
+                    math.max(0.0, _document.canvas.height - element.height),
                   ),
                 ),
         );
@@ -956,22 +1260,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'This is a local working copy. The current server supports only one design per school, so it cannot be saved over the source.',
+            'This is a local working copy. '
+            'The current server supports only one design per school, '
+            'so it cannot be saved over the source.',
           ),
         ),
       );
+
       return false;
     }
+
     final name = _name.text.trim();
-    if (_saving || name.isEmpty) return false;
+
+    if (_saving || name.isEmpty) {
+      return false;
+    }
+
     if (name.length > CardTemplate.maxNameLength) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Template name must be 120 characters or fewer.'),
         ),
       );
+
       return false;
     }
+
     if (_template.document.elements.length > DesignDocument.maxElements ||
         (_template.backDocument?.elements.length ?? 0) >
             DesignDocument.maxElements) {
@@ -980,58 +1294,92 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           content: Text('A design can contain at most 250 elements.'),
         ),
       );
+
       return false;
     }
-    if (!_dirty) return true;
+
+    if (!_dirty) {
+      return true;
+    }
+
     _endGesture();
+
     _commitTemplate(_template.copyWith(name: name));
+
     final submitted = _template;
+
     _updateUi(() {
       _saving = true;
       _saveState = 'Saving…';
     });
+
     try {
       final saved = await widget.api.saveCardTemplate(
         widget.schoolUuid,
         submitted,
         expectedUpdatedAt: _savedTemplate.updatedAt,
       );
-      if (!mounted) return false;
+
+      if (!mounted) {
+        return false;
+      }
+
       _updateUi(() {
         final authoritative = saved.deepCopy();
+
         _template = authoritative;
+
         _savedTemplate = authoritative.deepCopy();
+
         if (!_document.elements.any((element) => element.id == _selectedId)) {
           _selectedId = null;
         }
+
         _localDuplicate = false;
+
         _history[_historyIndex] = _DesignerSnapshot(
           authoritative,
           _selectedId,
           false,
         );
+
         _syncingName = true;
+
         _name.text = authoritative.name;
+
         _syncingName = false;
+
         _syncCanvasControllers();
+
         _canvasError = null;
+
         _saving = false;
+
         _refreshDirtyState();
       });
+
       return !_dirty;
     } catch (error) {
-      if (!mounted) return false;
+      if (!mounted) {
+        return false;
+      }
+
       final conflict = error is ApiException && error.statusCode == 409;
+
       _updateUi(() {
         _saving = false;
+
         _saveState = conflict
             ? 'Conflict'
             : error is ApiException && error.statusCode == 422
             ? 'Validation failed'
             : 'Save failed';
       });
+
       final messenger = ScaffoldMessenger.of(context);
+
       messenger.hideCurrentSnackBar();
+
       messenger.showSnackBar(
         SnackBar(
           content: Text(_saveFailureMessage(error)),
@@ -1047,6 +1395,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               : null,
         ),
       );
+
       return false;
     }
   }
@@ -1057,65 +1406,101 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           .replaceAll(RegExp(r'\s+'), ' ')
           .replaceFirst(RegExp(r'^body(?:\.design)?:\s*Value error,\s*'), '')
           .trim();
+
       final concise = detail.length > 180
           ? '${detail.substring(0, 177)}...'
           : detail;
+
       if (error.statusCode == 422) {
         return concise.isEmpty
             ? 'The template could not be saved because it is invalid.'
             : 'Template validation failed: $concise';
       }
+
       if (error.statusCode == 409) {
-        return 'Someone else saved this template after you loaded it. Your edits are still here. Reload the latest version to replace them.';
+        return 'Someone else saved this template after you loaded it. '
+            'Your edits are still here. '
+            'Reload the latest version to replace them.';
       }
+
       if (concise == 'The server returned an invalid card template.' ||
           concise.contains('unsupported schema version')) {
         return '$concise Your edited design is still safe.';
       }
+
       return concise.isEmpty
           ? 'Unable to save the template. Please try again.'
           : 'Unable to save the template: $concise';
     }
-    return 'Unable to save the template. Check your connection and try again.';
+
+    return 'Unable to save the template. '
+        'Check your connection and try again.';
   }
 
   Future<void> _reloadLatest() async {
-    if (_saving) return;
+    if (_saving) {
+      return;
+    }
+
     _updateUi(() {
       _saving = true;
       _saveState = 'Reloading…';
     });
+
     try {
       final loaded = await widget.api.getCardTemplate(widget.schoolUuid);
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       final authoritative = loaded.deepCopy();
+
       _updateUi(() {
         _template = authoritative;
+
         _savedTemplate = authoritative.deepCopy();
+
         _selectedId = null;
+
         _localDuplicate = false;
+
         _history
           ..clear()
           ..add(_DesignerSnapshot(authoritative, null, false));
+
         _historyIndex = 0;
+
         _syncingName = true;
+
         _name.text = authoritative.name;
+
         _syncingName = false;
+
         _syncCanvasControllers();
+
         _canvasError = null;
+
         _saving = false;
+
         _refreshDirtyState();
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       _updateUi(() {
         _saving = false;
+
         _saveState = 'Reload failed';
       });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            'Unable to reload the latest template. Your edits are still safe.',
+            'Unable to reload the latest template. '
+            'Your edits are still safe.',
           ),
         ),
       );
@@ -1124,111 +1509,169 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Future<void> _duplicateDesign() async {
     _endGesture();
+
     final stamp = DateTime.now().microsecondsSinceEpoch;
+
     final duplicate = _template.duplicateWorkingCopy(
       elementId: (element, index) =>
           '${element.type.wire}-$stamp-${_idCounter++}-$index',
     );
+
     _updateUi(() {
       _localDuplicate = true;
+
       _template = duplicate;
+
       _selectedId = null;
+
       _syncingName = true;
+
       _name.text = duplicate.name;
+
       _syncingName = false;
+
       _syncCanvasControllers();
+
       _canvasError = null;
+
       _history
         ..clear()
         ..add(_DesignerSnapshot(duplicate, null, true));
+
       _historyIndex = 0;
+
       _refreshDirtyState();
     });
-    if (!mounted) return;
+
+    if (!mounted) {
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Local duplicate created. It is independent, but cannot be saved until the server supports multiple designs per school.',
+          'Local duplicate created. '
+          'It is independent, but cannot be saved until the server '
+          'supports multiple designs per school.',
         ),
       ),
     );
   }
 
   Future<void> _revertToSaved() async {
-    if (!_dirty) return;
+    if (!_dirty) {
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Revert to saved design?'),
         content: const Text(
-          'This discards the current working changes and restores the last successfully saved design. You can still use Undo.',
+          'This discards the current working changes and restores '
+          'the last successfully saved design. '
+          'You can still use Undo.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
             child: const Text('Cancel'),
           ),
           FilledButton(
             key: const Key('confirm-revert-design'),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
             child: const Text('Revert'),
           ),
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     _endGesture();
+
     _localDuplicate = false;
+
     _selectedId = null;
+
     _commitTemplate(_savedTemplate.deepCopy());
+
     _syncingName = true;
+
     _name.text = _template.name;
+
     _syncingName = false;
+
     _syncCanvasControllers();
   }
 
   Future<void> _reset() async {
     final side = _editingBack ? 'back side' : 'front side';
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Reset $side?'),
         content: Text(
           _editingBack
-              ? 'This clears every element from the back side. You can still use Undo before saving.'
-              : 'This replaces the front side with the default template. You can still use Undo before saving.',
+              ? 'This clears every element from the back side. '
+                    'You can still use Undo before saving.'
+              : 'This replaces the front side with the default template. '
+                    'You can still use Undo before saving.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
             child: const Text('Reset'),
           ),
         ],
       ),
     );
-    if (confirmed == true) {
-      _endGesture();
-      _selectedId = null;
-      _commit(
-        _editingBack
-            ? _template.withBlankBack().backDocument!.copyWith(
-                elements: const [],
-              )
-            : CardTemplate.uploadedDesign.deepCopy().document,
-      );
-      _syncCanvasControllers();
+
+    if (confirmed != true) {
+      return;
     }
+
+    _endGesture();
+
+    _selectedId = null;
+
+    _commit(
+      _editingBack
+          ? _template.withBlankBack().backDocument!.copyWith(elements: const [])
+          : CardTemplate.uploadedDesign.deepCopy().document,
+    );
+
+    _syncCanvasControllers();
   }
 
   Future<bool> _confirmLeave() async {
     _endGesture();
-    if (!_dirty) return true;
-    if (_leaveDialogOpen) return false;
+
+    if (!_dirty) {
+      return true;
+    }
+
+    if (_leaveDialogOpen) {
+      return false;
+    }
+
     _leaveDialogOpen = true;
+
     final action = await showDialog<_LeaveAction>(
       context: context,
       barrierDismissible: false,
@@ -1236,42 +1679,65 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         title: const Text('Unsaved changes'),
         content: Text(
           _localDuplicate
-              ? 'You have unsaved changes in a local duplicate. This server supports only one design per school, so this copy cannot be saved without overwriting the source.'
+              ? 'You have unsaved changes in a local duplicate. '
+                    'This server supports only one design per school, '
+                    'so this copy cannot be saved without overwriting the source.'
               : 'You have unsaved changes to this card design.',
         ),
         actions: [
           TextButton(
             key: const Key('unsaved-cancel'),
-            onPressed: () => Navigator.pop(context, _LeaveAction.cancel),
+            onPressed: () {
+              Navigator.pop(context, _LeaveAction.cancel);
+            },
             child: const Text('Cancel'),
           ),
           TextButton(
             key: const Key('unsaved-discard'),
-            onPressed: () => Navigator.pop(context, _LeaveAction.discard),
+            onPressed: () {
+              Navigator.pop(context, _LeaveAction.discard);
+            },
             child: const Text('Discard'),
           ),
           FilledButton(
             key: const Key('unsaved-save-leave'),
             onPressed: _localDuplicate
                 ? null
-                : () => Navigator.pop(context, _LeaveAction.save),
+                : () {
+                    Navigator.pop(context, _LeaveAction.save);
+                  },
             child: const Text('Save and leave'),
           ),
         ],
       ),
     );
+
     _leaveDialogOpen = false;
+
     if (!mounted || action == null || action == _LeaveAction.cancel) {
       return false;
     }
-    if (action == _LeaveAction.discard) return true;
+
+    if (action == _LeaveAction.discard) {
+      return true;
+    }
+
     return _save();
   }
 
   Future<void> _handlePop(bool didPop) async {
-    if (didPop || _allowPop) return;
-    if (!await _confirmLeave() || !mounted) return;
-    _updateUi(() => _allowPop = true);
+    if (didPop || _allowPop) {
+      return;
+    }
+
+    if (!await _confirmLeave() || !mounted) {
+      return;
+    }
+
+    _updateUi(() {
+      _allowPop = true;
+    });
+
     Navigator.of(context).pop();
   }
 
@@ -1280,27 +1746,41 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Object _layerSignature() => <Object?>[
     _selectedId,
-    for (final e in _document.elements)
-      (e.id, e.zIndex, e.visible, e.locked, _elementLabel(e)),
+    for (final element in _document.elements)
+      (
+        element.id,
+        element.zIndex,
+        element.visible,
+        element.locked,
+        _elementLabel(element),
+      ),
   ];
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final size = constraints.biggest;
+
       final mobile = size.width < CardDesignerScreen.minimumEditorWidth;
+
       final small =
           size.width < CardDesignerScreen.recommendedEditorWidth ||
           size.height < CardDesignerScreen.recommendedEditorHeight;
+
       if (mobile || (small && !_smallScreenAccepted)) {
-        // A viewport change may remove a pointer target before it receives up.
+        // A viewport change may remove a pointer target
+        // before it receives pointer-up.
         if (_gestureStart != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _endGesture();
+            if (mounted) {
+              _endGesture();
+            }
           });
         }
+
         return _guardNavigation(
           Scaffold(
+            backgroundColor: AppColors.background,
             appBar: AuthenticatedAppBar(
               title: const Text('Card designer'),
               actions: [
@@ -1318,27 +1798,65 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             ),
             body: Center(
               child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.desktop_windows_outlined, size: 42),
-                      const SizedBox(height: 16),
-                      const Text(
-                        CardDesignerScreen.smallScreenMessage,
-                        key: Key('designer-screen-warning'),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (!mobile) ...[
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: () =>
-                              setState(() => _smallScreenAccepted = true),
-                          child: const Text('Continue anyway'),
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: AppColors.accentSoft,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.desktop_windows_outlined,
+                            size: 32,
+                            color: AppColors.accent,
+                          ),
                         ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Card Designer',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          CardDesignerScreen.smallScreenMessage,
+                          key: Key('designer-screen-warning'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            height: 1.5,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        if (!mobile) ...[
+                          const SizedBox(height: 24),
+                          FilledButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _smallScreenAccepted = true;
+                              });
+                            },
+                            icon: const Icon(Icons.open_in_full_rounded),
+                            label: const Text('Continue anyway'),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1346,6 +1864,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ),
         );
       }
+
       return DesignerShortcuts(
         onCommand: _command,
         child: Focus(autofocus: true, child: _editor()),
@@ -1368,7 +1887,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Widget _editor() => _guardNavigation(
     Scaffold(
-      backgroundColor: const Color(0xfff3f5f9),
+      backgroundColor: AppColors.background,
       appBar: AuthenticatedAppBar(
         title: const Text('Card designer'),
         actions: [
@@ -1382,10 +1901,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               schoolUuid: widget.schoolUuid,
               api: widget.api,
             ),
+
           _section(
             () => (_editingBack, _template.hasBackDesign),
             _sideSwitcher,
           ),
+
           _section(
             () => (
               _dirty,
@@ -1397,15 +1918,18 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             () => PopupMenuButton<_TemplateAction>(
               key: const Key('designer-template-actions'),
               tooltip: 'Design actions',
-              icon: const Icon(Icons.more_vert),
+              icon: const Icon(Icons.more_vert_rounded),
               onSelected: (action) {
                 switch (action) {
                   case _TemplateAction.duplicate:
                     _duplicateDesign();
+
                   case _TemplateAction.revert:
                     _revertToSaved();
+
                   case _TemplateAction.reset:
                     _reset();
+
                   case _TemplateAction.removeBack:
                     _removeBackDesign();
                 }
@@ -1414,12 +1938,22 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 PopupMenuItem(
                   value: _TemplateAction.duplicate,
                   enabled: !_saving,
-                  child: const Text('Duplicate design'),
+                  child: const ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.copy_outlined),
+                    title: Text('Duplicate design'),
+                  ),
                 ),
                 PopupMenuItem(
                   value: _TemplateAction.revert,
                   enabled: _dirty && !_saving,
-                  child: const Text('Revert to saved'),
+                  child: const ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.history_rounded),
+                    title: Text('Revert to saved'),
+                  ),
                 ),
                 PopupMenuItem(
                   value: _TemplateAction.reset,
@@ -1429,41 +1963,111 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         _document,
                         CardTemplate.uploadedDesign.document,
                       ),
-                  child: const Text('Reset design'),
+                  child: const ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.restart_alt_rounded),
+                    title: Text('Reset design'),
+                  ),
                 ),
                 if (_template.hasBackDesign)
                   PopupMenuItem(
                     value: _TemplateAction.removeBack,
                     enabled: !_saving,
-                    child: const Text('Remove back design'),
+                    child: const ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.remove_circle_outline_rounded),
+                      title: Text('Remove back design'),
+                    ),
                   ),
               ],
             ),
           ),
+
           _section(
-            () => (_saveState, _saving, _dirty),
+            () => (_saveState, _saving, _dirty, _localDuplicate),
             () => Center(
-              child: Text(
-                _saveState,
+              child: Container(
                 key: const Key('designer-save-state'),
-                style: const TextStyle(color: Colors.white70),
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: _dirty
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.16),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _saving
+                          ? Icons.sync_rounded
+                          : _dirty
+                          ? Icons.edit_outlined
+                          : Icons.check_circle_outline_rounded,
+                      size: 14,
+                      color: Colors.white70,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _saveState,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+
+          const SizedBox(width: 4),
+
           _section(
-            () => (_saveState, _saving, _dirty),
-            () => TextButton.icon(
-              key: const Key('designer-save'),
-              onPressed: _dirty && !_saving && !_localDuplicate ? _save : null,
-              icon: _saving
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined),
-              label: const Text('Save'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+            () => (_saveState, _saving, _dirty, _localDuplicate),
+            () => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                key: const Key('designer-save'),
+                onPressed: _dirty && !_saving && !_localDuplicate
+                    ? _save
+                    : null,
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Save'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: Colors.white38,
+                  backgroundColor: Colors.white.withValues(alpha: 0.10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -1482,61 +2086,85 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ),
           Expanded(
             child: LayoutBuilder(
-              builder: (context, constraints) =>
-                  constraints.maxWidth >=
-                      CardDesignerScreen.recommendedEditorWidth
-                  ? Row(
-                      children: [
-                        SizedBox(
-                          width: 250,
-                          child: _section(_layerSignature, _layers),
-                        ),
-                        Expanded(
-                          child: _section(
-                            () => (
-                              _document,
-                              _selectedId,
-                              _zoom,
-                              _logoUrl,
-                              _schoolProfile,
-                              _previewIdentityType,
-                            ),
-                            _workspace,
+              builder: (context, constraints) {
+                final wideWorkspace =
+                    constraints.maxWidth >=
+                    CardDesignerScreen.recommendedEditorWidth;
+
+                if (wideWorkspace) {
+                  return Row(
+                    children: [
+                      Container(
+                        width: 250,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border(
+                            right: BorderSide(color: AppColors.border),
                           ),
                         ),
-                        SizedBox(
-                          width: 300,
-                          child: _section(
-                            () => (_template, _selectedId, _canvasError),
-                            _inspector,
+                        child: _section(_layerSignature, _layers),
+                      ),
+                      Expanded(
+                        child: _section(
+                          () => (
+                            _document,
+                            _selectedId,
+                            _zoom,
+                            _logoUrl,
+                            _schoolProfile,
+                            _previewIdentityType,
+                          ),
+                          _workspace,
+                        ),
+                      ),
+                      Container(
+                        width: 300,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border(
+                            left: BorderSide(color: AppColors.border),
                           ),
                         ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(
-                          child: _section(
-                            () => (
-                              _document,
-                              _selectedId,
-                              _zoom,
-                              _logoUrl,
-                              _schoolProfile,
-                              _previewIdentityType,
-                            ),
-                            _workspace,
-                          ),
+                        child: _section(
+                          () => (_template, _selectedId, _canvasError),
+                          _inspector,
                         ),
-                        SizedBox(
-                          width: 300,
-                          child: _section(
-                            () => (_template, _selectedId, _canvasError),
-                            _inspector,
-                          ),
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: _section(
+                        () => (
+                          _document,
+                          _selectedId,
+                          _zoom,
+                          _logoUrl,
+                          _schoolProfile,
+                          _previewIdentityType,
                         ),
-                      ],
+                        _workspace,
+                      ),
                     ),
+                    Container(
+                      width: 300,
+                      decoration: const BoxDecoration(
+                        color: AppColors.surface,
+                        border: Border(
+                          left: BorderSide(color: AppColors.border),
+                        ),
+                      ),
+                      child: _section(
+                        () => (_template, _selectedId, _canvasError),
+                        _inspector,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -1545,116 +2173,209 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   );
 
   Widget _toolbar() => Material(
-    elevation: 1,
-    child: SizedBox(
-      height: 54,
+    color: AppColors.surface,
+    surfaceTintColor: Colors.transparent,
+    child: Container(
+      height: 62,
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         children: [
           IconButton(
             onPressed: _canUndo ? _undo : null,
-            icon: const Icon(Icons.undo),
+            icon: const Icon(Icons.undo_rounded),
             tooltip: 'Undo',
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              disabledForegroundColor: AppColors.disabled,
+            ),
           ),
           IconButton(
             onPressed: _canRedo ? _redo : null,
-            icon: const Icon(Icons.redo),
+            icon: const Icon(Icons.redo_rounded),
             tooltip: 'Redo',
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              disabledForegroundColor: AppColors.disabled,
+            ),
           ),
-          const VerticalDivider(),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: VerticalDivider(color: AppColors.border),
+          ),
+
           _tool(
-            Icons.text_fields,
+            Icons.text_fields_rounded,
             'Text',
             () => _add(DesignElementType.text),
             key: 'add-text',
           ),
+
           _tool(
             Icons.badge_outlined,
             'Identity field',
             () => _add(DesignElementType.boundText),
             key: 'add-student-field',
           ),
-          PopupMenuButton<StudentFieldDefinition>(
-            tooltip: 'Custom field',
-            enabled: _availableCustomFields.isNotEmpty,
-            onSelected: (field) =>
-                _add(DesignElementType.customFieldText, customField: field),
-            itemBuilder: (_) => [
-              for (final field in _availableCustomFields)
-                PopupMenuItem(value: field, child: Text(field.label)),
-            ],
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Icon(Icons.dynamic_form_outlined),
-                  SizedBox(width: 6),
-                  Text('Custom field'),
-                ],
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: PopupMenuButton<StudentFieldDefinition>(
+              tooltip: 'Custom field',
+              enabled: _availableCustomFields.isNotEmpty,
+              onSelected: (field) =>
+                  _add(DesignElementType.customFieldText, customField: field),
+              itemBuilder: (context) => [
+                for (final field in _availableCustomFields)
+                  PopupMenuItem<StudentFieldDefinition>(
+                    value: field,
+                    child: Text(field.label),
+                  ),
+              ],
+              child: Container(
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: _availableCustomFields.isNotEmpty
+                      ? AppColors.surfaceSoft
+                      : AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.dynamic_form_outlined,
+                      size: 18,
+                      color: _availableCustomFields.isNotEmpty
+                          ? AppColors.textPrimary
+                          : AppColors.disabled,
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Custom field',
+                      style: TextStyle(
+                        color: _availableCustomFields.isNotEmpty
+                            ? AppColors.textPrimary
+                            : AppColors.disabled,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 17,
+                      color: _availableCustomFields.isNotEmpty
+                          ? AppColors.textSecondary
+                          : AppColors.disabled,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
+
           _tool(
-            Icons.person_outline,
+            Icons.person_outline_rounded,
             'Photo',
             () => _add(DesignElementType.studentPhoto),
             key: 'add-photo',
           ),
+
           _tool(
             Icons.school_outlined,
             'Logo',
             () => _add(DesignElementType.schoolLogo),
             key: 'add-logo',
           ),
+
           _tool(
             Icons.rectangle_outlined,
             'Rectangle',
             () => _add(DesignElementType.rectangle),
             key: 'add-rectangle',
           ),
+
           _tool(
-            Icons.horizontal_rule,
+            Icons.horizontal_rule_rounded,
             'Line',
             () => _add(DesignElementType.line),
             key: 'add-line',
           ),
+
           _tool(
-            Icons.qr_code_2,
+            Icons.qr_code_2_rounded,
             'QR code',
             () => _add(DesignElementType.qrCode),
             key: 'add-qr-code',
           ),
+
           _tool(
             Icons.view_week_outlined,
             'Barcode',
             () => _add(DesignElementType.barcode),
             key: 'add-barcode',
           ),
-          const VerticalDivider(),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: VerticalDivider(color: AppColors.border),
+          ),
+
           IconButton(
             onPressed: _selected == null ? null : _duplicate,
             icon: const Icon(Icons.copy_outlined),
             tooltip: 'Duplicate element',
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              disabledForegroundColor: AppColors.disabled,
+            ),
           ),
+
           IconButton(
             onPressed: _selected == null ? null : _remove,
-            icon: const Icon(Icons.delete_outline),
+            icon: const Icon(Icons.delete_outline_rounded),
             tooltip: 'Delete',
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              disabledForegroundColor: AppColors.disabled,
+            ),
           ),
-          const VerticalDivider(),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: VerticalDivider(color: AppColors.border),
+          ),
+
           ...['left', 'hcenter', 'right', 'top', 'vcenter', 'bottom'].map(
             (value) => IconButton(
               onPressed: _selected == null ? null : () => _align(value),
               icon: Icon(switch (value) {
-                'left' => Icons.align_horizontal_left,
-                'hcenter' => Icons.align_horizontal_center,
-                'right' => Icons.align_horizontal_right,
-                'top' => Icons.align_vertical_top,
-                'vcenter' => Icons.align_vertical_center,
-                _ => Icons.align_vertical_bottom,
+                'left' => Icons.align_horizontal_left_rounded,
+                'hcenter' => Icons.align_horizontal_center_rounded,
+                'right' => Icons.align_horizontal_right_rounded,
+                'top' => Icons.align_vertical_top_rounded,
+                'vcenter' => Icons.align_vertical_center_rounded,
+                _ => Icons.align_vertical_bottom_rounded,
               }),
-              tooltip: 'Align $value',
+              tooltip: switch (value) {
+                'left' => 'Align left',
+                'hcenter' => 'Align horizontal center',
+                'right' => 'Align right',
+                'top' => 'Align top',
+                'vcenter' => 'Align vertical center',
+                _ => 'Align bottom',
+              },
+              style: IconButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                disabledForegroundColor: AppColors.disabled,
+              ),
             ),
           ),
         ],
@@ -1664,13 +2385,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Widget _sideSwitcher() => Center(
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
       child: SegmentedButton<bool>(
         key: const Key('designer-side-switcher'),
         segments: [
           const ButtonSegment(
             value: false,
-            icon: Icon(Icons.looks_one_outlined),
+            icon: Icon(Icons.looks_one_outlined, size: 17),
             label: Text('Front'),
           ),
           ButtonSegment(
@@ -1679,6 +2400,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               _template.hasBackDesign
                   ? Icons.flip_to_back_outlined
                   : Icons.add_box_outlined,
+              size: 17,
             ),
             label: const Text('Back'),
           ),
@@ -1687,14 +2409,19 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         showSelectedIcon: false,
         style: ButtonStyle(
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
-          side: const WidgetStatePropertyAll(BorderSide(color: Colors.white54)),
+          visualDensity: VisualDensity.compact,
+          side: WidgetStatePropertyAll(
+            BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+          ),
           backgroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.selected)
-                ? Colors.white24
+                ? Colors.white.withValues(alpha: 0.18)
                 : Colors.transparent,
           ),
         ),
-        onSelectionChanged: (selection) => _switchSide(selection.first),
+        onSelectionChanged: (selection) {
+          _switchSide(selection.first);
+        },
       ),
     ),
   );
@@ -1704,187 +2431,329 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     String label,
     VoidCallback onTap, {
     required String key,
-  }) => TextButton.icon(
-    key: Key(key),
-    onPressed: onTap,
-    icon: Icon(icon),
-    label: Text(label),
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 3),
+    child: TextButton.icon(
+      key: Key(key),
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.textPrimary,
+        backgroundColor: AppColors.surfaceSoft,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: AppColors.border),
+        ),
+      ),
+    ),
   );
 
   Widget _workspace() => Column(
     children: [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+      Container(
+        height: 58,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(bottom: BorderSide(color: AppColors.border)),
+        ),
         child: Row(
           children: [
-            const Icon(Icons.zoom_out),
-            Expanded(
+            const Icon(
+              Icons.zoom_out_rounded,
+              size: 19,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 180,
               child: Slider(
                 value: _zoom,
                 min: .5,
                 max: 2,
                 divisions: 15,
                 label: '${(_zoom * 100).round()}%',
-                onChanged: (v) => _updateUi(() => _zoom = v),
+                onChanged: (value) {
+                  _updateUi(() => _zoom = value);
+                },
               ),
             ),
-            const Icon(Icons.zoom_in),
-            const SizedBox(width: 12),
-            DropdownButton<String>(
-              key: const Key('designer-preview-identity-type'),
-              value: _previewIdentityType,
-              items: const [
-                DropdownMenuItem(
-                  value: 'student',
-                  child: Text('Student preview'),
-                ),
-                DropdownMenuItem(
-                  value: 'teacher',
-                  child: Text('Teacher preview'),
-                ),
-                DropdownMenuItem(value: 'staff', child: Text('Staff preview')),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  _updateUi(() => _previewIdentityType = value);
-                }
-              },
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.zoom_in_rounded,
+              size: 19,
+              color: AppColors.textSecondary,
             ),
-            TextButton(
-              onPressed: () => _updateUi(() {
-                _zoom = 1;
-                _viewTransform.value = Matrix4.identity();
-              }),
-              child: const Text('Fit'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Text(
+                '${(_zoom * 100).round()}%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  key: const Key('designer-preview-identity-type'),
+                  value: _previewIdentityType,
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'student',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.school_outlined,
+                            size: 17,
+                            color: AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 7),
+                          Text('Student preview'),
+                        ],
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 'teacher',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_outline_rounded,
+                            size: 17,
+                            color: AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 7),
+                          Text('Teacher preview'),
+                        ],
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 'staff',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.badge_outlined,
+                            size: 17,
+                            color: AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 7),
+                          Text('Staff preview'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      _updateUi(() {
+                        _previewIdentityType = value;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              onPressed: () {
+                _updateUi(() {
+                  _zoom = 1;
+                  _viewTransform.value = Matrix4.identity();
+                });
+              },
+              icon: const Icon(Icons.fit_screen_outlined, size: 18),
+              label: const Text('Fit'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.border),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
             ),
           ],
         ),
       ),
       Expanded(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            const pixelsPerMillimetre = 10.0;
-            final naturalWidth = _document.canvas.width * pixelsPerMillimetre;
-            final naturalHeight = _document.canvas.height * pixelsPerMillimetre;
-            final fitScale = math.min(
-              (constraints.maxWidth - 32).clamp(1, double.infinity) /
-                  naturalWidth,
-              (constraints.maxHeight - 32).clamp(1, double.infinity) /
-                  naturalHeight,
-            );
-            final displayWidth = naturalWidth * fitScale * _zoom;
-            return Focus(
-              focusNode: _canvasFocus,
-              child: AppScaleGestureBoundary(
-                child: InteractiveViewer(
-                  transformationController: _viewTransform,
-                  panEnabled: _selectedId == null,
-                  minScale: .5,
-                  maxScale: 3,
-                  child: Center(
-                    child: SizedBox(
-                      key: const Key('designer-canvas-frame'),
-                      width: displayWidth,
-                      child: Stack(
-                        children: [
-                          KeyedSubtree(
-                            key: _canvasCoordinates,
-                            child: DesignDocumentView(
-                              key: const Key('designer-canvas'),
-                              document: _document,
-                              student: _previewIdentityType == 'student'
-                                  ? _sampleStudent
-                                  : null,
-                              personnel: _previewIdentityType == 'student'
-                                  ? null
-                                  : ApiPersonnel(
-                                      uuid: _samplePersonnel.uuid,
-                                      personnelType:
-                                          _previewIdentityType == 'teacher'
-                                          ? PersonnelType.teacher
-                                          : PersonnelType.staff,
-                                      employeeNo: _samplePersonnel.employeeNo,
-                                      fullName: _samplePersonnel.fullName,
-                                      designation:
-                                          _previewIdentityType == 'teacher'
-                                          ? _samplePersonnel.designation
-                                          : 'Office Administrator',
-                                      department:
-                                          _previewIdentityType == 'teacher'
-                                          ? _samplePersonnel.department
-                                          : 'Administration',
-                                      dob: _samplePersonnel.dob,
-                                      gender: _samplePersonnel.gender,
-                                      bloodGroup: _samplePersonnel.bloodGroup,
-                                      mobile: _samplePersonnel.mobile,
-                                      email: _samplePersonnel.email,
-                                      address: _samplePersonnel.address,
-                                      photoPath: _samplePersonnel.photoPath,
-                                      verificationStatus:
-                                          _samplePersonnel.verificationStatus,
-                                      lifecycleStatus:
-                                          _samplePersonnel.lifecycleStatus,
-                                      correctionNote: null,
-                                      verifiedAt: null,
-                                      verifiedByName: null,
-                                      printedAt: null,
-                                      printedByName: null,
-                                      printCount: 0,
-                                      isActive: true,
-                                      createdAt: _samplePersonnel.createdAt,
-                                      updatedAt: _samplePersonnel.updatedAt,
-                                    ),
-                              sessionName: '2026-2028',
-                              className: 'XII',
-                              sectionName: 'A',
-                              logoUrl: _logoUrl,
-                              schoolProfile: _schoolProfile,
-                              assetBaseUrl: widget.api.baseUrl,
-                              selectedId: _selectedId,
-                              interactive: true,
-                              onSelect: _select,
-                              onGestureStart: _beginGesture,
-                              onGestureEnd: _endGesture,
-                              isGestureActive: (id) => _gestureId == id,
-                              onMove: _move,
-                              onResize: _resize,
+        child: Container(
+          color: AppColors.surfaceMuted,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const pixelsPerMillimetre = 10.0;
+
+              final naturalWidth = _document.canvas.width * pixelsPerMillimetre;
+
+              final naturalHeight =
+                  _document.canvas.height * pixelsPerMillimetre;
+
+              final fitScale = math.min(
+                (constraints.maxWidth - 32).clamp(1, double.infinity) /
+                    naturalWidth,
+                (constraints.maxHeight - 32).clamp(1, double.infinity) /
+                    naturalHeight,
+              );
+
+              final displayWidth = naturalWidth * fitScale * _zoom;
+
+              return Focus(
+                focusNode: _canvasFocus,
+                child: AppScaleGestureBoundary(
+                  child: InteractiveViewer(
+                    transformationController: _viewTransform,
+                    panEnabled: _selectedId == null,
+                    minScale: .5,
+                    maxScale: 3,
+                    child: Center(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 24,
+                              offset: const Offset(0, 8),
                             ),
-                          ),
-                          Positioned.fill(
-                            child: ValueListenableBuilder<List<DesignerGuide>>(
-                              valueListenable: _guides,
-                              builder: (context, guides, _) => guides.isEmpty
-                                  ? const SizedBox.shrink()
-                                  : DesignerGuideOverlay(
-                                      key: const Key('designer-smart-guides'),
-                                      guides: guides,
-                                      canvasWidth: _document.canvas.width,
-                                      viewScale: _viewTransform.value
-                                          .getMaxScaleOnAxis(),
-                                    ),
-                            ),
-                          ),
-                          if (_document.settings['grid_enabled'] != false)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: CustomPaint(
-                                  painter: _GridPainter(
-                                    (_document.settings['grid_size'] as num?)
-                                            ?.toDouble() ??
-                                        2,
-                                    _document.canvas.width,
-                                  ),
+                          ],
+                        ),
+                        child: SizedBox(
+                          key: const Key('designer-canvas-frame'),
+                          width: displayWidth,
+                          child: Stack(
+                            children: [
+                              KeyedSubtree(
+                                key: _canvasCoordinates,
+                                child: DesignDocumentView(
+                                  key: const Key('designer-canvas'),
+                                  document: _document,
+                                  student: _previewIdentityType == 'student'
+                                      ? _sampleStudent
+                                      : null,
+                                  personnel: _previewIdentityType == 'student'
+                                      ? null
+                                      : ApiPersonnel(
+                                          uuid: _samplePersonnel.uuid,
+                                          personnelType:
+                                              _previewIdentityType == 'teacher'
+                                              ? PersonnelType.teacher
+                                              : PersonnelType.staff,
+                                          employeeNo:
+                                              _samplePersonnel.employeeNo,
+                                          fullName: _samplePersonnel.fullName,
+                                          designation:
+                                              _previewIdentityType == 'teacher'
+                                              ? _samplePersonnel.designation
+                                              : 'Office Administrator',
+                                          department:
+                                              _previewIdentityType == 'teacher'
+                                              ? _samplePersonnel.department
+                                              : 'Administration',
+                                          dob: _samplePersonnel.dob,
+                                          gender: _samplePersonnel.gender,
+                                          bloodGroup:
+                                              _samplePersonnel.bloodGroup,
+                                          mobile: _samplePersonnel.mobile,
+                                          email: _samplePersonnel.email,
+                                          address: _samplePersonnel.address,
+                                          photoPath: _samplePersonnel.photoPath,
+                                          verificationStatus: _samplePersonnel
+                                              .verificationStatus,
+                                          lifecycleStatus:
+                                              _samplePersonnel.lifecycleStatus,
+                                          correctionNote: null,
+                                          verifiedAt: null,
+                                          verifiedByName: null,
+                                          printedAt: null,
+                                          printedByName: null,
+                                          printCount: 0,
+                                          isActive: true,
+                                          createdAt: _samplePersonnel.createdAt,
+                                          updatedAt: _samplePersonnel.updatedAt,
+                                        ),
+                                  sessionName: '2026-2028',
+                                  className: 'XII',
+                                  sectionName: 'A',
+                                  logoUrl: _logoUrl,
+                                  schoolProfile: _schoolProfile,
+                                  assetBaseUrl: widget.api.baseUrl,
+                                  selectedId: _selectedId,
+                                  interactive: true,
+                                  onSelect: _select,
+                                  onGestureStart: _beginGesture,
+                                  onGestureEnd: _endGesture,
+                                  isGestureActive: (id) => _gestureId == id,
+                                  onMove: _move,
+                                  onResize: _resize,
                                 ),
                               ),
-                            ),
-                        ],
+                              Positioned.fill(
+                                child:
+                                    ValueListenableBuilder<List<DesignerGuide>>(
+                                      valueListenable: _guides,
+                                      builder: (context, guides, _) =>
+                                          guides.isEmpty
+                                          ? const SizedBox.shrink()
+                                          : DesignerGuideOverlay(
+                                              key: const Key(
+                                                'designer-smart-guides',
+                                              ),
+                                              guides: guides,
+                                              canvasWidth:
+                                                  _document.canvas.width,
+                                              viewScale: _viewTransform.value
+                                                  .getMaxScaleOnAxis(),
+                                            ),
+                                    ),
+                              ),
+                              if (_document.settings['grid_enabled'] != false)
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: CustomPaint(
+                                      painter: _GridPainter(
+                                        (_document.settings['grid_size']
+                                                    as num?)
+                                                ?.toDouble() ??
+                                            2,
+                                        _document.canvas.width,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     ],
@@ -1893,96 +2762,253 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   Widget _layers() {
     final elements = [..._document.elements]
       ..sort((a, b) => b.zIndex.compareTo(a.zIndex));
+
     return Material(
-      color: Colors.white,
+      color: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
       child: Column(
         children: [
-          const ListTile(
-            title: Text(
-              'Layers',
-              style: TextStyle(fontWeight: FontWeight.bold),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-          ),
-          Expanded(
-            child: ListView(
+            child: Row(
               children: [
-                for (final e in elements)
-                  ListTile(
-                    key: Key('layer-${e.id}'),
-                    selected: e.id == _selectedId,
-                    dense: true,
-                    onTap: () => _select(e.id),
-                    leading: IconButton(
-                      tooltip: e.visible ? 'Hide' : 'Show',
-                      icon: Icon(
-                        e.visible
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        size: 18,
-                      ),
-                      onPressed: () => _updateElement(
-                        e.id,
-                        (live) => live.copyWith(visible: !live.visible),
-                      ),
-                    ),
-                    title: Text(
-                      _elementLabel(e),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: IconButton(
-                      icon: Icon(
-                        e.locked ? Icons.lock : Icons.lock_open,
-                        size: 18,
-                      ),
-                      onPressed: () => _updateElement(
-                        e.id,
-                        (live) => live.copyWith(locked: !live.locked),
-                      ),
+                const Icon(
+                  Icons.layers_outlined,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 9),
+                const Expanded(
+                  child: Text(
+                    'Layers',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
                     ),
                   ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSoft,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${elements.length}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-          Wrap(
-            children: [
-              IconButton(
-                onPressed: _selected == null ? null : () => _layer('front'),
-                icon: const Icon(Icons.vertical_align_top),
-                tooltip: 'Bring to front',
-              ),
-              IconButton(
-                onPressed: _selected == null ? null : () => _layer('forward'),
-                icon: const Icon(Icons.arrow_upward),
-                tooltip: 'Bring forward',
-              ),
-              IconButton(
-                onPressed: _selected == null ? null : () => _layer('backward'),
-                icon: const Icon(Icons.arrow_downward),
-                tooltip: 'Send backward',
-              ),
-              IconButton(
-                onPressed: _selected == null ? null : () => _layer('back'),
-                icon: const Icon(Icons.vertical_align_bottom),
-                tooltip: 'Send to back',
-              ),
-            ],
+          Expanded(
+            child: elements.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.layers_clear_outlined,
+                            size: 32,
+                            color: AppColors.textMuted,
+                          ),
+                          SizedBox(height: 10),
+                          Text(
+                            'No elements yet',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            'Add an element from the toolbar.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: elements.length,
+                    itemBuilder: (context, index) {
+                      final element = elements[index];
+
+                      final selected = element.id == _selectedId;
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        child: Material(
+                          color: selected
+                              ? AppColors.accentSoft
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          child: ListTile(
+                            key: Key('layer-${element.id}'),
+                            selected: selected,
+                            dense: true,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            onTap: () {
+                              _select(element.id);
+                            },
+                            leading: IconButton(
+                              tooltip: element.visible ? 'Hide' : 'Show',
+                              icon: Icon(
+                                element.visible
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                size: 18,
+                                color: element.visible
+                                    ? AppColors.textSecondary
+                                    : AppColors.textMuted,
+                              ),
+                              onPressed: () {
+                                _updateElement(
+                                  element.id,
+                                  (live) =>
+                                      live.copyWith(visible: !live.visible),
+                                );
+                              },
+                            ),
+                            title: Text(
+                              _elementLabel(element),
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: selected
+                                    ? AppColors.accent
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              tooltip: element.locked ? 'Unlock' : 'Lock',
+                              icon: Icon(
+                                element.locked
+                                    ? Icons.lock_outline_rounded
+                                    : Icons.lock_open_rounded,
+                                size: 18,
+                                color: element.locked
+                                    ? AppColors.warning
+                                    : AppColors.textMuted,
+                              ),
+                              onPressed: () {
+                                _updateElement(
+                                  element.id,
+                                  (live) => live.copyWith(locked: !live.locked),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.border)),
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 2,
+              children: [
+                IconButton(
+                  onPressed: _selected == null ? null : () => _layer('front'),
+                  icon: const Icon(Icons.vertical_align_top_rounded),
+                  tooltip: 'Bring to front',
+                  style: IconButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    disabledForegroundColor: AppColors.disabled,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _selected == null ? null : () => _layer('forward'),
+                  icon: const Icon(Icons.arrow_upward_rounded),
+                  tooltip: 'Bring forward',
+                  style: IconButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    disabledForegroundColor: AppColors.disabled,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _selected == null
+                      ? null
+                      : () => _layer('backward'),
+                  icon: const Icon(Icons.arrow_downward_rounded),
+                  tooltip: 'Send backward',
+                  style: IconButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    disabledForegroundColor: AppColors.disabled,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _selected == null ? null : () => _layer('back'),
+                  icon: const Icon(Icons.vertical_align_bottom_rounded),
+                  tooltip: 'Send to back',
+                  style: IconButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    disabledForegroundColor: AppColors.disabled,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  String _elementLabel(DesignElement e) => e.type == DesignElementType.text
-      ? (e.data['text'] as String? ?? 'Text')
-      : e.type.wire.replaceAll('_', ' ');
+  String _elementLabel(DesignElement element) =>
+      element.type == DesignElementType.text
+      ? (element.data['text'] as String? ?? 'Text')
+      : element.type.wire.replaceAll('_', ' ');
 
   String _qrSource(DesignElement element) {
-    if (element.data['fields'] is List) return 'multiple_fields';
-    if (element.data['field_uuid'] is String) return 'custom_field';
+    if (element.data['fields'] is List) {
+      return 'multiple_fields';
+    }
+
+    if (element.data['field_uuid'] is String) {
+      return 'custom_field';
+    }
+
     if (element.data['field'] == 'verification_url') {
       return 'verification_link';
     }
-    if (element.data['field'] is String) return 'system_field';
+
+    if (element.data['field'] is String) {
+      return 'system_field';
+    }
+
     return 'static';
   }
 
@@ -1994,14 +3020,18 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Map<String, dynamic> _qrDataForSource(DesignElement element, String source) {
     final prefix = element.data['prefix'] as String?;
+
     final suffix = element.data['suffix'] as String?;
+
     late final Map<String, dynamic> data;
+
     if (source == 'verification_link') {
       data = {'field': 'verification_url'};
     } else if (source == 'multiple_fields') {
       final idField = _previewIdentityType == 'student'
           ? 'admission_no'
           : 'employee_no';
+
       data = {
         'fields': [
           {'field': 'full_name', 'label': _systemFields['full_name']},
@@ -2013,9 +3043,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       final field = _previewIdentityType == 'student'
           ? 'admission_no'
           : 'employee_no';
+
       data = {'field': field, 'fallback': _systemFields[field]};
     } else if (source == 'custom_field') {
       final field = _availableCustomFields.firstOrNull;
+
       data = field == null
           ? {'text': 'CAMPUS-ID'}
           : {
@@ -2026,13 +3058,21 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     } else {
       data = {'text': 'CAMPUS-ID'};
     }
+
     if (source != 'multiple_fields') {
-      if (prefix != null) data['prefix'] = prefix;
-      if (suffix != null) data['suffix'] = suffix;
+      if (prefix != null) {
+        data['prefix'] = prefix;
+      }
+
+      if (suffix != null) {
+        data['suffix'] = suffix;
+      }
     }
+
     if (element.type == DesignElementType.barcode) {
       data['symbology'] = element.data['symbology'] ?? 'code128';
     }
+
     return data;
   }
 
@@ -2055,8 +3095,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     required bool selected,
   }) {
     final fields = _qrFields(element);
+
     bool matches(Map<String, dynamic> item) =>
         item['field'] == field && item['field_uuid'] == fieldUuid;
+
     if (selected) {
       if (fields.length < 20 && !fields.any(matches)) {
         fields.add({'field': ?field, 'field_uuid': ?fieldUuid, 'label': label});
@@ -2064,12 +3106,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     } else {
       fields.removeWhere(matches);
     }
+
     return {...element.data, 'fields': fields};
   }
 
   List<DropdownMenuItem<String>> _qrCustomFieldItems(DesignElement element) {
     final selected = element.data['field_uuid'] as String?;
+
     final fields = _availableCustomFields.toList();
+
     return [
       if (selected != null && !fields.any((field) => field.uuid == selected))
         DropdownMenuItem(
@@ -2084,693 +3129,1056 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   Widget _inspector() {
     final e = _selected;
+
     // Resolve by identity at event time; callbacks must not replace newer edits
     // with the element snapshot captured by the previous build.
     void update(DesignElement Function(DesignElement) change) {
       final live = _document.elements
           .where((element) => element.id == e?.id)
           .firstOrNull;
-      if (live != null) _replace(change(live));
+
+      if (live != null) {
+        _replace(change(live));
+      }
     }
 
     return Material(
-      color: Colors.white,
+      color: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
       child: Theme(
         data: Theme.of(context).copyWith(
           inputDecorationTheme: const InputDecorationTheme(
+            filled: true,
+            fillColor: AppColors.surface,
             border: OutlineInputBorder(),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: AppColors.accent, width: 1.5),
+            ),
             floatingLabelBehavior: FloatingLabelBehavior.auto,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           ),
         ),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.zero,
           children: [
-            _propertyControl(
-              TextField(
-                key: const Key('template-name'),
-                controller: _name,
-                decoration: _propertyDecoration('Template name'),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.border)),
               ),
-            ),
-            Text(
-              e == null
-                  ? 'Canvas properties'
-                  : 'Properties · ${_elementLabel(e)}',
-              key: Key(e == null ? 'canvas-properties' : 'element-properties'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            if (e == null) ..._canvasProperties(),
-            if (e != null) ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              child: Row(
                 children: [
-                  _numberField(
-                    'X',
-                    e.x,
-                    (v) => update(
-                      (e) => e.copyWith(
-                        x: v.clamp(
-                          0.0,
-                          math.max(0.0, _document.canvas.width - e.width),
-                        ),
-                      ),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      e == null
+                          ? Icons.dashboard_customize_outlined
+                          : Icons.tune_rounded,
+                      size: 19,
+                      color: AppColors.accent,
                     ),
                   ),
-                  _numberField(
-                    'Y',
-                    e.y,
-                    (v) => update(
-                      (e) => e.copyWith(
-                        y: v.clamp(
-                          0.0,
-                          math.max(0.0, _document.canvas.height - e.height),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          e == null ? 'Canvas' : 'Properties',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                  _numberField(
-                    'Width',
-                    e.width,
-                    (v) => update(
-                      (e) => e.copyWith(
-                        width: v.clamp(
-                          2.0,
-                          math.max(2.0, _document.canvas.width - e.x),
+                        const SizedBox(height: 2),
+                        Text(
+                          e == null
+                              ? 'Card layout and workspace'
+                              : _elementLabel(e),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ),
-                  _numberField(
-                    'Height',
-                    e.height,
-                    (v) => update(
-                      (e) => e.copyWith(
-                        height: v.clamp(
-                          1.0,
-                          math.max(1.0, _document.canvas.height - e.y),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _numberField(
-                    'Rotation',
-                    e.rotation,
-                    (v) =>
-                        update((e) => e.copyWith(rotation: v.clamp(-360, 360))),
                   ),
                 ],
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Locked'),
-                value: e.locked,
-                onChanged: (v) => update((e) => e.copyWith(locked: v)),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Visible'),
-                value: e.visible,
-                onChanged: (v) => update((e) => e.copyWith(visible: v)),
-              ),
-              if (e.type == DesignElementType.text)
-                _textProperty(
-                  'Text',
-                  e.data['text'] as String? ?? '',
-                  (v) =>
-                      update((e) => e.copyWith(data: {...e.data, 'text': v})),
-                ),
-              if (e.type == DesignElementType.boundText)
-                _dropdownProperty<String>(
-                  key: ValueKey('student-field-${e.id}'),
-                  label: 'Identity field',
-                  value: _availableSystemFields.containsKey(e.data['field'])
-                      ? e.data['field'] as String
-                      : 'full_name',
-                  items: _availableSystemFields.entries
-                      .map(
-                        (entry) => DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _propertyControl(
+                    TextField(
+                      key: const Key('template-name'),
+                      controller: _name,
+                      decoration: _propertyDecoration('Template name').copyWith(
+                        prefixIcon: const Icon(
+                          Icons.drive_file_rename_outline_rounded,
+                          size: 19,
                         ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null)
-                      update(
-                        (e) => e.copyWith(
-                          data: {
-                            ...e.data,
-                            'field': v,
-                            'fallback': _systemFields[v],
-                          },
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          e == null
+                              ? 'Canvas properties'
+                              : 'Properties · ${_elementLabel(e)}',
+                          key: Key(
+                            e == null
+                                ? 'canvas-properties'
+                                : 'element-properties',
+                          ),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                      );
-                  },
-                ),
-              if ({
-                DesignElementType.qrCode,
-                DesignElementType.barcode,
-              }.contains(e.type)) ...[
-                if (e.type == DesignElementType.barcode)
-                  _dropdownProperty<String>(
-                    key: ValueKey('barcode-symbology-${e.id}'),
-                    label: 'Barcode format',
-                    value: e.data['symbology'] as String? ?? 'code128',
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'code128',
-                        child: Text('Code 128'),
                       ),
-                      DropdownMenuItem(value: 'code39', child: Text('Code 39')),
-                      DropdownMenuItem(value: 'ean13', child: Text('EAN-13')),
-                      DropdownMenuItem(
-                        value: 'data_matrix',
-                        child: Text('Data Matrix'),
-                      ),
+                      if (e != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSoft,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            e.type.wire.replaceAll('_', ' '),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
                     ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      final square = isDesignBarcodeSquare(value);
-                      update(
-                        (e) => e.copyWith(
-                          width: square ? 20 : 35,
-                          height: square ? 20 : 15,
-                          style: {
-                            ...e.style,
-                            'show_text': square
-                                ? false
-                                : e.style['show_text'] != false,
-                          },
-                          data: {...e.data, 'symbology': value},
-                        ),
-                      );
-                    },
                   ),
-                _dropdownProperty<String>(
-                  key: ValueKey('qr-source-${e.id}'),
-                  label: e.type == DesignElementType.qrCode
-                      ? 'QR content source'
-                      : 'Barcode content source',
-                  value: _effectiveQrSource(e),
-                  items: [
-                    if (e.type == DesignElementType.qrCode &&
-                        _previewIdentityType == 'student')
-                      const DropdownMenuItem(
-                        value: 'verification_link',
-                        child: Text('Verification link (recommended)'),
-                      ),
-                    const DropdownMenuItem(
-                      value: 'static',
-                      child: Text('Static text'),
-                    ),
-                    const DropdownMenuItem(
-                      value: 'system_field',
-                      child: Text('Identity or school field'),
-                    ),
-                    const DropdownMenuItem(
-                      value: 'multiple_fields',
-                      child: Text('Multiple fields'),
-                    ),
-                    if (e.data['field_uuid'] is String ||
-                        _availableCustomFields.isNotEmpty)
-                      const DropdownMenuItem(
-                        value: 'custom_field',
-                        child: Text('Custom identity field'),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      update(
-                        (e) => e.copyWith(data: _qrDataForSource(e, value)),
-                      );
-                    }
-                  },
-                ),
-                if (_effectiveQrSource(e) == 'static')
-                  _textProperty(
-                    e.type == DesignElementType.qrCode
-                        ? 'QR content'
-                        : 'Barcode content',
-                    e.data['text'] as String? ?? '',
-                    (value) => update(
-                      (e) => e.copyWith(data: {...e.data, 'text': value}),
-                    ),
-                  ),
-                if (_effectiveQrSource(e) == 'system_field')
-                  _dropdownProperty<String>(
-                    key: ValueKey('qr-system-field-${e.id}'),
-                    label: e.type == DesignElementType.qrCode
-                        ? 'QR field'
-                        : 'Barcode field',
-                    value: _availableSystemFields.containsKey(e.data['field'])
-                        ? e.data['field'] as String
-                        : 'full_name',
-                    items: _availableSystemFields.entries
-                        .map(
-                          (entry) => DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        update(
-                          (e) => e.copyWith(
-                            data: {
-                              ...e.data,
-                              'field': value,
-                              'fallback': _systemFields[value],
-                            },
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                if (_effectiveQrSource(e) == 'custom_field')
-                  _dropdownProperty<String>(
-                    key: ValueKey('qr-custom-field-${e.id}'),
-                    label: e.type == DesignElementType.qrCode
-                        ? 'QR custom field'
-                        : 'Barcode custom field',
-                    value: e.data['field_uuid'] as String,
-                    items: _qrCustomFieldItems(e),
-                    onChanged: (value) {
-                      final field = _availableCustomFields
-                          .where((field) => field.uuid == value)
-                          .firstOrNull;
-                      if (field != null) {
-                        update(
-                          (e) => e.copyWith(
-                            data: {
-                              ...e.data,
-                              'field_uuid': field.uuid,
-                              'label': field.label,
-                              'fallback': field.label,
-                            },
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                if (_effectiveQrSource(e) == 'multiple_fields') ...[
-                  _dropdownProperty<String>(
-                    key: ValueKey('qr-format-${e.id}'),
-                    label: 'Payload format',
-                    value: e.data['format'] as String? ?? 'json',
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'json',
-                        child: Text('Structured JSON'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'labeled_text',
-                        child: Text('Labeled text'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        update(
-                          (e) => e.copyWith(
-                            data: {
-                              ...e.data,
-                              'format': value,
-                              if (value == 'json') ...{
-                                'prefix': '',
-                                'suffix': '',
-                              },
-                            },
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4, bottom: 4),
-                    child: Text(
-                      'Fields (${_qrFields(e).length}/20)',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Text(
-                    e.data['format'] == 'labeled_text'
-                        ? 'Each selected value is encoded as a labeled line.'
-                        : 'System keys stay stable; custom keys use custom:<field UUID>.',
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
-                  ),
-                  for (final group in _qrSystemFieldGroups.entries) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        group.key,
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                    ),
-                    for (final fieldKey in group.value.where(
-                      _availableSystemFields.containsKey,
-                    ))
-                      CheckboxListTile(
-                        key: Key('qr-field-$fieldKey'),
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(_systemFields[fieldKey]!),
-                        value: _hasQrField(e, field: fieldKey),
-                        onChanged:
-                            (_hasQrField(e, field: fieldKey) &&
-                                    _qrFields(e).length == 1) ||
-                                (!_hasQrField(e, field: fieldKey) &&
-                                    _qrFields(e).length >= 20)
-                            ? null
-                            : (selected) => update(
-                                (e) => e.copyWith(
-                                  data: _toggleQrField(
-                                    e,
-                                    field: fieldKey,
-                                    label: _systemFields[fieldKey]!,
-                                    selected: selected ?? false,
-                                  ),
-                                ),
-                              ),
-                      ),
-                  ],
-                  if (_availableCustomFields.isNotEmpty) ...[
-                    const Divider(),
+                  const SizedBox(height: 16),
+                  if (e == null) ..._canvasProperties(),
+                  if (e != null) ...[
                     const Text(
-                      'Custom identity fields',
-                      style: TextStyle(color: Colors.black54),
+                      'POSITION & SIZE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .7,
+                        color: AppColors.textMuted,
+                      ),
                     ),
-                    for (final field in _availableCustomFields)
-                      CheckboxListTile(
-                        key: Key('qr-custom-field-${field.uuid}'),
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(field.label),
-                        value: _hasQrField(e, fieldUuid: field.uuid),
-                        onChanged:
-                            (_hasQrField(e, fieldUuid: field.uuid) &&
-                                    _qrFields(e).length == 1) ||
-                                (!_hasQrField(e, fieldUuid: field.uuid) &&
-                                    _qrFields(e).length >= 20)
-                            ? null
-                            : (selected) => update(
-                                (e) => e.copyWith(
-                                  data: _toggleQrField(
-                                    e,
-                                    fieldUuid: field.uuid,
-                                    label: field.label,
-                                    selected: selected ?? false,
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 0,
+                      children: [
+                        _numberField(
+                          'X',
+                          e.x,
+                          (value) => update(
+                            (element) => element.copyWith(
+                              x: value.clamp(
+                                0.0,
+                                math.max(
+                                  0.0,
+                                  _document.canvas.width - element.width,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _numberField(
+                          'Y',
+                          e.y,
+                          (value) => update(
+                            (element) => element.copyWith(
+                              y: value.clamp(
+                                0.0,
+                                math.max(
+                                  0.0,
+                                  _document.canvas.height - element.height,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _numberField(
+                          'Width',
+                          e.width,
+                          (value) => update(
+                            (element) => element.copyWith(
+                              width: value.clamp(
+                                2.0,
+                                math.max(
+                                  2.0,
+                                  _document.canvas.width - element.x,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _numberField(
+                          'Height',
+                          e.height,
+                          (value) => update(
+                            (element) => element.copyWith(
+                              height: value.clamp(
+                                1.0,
+                                math.max(
+                                  1.0,
+                                  _document.canvas.height - element.y,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _numberField(
+                          'Rotation',
+                          e.rotation,
+                          (value) => update(
+                            (element) => element.copyWith(
+                              rotation: value.clamp(-360, 360),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceSoft,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                            ),
+                            dense: true,
+                            title: const Text(
+                              'Locked',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            secondary: const Icon(
+                              Icons.lock_outline_rounded,
+                              size: 18,
+                            ),
+                            value: e.locked,
+                            onChanged: (value) => update(
+                              (element) => element.copyWith(locked: value),
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                            ),
+                            dense: true,
+                            title: const Text(
+                              'Visible',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            secondary: const Icon(
+                              Icons.visibility_outlined,
+                              size: 18,
+                            ),
+                            value: e.visible,
+                            onChanged: (value) => update(
+                              (element) => element.copyWith(visible: value),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (e.type == DesignElementType.text)
+                      _textProperty(
+                        'Text',
+                        e.data['text'] as String? ?? '',
+                        (value) => update(
+                          (element) => element.copyWith(
+                            data: {...element.data, 'text': value},
+                          ),
+                        ),
+                      ),
+                    if (e.type == DesignElementType.boundText)
+                      _dropdownProperty<String>(
+                        key: ValueKey('student-field-${e.id}'),
+                        label: 'Identity field',
+                        value:
+                            _availableSystemFields.containsKey(e.data['field'])
+                            ? e.data['field'] as String
+                            : 'full_name',
+                        items: _availableSystemFields.entries
+                            .map(
+                              (entry) => DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            update(
+                              (element) => element.copyWith(
+                                data: {
+                                  ...element.data,
+                                  'field': value,
+                                  'fallback': _systemFields[value],
+                                },
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    if ({
+                      DesignElementType.qrCode,
+                      DesignElementType.barcode,
+                    }.contains(e.type)) ...[
+                      const Text(
+                        'CODE CONTENT',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .7,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (e.type == DesignElementType.barcode)
+                        _dropdownProperty<String>(
+                          key: ValueKey('barcode-symbology-${e.id}'),
+                          label: 'Barcode format',
+                          value: e.data['symbology'] as String? ?? 'code128',
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'code128',
+                              child: Text('Code 128'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'code39',
+                              child: Text('Code 39'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'ean13',
+                              child: Text('EAN-13'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'data_matrix',
+                              child: Text('Data Matrix'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+
+                            final square = isDesignBarcodeSquare(value);
+
+                            update(
+                              (element) => element.copyWith(
+                                width: square ? 20 : 35,
+                                height: square ? 20 : 15,
+                                style: {
+                                  ...element.style,
+                                  'show_text': square
+                                      ? false
+                                      : element.style['show_text'] != false,
+                                },
+                                data: {...element.data, 'symbology': value},
+                              ),
+                            );
+                          },
+                        ),
+                      _dropdownProperty<String>(
+                        key: ValueKey('qr-source-${e.id}'),
+                        label: e.type == DesignElementType.qrCode
+                            ? 'QR content source'
+                            : 'Barcode content source',
+                        value: _effectiveQrSource(e),
+                        items: [
+                          if (e.type == DesignElementType.qrCode &&
+                              _previewIdentityType == 'student')
+                            const DropdownMenuItem(
+                              value: 'verification_link',
+                              child: Text('Verification link (recommended)'),
+                            ),
+                          const DropdownMenuItem(
+                            value: 'static',
+                            child: Text('Static text'),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'system_field',
+                            child: Text('Identity or school field'),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'multiple_fields',
+                            child: Text('Multiple fields'),
+                          ),
+                          if (e.data['field_uuid'] is String ||
+                              _availableCustomFields.isNotEmpty)
+                            const DropdownMenuItem(
+                              value: 'custom_field',
+                              child: Text('Custom identity field'),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            update(
+                              (element) => element.copyWith(
+                                data: _qrDataForSource(element, value),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      if (_effectiveQrSource(e) == 'static')
+                        _textProperty(
+                          e.type == DesignElementType.qrCode
+                              ? 'QR content'
+                              : 'Barcode content',
+                          e.data['text'] as String? ?? '',
+                          (value) => update(
+                            (element) => element.copyWith(
+                              data: {...element.data, 'text': value},
+                            ),
+                          ),
+                        ),
+                      if (_effectiveQrSource(e) == 'system_field')
+                        _dropdownProperty<String>(
+                          key: ValueKey('qr-system-field-${e.id}'),
+                          label: e.type == DesignElementType.qrCode
+                              ? 'QR field'
+                              : 'Barcode field',
+                          value:
+                              _availableSystemFields.containsKey(
+                                e.data['field'],
+                              )
+                              ? e.data['field'] as String
+                              : 'full_name',
+                          items: _availableSystemFields.entries
+                              .map(
+                                (entry) => DropdownMenuItem<String>(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              update(
+                                (element) => element.copyWith(
+                                  data: {
+                                    ...element.data,
+                                    'field': value,
+                                    'fallback': _systemFields[value],
+                                  },
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      if (_effectiveQrSource(e) == 'custom_field')
+                        _dropdownProperty<String>(
+                          key: ValueKey('qr-custom-field-${e.id}'),
+                          label: e.type == DesignElementType.qrCode
+                              ? 'QR custom field'
+                              : 'Barcode custom field',
+                          value: e.data['field_uuid'] as String,
+                          items: _qrCustomFieldItems(e),
+                          onChanged: (value) {
+                            final field = _availableCustomFields
+                                .where((field) => field.uuid == value)
+                                .firstOrNull;
+
+                            if (field != null) {
+                              update(
+                                (element) => element.copyWith(
+                                  data: {
+                                    ...element.data,
+                                    'field_uuid': field.uuid,
+                                    'label': field.label,
+                                    'fallback': field.label,
+                                  },
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      if (_effectiveQrSource(e) == 'multiple_fields') ...[
+                        _dropdownProperty<String>(
+                          key: ValueKey('qr-format-${e.id}'),
+                          label: 'Payload format',
+                          value: e.data['format'] as String? ?? 'json',
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'json',
+                              child: Text('Structured JSON'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'labeled_text',
+                              child: Text('Labeled text'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              update(
+                                (element) => element.copyWith(
+                                  data: {
+                                    ...element.data,
+                                    'format': value,
+                                    if (value == 'json') ...{
+                                      'prefix': '',
+                                      'suffix': '',
+                                    },
+                                  },
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 4),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Fields',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
                                   ),
                                 ),
                               ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceSoft,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '${_qrFields(e).length}/20',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          e.data['format'] == 'labeled_text'
+                              ? 'Each selected value is encoded as a labeled line.'
+                              : 'System keys stay stable; custom keys use custom:<field UUID>.',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            height: 1.4,
+                          ),
+                        ),
+                        for (final group in _qrSystemFieldGroups.entries) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 14, bottom: 2),
+                            child: Text(
+                              group.key,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          for (final fieldKey in group.value.where(
+                            _availableSystemFields.containsKey,
+                          ))
+                            CheckboxListTile(
+                              key: Key('qr-field-$fieldKey'),
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(
+                                _systemFields[fieldKey]!,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              value: _hasQrField(e, field: fieldKey),
+                              onChanged:
+                                  (_hasQrField(e, field: fieldKey) &&
+                                          _qrFields(e).length == 1) ||
+                                      (!_hasQrField(e, field: fieldKey) &&
+                                          _qrFields(e).length >= 20)
+                                  ? null
+                                  : (selected) => update(
+                                      (element) => element.copyWith(
+                                        data: _toggleQrField(
+                                          element,
+                                          field: fieldKey,
+                                          label: _systemFields[fieldKey]!,
+                                          selected: selected ?? false,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                        ],
+                        if (_availableCustomFields.isNotEmpty) ...[
+                          const Divider(height: 24),
+                          const Text(
+                            'Custom identity fields',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          for (final field in _availableCustomFields)
+                            CheckboxListTile(
+                              key: Key('qr-custom-field-${field.uuid}'),
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(
+                                field.label,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              value: _hasQrField(e, fieldUuid: field.uuid),
+                              onChanged:
+                                  (_hasQrField(e, fieldUuid: field.uuid) &&
+                                          _qrFields(e).length == 1) ||
+                                      (!_hasQrField(e, fieldUuid: field.uuid) &&
+                                          _qrFields(e).length >= 20)
+                                  ? null
+                                  : (selected) => update(
+                                      (element) => element.copyWith(
+                                        data: _toggleQrField(
+                                          element,
+                                          fieldUuid: field.uuid,
+                                          label: field.label,
+                                          selected: selected ?? false,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                        ],
+                      ],
+                      if (_effectiveQrSource(e) != 'verification_link' &&
+                          (_effectiveQrSource(e) != 'multiple_fields' ||
+                              e.data['format'] == 'labeled_text')) ...[
+                        _textProperty(
+                          e.type == DesignElementType.qrCode
+                              ? 'QR prefix'
+                              : 'Barcode prefix',
+                          e.data['prefix'] as String? ?? '',
+                          (value) => update(
+                            (element) => element.copyWith(
+                              data: {...element.data, 'prefix': value},
+                            ),
+                          ),
+                        ),
+                        _textProperty(
+                          e.type == DesignElementType.qrCode
+                              ? 'QR suffix'
+                              : 'Barcode suffix',
+                          e.data['suffix'] as String? ?? '',
+                          (value) => update(
+                            (element) => element.copyWith(
+                              data: {...element.data, 'suffix': value},
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (e.type == DesignElementType.qrCode)
+                        _dropdownProperty<String>(
+                          key: ValueKey('qr-correction-${e.id}'),
+                          label: 'Error correction',
+                          value:
+                              e.style['error_correction'] as String? ??
+                              'medium',
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'low',
+                              child: Text('Low · 7%'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'medium',
+                              child: Text('Medium · 15%'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'quartile',
+                              child: Text('Quartile · 25%'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'high',
+                              child: Text('High · 30%'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              update(
+                                (element) => element.copyWith(
+                                  style: {
+                                    ...element.style,
+                                    'error_correction': value,
+                                  },
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      _colourProperty(
+                        e.type == DesignElementType.qrCode
+                            ? 'QR foreground'
+                            : 'Barcode foreground',
+                        e.style['color'] as String? ?? '#000000',
+                        (value) {
+                          if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {
+                                  ...element.style,
+                                  'color': value.toUpperCase(),
+                                },
+                              ),
+                            );
+                          }
+                        },
                       ),
-                  ],
-                ],
-                if (_effectiveQrSource(e) != 'verification_link' &&
-                    (_effectiveQrSource(e) != 'multiple_fields' ||
-                        e.data['format'] == 'labeled_text')) ...[
-                  _textProperty(
-                    e.type == DesignElementType.qrCode
-                        ? 'QR prefix'
-                        : 'Barcode prefix',
-                    e.data['prefix'] as String? ?? '',
-                    (value) => update(
-                      (e) => e.copyWith(data: {...e.data, 'prefix': value}),
-                    ),
-                  ),
-                  _textProperty(
-                    e.type == DesignElementType.qrCode
-                        ? 'QR suffix'
-                        : 'Barcode suffix',
-                    e.data['suffix'] as String? ?? '',
-                    (value) => update(
-                      (e) => e.copyWith(data: {...e.data, 'suffix': value}),
-                    ),
-                  ),
-                ],
-                if (e.type == DesignElementType.qrCode)
-                  _dropdownProperty<String>(
-                    key: ValueKey('qr-correction-${e.id}'),
-                    label: 'Error correction',
-                    value: e.style['error_correction'] as String? ?? 'medium',
-                    items: const [
-                      DropdownMenuItem(value: 'low', child: Text('Low · 7%')),
-                      DropdownMenuItem(
-                        value: 'medium',
-                        child: Text('Medium · 15%'),
+                      _colourProperty(
+                        e.type == DesignElementType.qrCode
+                            ? 'QR background'
+                            : 'Barcode background',
+                        e.style['background_color'] as String? ?? '#FFFFFF',
+                        (value) {
+                          if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {
+                                  ...element.style,
+                                  'background_color': value.toUpperCase(),
+                                },
+                              ),
+                            );
+                          }
+                        },
                       ),
-                      DropdownMenuItem(
-                        value: 'quartile',
-                        child: Text('Quartile · 25%'),
+                      _numberField(
+                        'Quiet zone (mm)',
+                        (e.style['quiet_zone'] as num?)?.toDouble() ?? 1,
+                        (value) => update(
+                          (element) => element.copyWith(
+                            style: {
+                              ...element.style,
+                              'quiet_zone': value.clamp(0, 5),
+                            },
+                          ),
+                        ),
+                        wide: true,
                       ),
-                      DropdownMenuItem(
-                        value: 'high',
-                        child: Text('High · 30%'),
+                      if (e.type == DesignElementType.barcode &&
+                          !isDesignBarcodeSquare(
+                            e.data['symbology'] as String? ?? 'code128',
+                          )) ...[
+                        SwitchListTile(
+                          key: const Key('barcode-show-text'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'Show human-readable value',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          value: e.style['show_text'] != false,
+                          onChanged: (value) => update(
+                            (element) => element.copyWith(
+                              style: {...element.style, 'show_text': value},
+                            ),
+                          ),
+                        ),
+                        if (e.style['show_text'] != false)
+                          _numberField(
+                            'Value text size (mm)',
+                            (e.style['font_size'] as num?)?.toDouble() ?? 2.5,
+                            (value) => update(
+                              (element) => element.copyWith(
+                                style: {
+                                  ...element.style,
+                                  'font_size': value.clamp(1, 6),
+                                },
+                              ),
+                            ),
+                            wide: true,
+                          ),
+                      ],
+                    ],
+                    if ({
+                      DesignElementType.text,
+                      DesignElementType.boundText,
+                      DesignElementType.customFieldText,
+                    }.contains(e.type)) ...[
+                      const Text(
+                        'TYPOGRAPHY',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .7,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _numberField(
+                        'Font size (mm)',
+                        (e.style['font_size'] as num?)?.toDouble() ?? 3,
+                        (value) => update(
+                          (element) => element.copyWith(
+                            style: {
+                              ...element.style,
+                              'font_size': value.clamp(1, 20),
+                            },
+                          ),
+                        ),
+                        wide: true,
+                      ),
+                      _dropdownProperty<int>(
+                        key: ValueKey('font-weight-${e.id}'),
+                        label: 'Weight',
+                        value: (e.style['font_weight'] as num?)?.toInt() ?? 400,
+                        items: const [
+                          DropdownMenuItem(value: 400, child: Text('Regular')),
+                          DropdownMenuItem(
+                            value: 600,
+                            child: Text('Semi-bold'),
+                          ),
+                          DropdownMenuItem(value: 700, child: Text('Bold')),
+                          DropdownMenuItem(value: 900, child: Text('Black')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {...element.style, 'font_weight': value},
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      _dropdownProperty<String>(
+                        key: ValueKey('alignment-${e.id}'),
+                        label: 'Alignment',
+                        value: e.style['alignment'] as String? ?? 'left',
+                        items: const [
+                          DropdownMenuItem(value: 'left', child: Text('Left')),
+                          DropdownMenuItem(
+                            value: 'center',
+                            child: Text('Center'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'right',
+                            child: Text('Right'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {...element.style, 'alignment': value},
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      _colourProperty(
+                        'Text colour (hex)',
+                        e.style['color'] as String? ?? '#111111',
+                        (value) {
+                          if (isDesignerHex(value)) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {
+                                  ...element.style,
+                                  'color': value.toUpperCase(),
+                                },
+                              ),
+                            );
+                          }
+                        },
                       ),
                     ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        update(
-                          (e) => e.copyWith(
-                            style: {...e.style, 'error_correction': value},
+                    if (e.type == DesignElementType.studentPhoto ||
+                        e.type == DesignElementType.schoolLogo)
+                      _dropdownProperty<String>(
+                        key: ValueKey('image-fit-${e.id}'),
+                        label: 'Image fit',
+                        value: e.style['fit'] as String? ?? 'cover',
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'cover',
+                            child: Text('Cover'),
                           ),
-                        );
-                      }
-                    },
-                  ),
-                _colourProperty(
-                  e.type == DesignElementType.qrCode
-                      ? 'QR foreground'
-                      : 'Barcode foreground',
-                  e.style['color'] as String? ?? '#000000',
-                  (value) {
-                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-                      update(
-                        (e) => e.copyWith(
-                          style: {...e.style, 'color': value.toUpperCase()},
-                        ),
-                      );
-                    }
-                  },
-                ),
-                _colourProperty(
-                  e.type == DesignElementType.qrCode
-                      ? 'QR background'
-                      : 'Barcode background',
-                  e.style['background_color'] as String? ?? '#FFFFFF',
-                  (value) {
-                    if (RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-                      update(
-                        (e) => e.copyWith(
-                          style: {
-                            ...e.style,
-                            'background_color': value.toUpperCase(),
-                          },
-                        ),
-                      );
-                    }
-                  },
-                ),
-                _numberField(
-                  'Quiet zone (mm)',
-                  (e.style['quiet_zone'] as num?)?.toDouble() ?? 1,
-                  (value) => update(
-                    (e) => e.copyWith(
-                      style: {...e.style, 'quiet_zone': value.clamp(0, 5)},
-                    ),
-                  ),
-                  wide: true,
-                ),
-                if (e.type == DesignElementType.barcode &&
-                    !isDesignBarcodeSquare(
-                      e.data['symbology'] as String? ?? 'code128',
-                    )) ...[
-                  SwitchListTile(
-                    key: const Key('barcode-show-text'),
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Show human-readable value'),
-                    value: e.style['show_text'] != false,
-                    onChanged: (value) => update(
-                      (e) =>
-                          e.copyWith(style: {...e.style, 'show_text': value}),
-                    ),
-                  ),
-                  if (e.style['show_text'] != false)
-                    _numberField(
-                      'Value text size (mm)',
-                      (e.style['font_size'] as num?)?.toDouble() ?? 2.5,
-                      (value) => update(
-                        (e) => e.copyWith(
-                          style: {...e.style, 'font_size': value.clamp(1, 6)},
+                          DropdownMenuItem(
+                            value: 'contain',
+                            child: Text('Contain'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {...element.style, 'fit': value},
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    if ({
+                      DesignElementType.studentPhoto,
+                      DesignElementType.schoolLogo,
+                      DesignElementType.rectangle,
+                    }.contains(e.type)) ...[
+                      const Text(
+                        'APPEARANCE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .7,
+                          color: AppColors.textMuted,
                         ),
                       ),
-                      wide: true,
-                    ),
+                      const SizedBox(height: 10),
+                      _colourProperty(
+                        'Border colour (hex)',
+                        e.style['border_color'] as String? ?? '#000000',
+                        (value) {
+                          if (isDesignerHex(value)) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {
+                                  ...element.style,
+                                  'border_color': value.toUpperCase(),
+                                },
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      _numberField(
+                        'Border width',
+                        (e.style['border_width'] as num?)?.toDouble() ?? 0,
+                        (value) => update(
+                          (element) => element.copyWith(
+                            style: {
+                              ...element.style,
+                              'border_width': value.clamp(0, 10),
+                            },
+                          ),
+                        ),
+                        wide: true,
+                      ),
+                      _numberField(
+                        'Corner radius',
+                        (e.style['corner_radius'] as num?)?.toDouble() ?? 0,
+                        (value) => update(
+                          (element) => element.copyWith(
+                            style: {
+                              ...element.style,
+                              'corner_radius': value.clamp(0, 30),
+                            },
+                          ),
+                        ),
+                        wide: true,
+                      ),
+                    ],
+                    if (e.type == DesignElementType.rectangle)
+                      _colourProperty(
+                        'Fill colour (hex)',
+                        e.style['fill_color'] as String? ?? '#FFFFFF',
+                        (value) {
+                          if (isDesignerHex(value)) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {
+                                  ...element.style,
+                                  'fill_color': value.toUpperCase(),
+                                },
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    if (e.type == DesignElementType.line) ...[
+                      const Text(
+                        'LINE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .7,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _colourProperty(
+                        'Line colour (hex)',
+                        e.style['color'] as String? ?? '#000000',
+                        (value) {
+                          if (isDesignerHex(value)) {
+                            update(
+                              (element) => element.copyWith(
+                                style: {
+                                  ...element.style,
+                                  'color': value.toUpperCase(),
+                                },
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      _numberField(
+                        'Line width',
+                        (e.style['border_width'] as num?)?.toDouble() ?? .5,
+                        (value) => update(
+                          (element) => element.copyWith(
+                            style: {
+                              ...element.style,
+                              'border_width': value.clamp(.1, 10),
+                            },
+                          ),
+                        ),
+                        wide: true,
+                      ),
+                    ],
+                  ],
                 ],
-              ],
-              if ({
-                DesignElementType.text,
-                DesignElementType.boundText,
-                DesignElementType.customFieldText,
-              }.contains(e.type)) ...[
-                _numberField(
-                  'Font size (mm)',
-                  (e.style['font_size'] as num?)?.toDouble() ?? 3,
-                  (v) => update(
-                    (e) => e.copyWith(
-                      style: {...e.style, 'font_size': v.clamp(1, 20)},
-                    ),
-                  ),
-                  wide: true,
-                ),
-                _dropdownProperty<int>(
-                  key: ValueKey('font-weight-${e.id}'),
-                  label: 'Weight',
-                  value: (e.style['font_weight'] as num?)?.toInt() ?? 400,
-                  items: const [
-                    DropdownMenuItem(value: 400, child: Text('Regular')),
-                    DropdownMenuItem(value: 600, child: Text('Semi-bold')),
-                    DropdownMenuItem(value: 700, child: Text('Bold')),
-                    DropdownMenuItem(value: 900, child: Text('Black')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null)
-                      update(
-                        (e) =>
-                            e.copyWith(style: {...e.style, 'font_weight': v}),
-                      );
-                  },
-                ),
-                _dropdownProperty<String>(
-                  key: ValueKey('alignment-${e.id}'),
-                  label: 'Alignment',
-                  value: e.style['alignment'] as String? ?? 'left',
-                  items: const [
-                    DropdownMenuItem(value: 'left', child: Text('Left')),
-                    DropdownMenuItem(value: 'center', child: Text('Center')),
-                    DropdownMenuItem(value: 'right', child: Text('Right')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null)
-                      update(
-                        (e) => e.copyWith(style: {...e.style, 'alignment': v}),
-                      );
-                  },
-                ),
-                _colourProperty(
-                  'Text colour (hex)',
-                  e.style['color'] as String? ?? '#111111',
-                  (v) {
-                    if (isDesignerHex(v))
-                      update(
-                        (e) => e.copyWith(
-                          style: {...e.style, 'color': v.toUpperCase()},
-                        ),
-                      );
-                  },
-                ),
-              ],
-              if (e.type == DesignElementType.studentPhoto ||
-                  e.type == DesignElementType.schoolLogo)
-                _dropdownProperty<String>(
-                  key: ValueKey('image-fit-${e.id}'),
-                  label: 'Image fit',
-                  value: e.style['fit'] as String? ?? 'cover',
-                  items: const [
-                    DropdownMenuItem(value: 'cover', child: Text('Cover')),
-                    DropdownMenuItem(value: 'contain', child: Text('Contain')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null)
-                      update((e) => e.copyWith(style: {...e.style, 'fit': v}));
-                  },
-                ),
-              if ({
-                DesignElementType.studentPhoto,
-                DesignElementType.schoolLogo,
-                DesignElementType.rectangle,
-              }.contains(e.type)) ...[
-                _colourProperty(
-                  'Border colour (hex)',
-                  e.style['border_color'] as String? ?? '#000000',
-                  (value) {
-                    if (isDesignerHex(value)) {
-                      update(
-                        (e) => e.copyWith(
-                          style: {
-                            ...e.style,
-                            'border_color': value.toUpperCase(),
-                          },
-                        ),
-                      );
-                    }
-                  },
-                ),
-                _numberField(
-                  'Border width',
-                  (e.style['border_width'] as num?)?.toDouble() ?? 0,
-                  (value) => update(
-                    (e) => e.copyWith(
-                      style: {...e.style, 'border_width': value.clamp(0, 10)},
-                    ),
-                  ),
-                  wide: true,
-                ),
-                _numberField(
-                  'Corner radius',
-                  (e.style['corner_radius'] as num?)?.toDouble() ?? 0,
-                  (value) => update(
-                    (e) => e.copyWith(
-                      style: {...e.style, 'corner_radius': value.clamp(0, 30)},
-                    ),
-                  ),
-                  wide: true,
-                ),
-              ],
-              if (e.type == DesignElementType.rectangle) ...[
-                _colourProperty(
-                  'Fill colour (hex)',
-                  e.style['fill_color'] as String? ?? '#FFFFFF',
-                  (v) {
-                    if (isDesignerHex(v))
-                      update(
-                        (e) => e.copyWith(
-                          style: {...e.style, 'fill_color': v.toUpperCase()},
-                        ),
-                      );
-                  },
-                ),
-              ],
-              if (e.type == DesignElementType.line) ...[
-                _colourProperty(
-                  'Line colour (hex)',
-                  e.style['color'] as String? ?? '#000000',
-                  (value) {
-                    if (isDesignerHex(value)) {
-                      update(
-                        (e) => e.copyWith(
-                          style: {...e.style, 'color': value.toUpperCase()},
-                        ),
-                      );
-                    }
-                  },
-                ),
-                _numberField(
-                  'Line width',
-                  (e.style['border_width'] as num?)?.toDouble() ?? .5,
-                  (value) => update(
-                    (e) => e.copyWith(
-                      style: {...e.style, 'border_width': value.clamp(.1, 10)},
-                    ),
-                  ),
-                  wide: true,
-                ),
-              ],
-            ],
+              ),
+            ),
           ],
         ),
       ),
@@ -2790,31 +4198,65 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         DropdownMenuItem(value: 'custom', child: Text('Custom')),
       ],
       onChanged: (value) {
-        if (value == 'cr80') _setCr80Preset();
+        if (value == 'cr80') {
+          _setCr80Preset();
+        }
       },
     ),
-    _canvasDimensionField(
-      key: const Key('canvas-width'),
-      label: 'Width (mm)',
-      controller: _canvasWidth,
+
+    Row(
+      children: [
+        Expanded(
+          child: _canvasDimensionField(
+            key: const Key('canvas-width'),
+            label: 'Width (mm)',
+            controller: _canvasWidth,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _canvasDimensionField(
+            key: const Key('canvas-height'),
+            label: 'Height (mm)',
+            controller: _canvasHeight,
+          ),
+        ),
+      ],
     ),
-    _canvasDimensionField(
-      key: const Key('canvas-height'),
-      label: 'Height (mm)',
-      controller: _canvasHeight,
-    ),
+
     _dropdownProperty<String>(
       key: ValueKey('canvas-orientation-${_document.canvas.orientation}'),
       label: 'Orientation',
       value: _document.canvas.orientation,
       items: const [
-        DropdownMenuItem(value: 'landscape', child: Text('Landscape')),
-        DropdownMenuItem(value: 'portrait', child: Text('Portrait')),
+        DropdownMenuItem(
+          value: 'landscape',
+          child: Row(
+            children: [
+              Icon(Icons.crop_landscape_outlined, size: 18),
+              SizedBox(width: 8),
+              Text('Landscape'),
+            ],
+          ),
+        ),
+        DropdownMenuItem(
+          value: 'portrait',
+          child: Row(
+            children: [
+              Icon(Icons.crop_portrait_outlined, size: 18),
+              SizedBox(width: 8),
+              Text('Portrait'),
+            ],
+          ),
+        ),
       ],
       onChanged: (value) {
-        if (value != null) _setCanvasOrientation(value);
+        if (value != null) {
+          _setCanvasOrientation(value);
+        }
       },
     ),
+
     _propertyControl(
       DesignerColourField(
         fieldKey: const Key('canvas-background-color'),
@@ -2825,7 +4267,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         onChanged: (value) {
           if (isDesignerHex(value)) {
             _rememberColour(value);
-            _updateUi(() => _canvasError = null);
+
+            _updateUi(() {
+              _canvasError = null;
+            });
+
             _commit(
               _document.copyWith(
                 canvas: _document.canvas.copyWith(
@@ -2837,36 +4283,100 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         },
       ),
     ),
+
     if (_canvasError != null)
-      Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Text(
-          _canvasError!,
-          key: const Key('canvas-validation-error'),
-          style: const TextStyle(color: Colors.red, fontSize: 12),
+      Container(
+        key: const Key('canvas-validation-error'),
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.dangerSoft,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.danger.withValues(alpha: .25)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 18,
+              color: AppColors.danger,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _canvasError!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: AppColors.danger,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-    SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: const Text('Grid enabled'),
-      value: _document.settings['grid_enabled'] != false,
-      onChanged: (value) => _commit(
-        _document.copyWith(
-          settings: {..._document.settings, 'grid_enabled': value},
-        ),
+
+    Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            dense: true,
+            title: const Text(
+              'Grid enabled',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            secondary: const Icon(Icons.grid_4x4_rounded, size: 18),
+            value: _document.settings['grid_enabled'] != false,
+            onChanged: (value) => _commit(
+              _document.copyWith(
+                settings: {..._document.settings, 'grid_enabled': value},
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            dense: true,
+            title: const Text(
+              'Snap enabled',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            secondary: const Icon(Icons.control_camera_outlined, size: 18),
+            value: _document.settings['snap_enabled'] != false,
+            onChanged: (value) => _commit(
+              _document.copyWith(
+                settings: {..._document.settings, 'snap_enabled': value},
+              ),
+            ),
+          ),
+        ],
       ),
     ),
+
     _numberField(
       'Grid size (mm)',
       (_document.settings['grid_size'] as num?)?.toDouble() ?? 2,
       (value) {
         if (!value.isFinite || value <= 0 || value > 200) {
-          _updateUi(
-            () => _canvasError = 'Grid size must be between 0 and 200 mm.',
-          );
+          _updateUi(() {
+            _canvasError = 'Grid size must be between 0 and 200 mm.';
+          });
+
           return;
         }
-        _updateUi(() => _canvasError = null);
+
+        _updateUi(() {
+          _canvasError = null;
+        });
+
         _commit(
           _document.copyWith(
             settings: {..._document.settings, 'grid_size': value},
@@ -2875,19 +4385,31 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       },
       wide: true,
     ),
-    SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: const Text('Snap enabled'),
-      value: _document.settings['snap_enabled'] != false,
-      onChanged: (value) => _commit(
-        _document.copyWith(
-          settings: {..._document.settings, 'snap_enabled': value},
-        ),
+
+    Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.infoSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.info.withValues(alpha: .18)),
       ),
-    ),
-    const Text(
-      'When the canvas size changes, choose whether to keep, scale, or fit existing elements.',
-      style: TextStyle(color: Colors.black54, fontSize: 12),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 17, color: AppColors.info),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'When the canvas size changes, choose whether to keep, scale, or fit existing elements.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
     ),
   ];
 
@@ -2905,6 +4427,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       decoration: _propertyDecoration(label),
       onChanged: (value) {
         controller.text = value.toString();
+
         _applyCanvasDimensions();
       },
     ),
@@ -2913,8 +4436,21 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   InputDecoration _propertyDecoration(String label) => InputDecoration(
     labelText: label,
     floatingLabelBehavior: FloatingLabelBehavior.auto,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-    border: const OutlineInputBorder(),
+    filled: true,
+    fillColor: AppColors.surface,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+    ),
   );
 
   Widget _propertyControl(Widget child) =>
@@ -2933,6 +4469,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         key: ValueKey(value),
         initialValue: value,
         isExpanded: true,
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
         decoration: _propertyDecoration(label),
         items: items,
         onChanged: onChanged,
@@ -2960,10 +4497,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ),
     ),
   );
+
   void _rememberColour(String value) {
     _recentColours.remove(value);
+
     _recentColours.insert(0, value);
-    if (_recentColours.length > 12) _recentColours.removeLast();
+
+    if (_recentColours.length > 12) {
+      _recentColours.removeLast();
+    }
   }
 
   Widget _colourProperty(
@@ -2979,6 +4521,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       recentColours: _recentColours,
       onChanged: (colour) {
         _rememberColour(colour);
+
         apply(colour);
       },
     ),
@@ -3000,8 +4543,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   );
 }
 
-// Controllers hold editing drafts only. Committed values always come from the
-// document, including selection changes, gestures, and undo/redo.
+// Controllers hold editing drafts only.
+// Committed values always come from the document,
+// including selection changes, gestures, and undo/redo.
 class _ModelTextProperty extends StatefulWidget {
   const _ModelTextProperty({
     required this.fieldKey,
@@ -3027,11 +4571,15 @@ class _ModelTextPropertyState extends State<_ModelTextProperty> {
   @override
   void initState() {
     super.initState();
+
     _controller = TextEditingController(text: widget.value);
   }
 
   void _sync() {
-    if (_controller.text == widget.value) return;
+    if (_controller.text == widget.value) {
+      return;
+    }
+
     _controller.value = TextEditingValue(
       text: widget.value,
       selection: TextSelection.collapsed(offset: widget.value.length),
@@ -3041,6 +4589,7 @@ class _ModelTextPropertyState extends State<_ModelTextProperty> {
   @override
   void didUpdateWidget(covariant _ModelTextProperty oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (oldWidget.ownerId != widget.ownerId ||
         oldWidget.fieldKey != widget.fieldKey ||
         oldWidget.value != widget.value) {
@@ -3051,6 +4600,7 @@ class _ModelTextPropertyState extends State<_ModelTextProperty> {
   @override
   void dispose() {
     _controller.dispose();
+
     super.dispose();
   }
 
@@ -3141,18 +4691,29 @@ const _qrSystemFieldGroups = <String, List<String>>{
 
 class _GridPainter extends CustomPainter {
   const _GridPainter(this.gridMm, this.canvasWidthMm);
-  final double gridMm, canvasWidthMm;
+
+  final double gridMm;
+  final double canvasWidthMm;
+
   @override
   void paint(Canvas canvas, Size size) {
     final step = gridMm * size.width / canvasWidthMm;
-    if (step < 4) return;
-    final p = Paint()
+
+    if (step < 4) {
+      return;
+    }
+
+    final paint = Paint()
       ..color = const Color(0x18000000)
       ..strokeWidth = .5;
-    for (double x = step; x < size.width; x += step)
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
-    for (double y = step; y < size.height; y += step)
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+
+    for (double x = step; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+
+    for (double y = step; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
   }
 
   @override
@@ -3161,51 +4722,67 @@ class _GridPainter extends CustomPainter {
       oldDelegate.canvasWidthMm != canvasWidthMm;
 }
 
-// Cache each section by the state it actually displays. Geometry updates do not
-// rebuild app chrome, toolbar or layers; no element model is cached here.
+// Cache each section by the state it actually displays.
+// Geometry updates do not rebuild app chrome, toolbar, or layers;
+// no element model is cached here.
 class _DesignerSection extends StatefulWidget {
   const _DesignerSection({
     required this.revision,
     required this.select,
     required this.builder,
   });
+
   final ValueListenable<int> revision;
   final Object? Function() select;
   final Widget Function() builder;
+
   @override
   State<_DesignerSection> createState() => _DesignerSectionState();
 }
 
 class _DesignerSectionState extends State<_DesignerSection> {
   Object? _signature;
+
   @override
   void initState() {
     super.initState();
+
     _signature = widget.select();
+
     widget.revision.addListener(_changed);
   }
 
   void _changed() {
     final next = widget.select();
+
     final unchanged = next is List && _signature is List
         ? listEquals(next, _signature as List)
         : next == _signature;
-    if (!unchanged) setState(() => _signature = next);
+
+    if (!unchanged) {
+      setState(() {
+        _signature = next;
+      });
+    }
   }
 
   @override
   void didUpdateWidget(covariant _DesignerSection oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (oldWidget.revision != widget.revision) {
       oldWidget.revision.removeListener(_changed);
+
       widget.revision.addListener(_changed);
     }
+
     _signature = widget.select();
   }
 
   @override
   void dispose() {
     widget.revision.removeListener(_changed);
+
     super.dispose();
   }
 
@@ -3216,6 +4793,7 @@ class _DesignerSectionState extends State<_DesignerSection> {
 
 class _DesignerSnapshot {
   const _DesignerSnapshot(this.template, this.selectedId, this.localDuplicate);
+
   final CardTemplate template;
   final String? selectedId;
   final bool localDuplicate;
