@@ -3684,16 +3684,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   const SizedBox(height: 16),
                   if (e == null) ..._canvasProperties(),
                   if (e != null) ...[
-                    const Text(
-                      'POSITION & SIZE',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: .7,
-                        color: AppColors.textMuted,
-                      ),
+                    _inspectorSectionHeader(
+                      icon: Icons.open_with_rounded,
+                      title: 'Position & size',
+                      description: 'Placement, dimensions and rotation',
                     ),
-                    const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
                       runSpacing: 0,
@@ -3824,6 +3819,19 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         ],
                       ),
                     ),
+                    if (e.type == DesignElementType.text ||
+                        e.type == DesignElementType.boundText)
+                      _inspectorSectionHeader(
+                        icon: e.type == DesignElementType.text
+                            ? Icons.text_fields_rounded
+                            : Icons.badge_outlined,
+                        title: e.type == DesignElementType.text
+                            ? 'Content'
+                            : 'Data binding',
+                        description: e.type == DesignElementType.text
+                            ? 'Text displayed on the card'
+                            : 'Identity field displayed by this element',
+                      ),
                     if (e.type == DesignElementType.text)
                       _textProperty(
                         'Text',
@@ -3868,16 +3876,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       DesignElementType.qrCode,
                       DesignElementType.barcode,
                     }.contains(e.type)) ...[
-                      const Text(
-                        'CODE CONTENT',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .7,
-                          color: AppColors.textMuted,
-                        ),
+                      _inspectorSectionHeader(
+                        icon: e.type == DesignElementType.qrCode
+                            ? Icons.qr_code_2_rounded
+                            : Icons.view_week_outlined,
+                        title: e.type == DesignElementType.qrCode
+                            ? 'QR code content'
+                            : 'Barcode content',
+                        description:
+                            'Choose what information this code contains',
                       ),
-                      const SizedBox(height: 10),
                       if (e.type == DesignElementType.barcode)
                         _dropdownProperty<String>(
                           key: ValueKey('barcode-symbology-${e.id}'),
@@ -4352,16 +4360,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       DesignElementType.boundText,
                       DesignElementType.customFieldText,
                     }.contains(e.type)) ...[
-                      const Text(
-                        'TYPOGRAPHY',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .7,
-                          color: AppColors.textMuted,
-                        ),
+                      _inspectorSectionHeader(
+                        icon: Icons.format_size_rounded,
+                        title: 'Typography',
+                        description: 'Font size, weight, alignment and colour',
                       ),
-                      const SizedBox(height: 10),
                       _numberField(
                         'Font size (mm)',
                         (e.style['font_size'] as num?)?.toDouble() ?? 3,
@@ -4441,7 +4444,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       ),
                     ],
                     if (e.type == DesignElementType.studentPhoto ||
-                        e.type == DesignElementType.schoolLogo)
+                        e.type == DesignElementType.schoolLogo) ...[
+                      _inspectorSectionHeader(
+                        icon: e.type == DesignElementType.studentPhoto
+                            ? Icons.person_outline_rounded
+                            : Icons.school_outlined,
+                        title: e.type == DesignElementType.studentPhoto
+                            ? 'Photo'
+                            : 'School logo',
+                        description: 'Image scaling and presentation',
+                      ),
                       _dropdownProperty<String>(
                         key: ValueKey('image-fit-${e.id}'),
                         label: 'Image fit',
@@ -4466,21 +4478,17 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                           }
                         },
                       ),
+                    ],
                     if ({
                       DesignElementType.studentPhoto,
                       DesignElementType.schoolLogo,
                       DesignElementType.rectangle,
                     }.contains(e.type)) ...[
-                      const Text(
-                        'APPEARANCE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .7,
-                          color: AppColors.textMuted,
-                        ),
+                      _inspectorSectionHeader(
+                        icon: Icons.palette_outlined,
+                        title: 'Appearance',
+                        description: 'Border, radius and visual styling',
                       ),
-                      const SizedBox(height: 10),
                       _colourProperty(
                         'Border colour (hex)',
                         e.style['border_color'] as String? ?? '#000000',
@@ -4542,16 +4550,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         },
                       ),
                     if (e.type == DesignElementType.line) ...[
-                      const Text(
-                        'LINE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .7,
-                          color: AppColors.textMuted,
-                        ),
+                      _inspectorSectionHeader(
+                        icon: Icons.horizontal_rule_rounded,
+                        title: 'Line appearance',
+                        description: 'Colour and stroke width',
                       ),
-                      const SizedBox(height: 10),
                       _colourProperty(
                         'Line colour (hex)',
                         e.style['color'] as String? ?? '#000000',
@@ -4591,6 +4594,57 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ),
     );
   }
+
+  Widget _inspectorSectionHeader({
+    required IconData icon,
+    required String title,
+    String? description,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: AppColors.accentSoft,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: AppColors.accent),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (description != null) ...[
+                const SizedBox(height: 1),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    height: 1.3,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Expanded(child: Divider(color: AppColors.border, height: 1)),
+      ],
+    ),
+  );
 
   List<Widget> _canvasProperties() => [
     _dropdownProperty<String>(
