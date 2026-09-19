@@ -1782,7 +1782,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           Scaffold(
             backgroundColor: AppColors.background,
             appBar: AuthenticatedAppBar(
-              title: const Text('Card designer'),
+              title: const Text('Card Designer'),
               actions: [
                 if (widget.canManagePublicShare)
                   PublicVerificationSettingsButton(
@@ -1889,7 +1889,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     Scaffold(
       backgroundColor: AppColors.background,
       appBar: AuthenticatedAppBar(
-        title: const Text('Card designer'),
+        title: const Text('Card Designer'),
         actions: [
           if (widget.canManagePublicShare)
             PublicVerificationSettingsButton(
@@ -3600,6 +3600,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       children: [
                         Text(
                           e == null ? 'Canvas' : 'Properties',
+                          key: Key(
+                            e == null
+                                ? 'canvas-properties'
+                                : 'element-properties',
+                          ),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -3641,47 +3646,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       ),
                     ),
                   ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          e == null
-                              ? 'Canvas properties'
-                              : 'Properties · ${_elementLabel(e)}',
-                          key: Key(
-                            e == null
-                                ? 'canvas-properties'
-                                : 'element-properties',
-                          ),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      if (e != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceSoft,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            e.type.wire.replaceAll('_', ' '),
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 4),
                   if (e == null) ..._canvasProperties(),
                   if (e != null) ...[
                     _inspectorSectionHeader(
