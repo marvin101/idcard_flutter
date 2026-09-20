@@ -170,6 +170,83 @@ class PdfDocumentRenderer {
       case DesignElementType.rectangle:
         return _box(style, style.fill, radius: radius);
 
+      case DesignElementType.roundedRectangle:
+        return _box(style, style.fill, radius: radius);
+
+      case DesignElementType.ellipse:
+      case DesignElementType.circle:
+      case DesignElementType.triangle:
+      case DesignElementType.bloodDrop:
+        return pw.CustomPaint(
+          painter: (canvas, size) {
+            final stroke = mm(style.borderWidth);
+            void drawPath() {
+              if (node.element.type == DesignElementType.ellipse ||
+                  node.element.type == DesignElementType.circle) {
+                canvas.drawEllipse(
+                  size.x / 2,
+                  size.y / 2,
+                  math.max(0, size.x / 2 - stroke / 2),
+                  math.max(0, size.y / 2 - stroke / 2),
+                );
+              } else if (node.element.type == DesignElementType.triangle) {
+                canvas.moveTo(size.x / 2, size.y);
+                canvas.lineTo(size.x, 0);
+                canvas.lineTo(0, 0);
+              } else {
+                canvas.moveTo(size.x / 2, size.y);
+                canvas.curveTo(
+                  size.x * .14,
+                  size.y * .66,
+                  0,
+                  size.y * .47,
+                  0,
+                  size.y * .31,
+                );
+                canvas.curveTo(0, 0, size.x, 0, size.x, size.y * .31);
+                canvas.curveTo(
+                  size.x,
+                  size.y * .47,
+                  size.x * .86,
+                  size.y * .66,
+                  size.x / 2,
+                  size.y,
+                );
+              }
+            }
+
+            if (style.fill.a > 0) {
+              canvas.setGraphicState(PdfGraphicState(opacity: style.fill.a));
+              canvas.setFillColor(color(style.fill));
+              drawPath();
+              canvas.fillPath();
+            }
+            if (stroke > 0 && style.border.a > 0) {
+              canvas.setGraphicState(PdfGraphicState(opacity: style.border.a));
+              canvas.setStrokeColor(color(style.border));
+              canvas.setLineWidth(stroke);
+              drawPath();
+              canvas.strokePath(close: true);
+            }
+          },
+          child: pw.SizedBox(
+            width: mm(node.element.width),
+            height: mm(node.element.height),
+            child: node.element.type == DesignElementType.bloodDrop
+                ? pw.Center(
+                    child: pw.Text(
+                      node.text,
+                      style: pw.TextStyle(
+                        font: fonts[700],
+                        fontSize: mm(3.2),
+                        color: PdfColors.white,
+                      ),
+                    ),
+                  )
+                : pw.SizedBox(),
+          ),
+        );
+
       case DesignElementType.line:
         return pw.Center(
           child: _withOpacity(
@@ -183,6 +260,7 @@ class PdfDocumentRenderer {
 
       case DesignElementType.studentPhoto:
       case DesignElementType.schoolLogo:
+      case DesignElementType.principalSignature:
         final image = images[node.imageUrl];
 
         if (style.imageShape == 'oval') {
@@ -198,6 +276,9 @@ class PdfDocumentRenderer {
                               node.element.type ==
                                       DesignElementType.studentPhoto
                                   ? 'PHOTO'
+                                  : node.element.type ==
+                                        DesignElementType.principalSignature
+                                  ? 'SIGNATURE'
                                   : 'LOGO',
                               style: pw.TextStyle(
                                 font: fonts[400],
@@ -250,6 +331,9 @@ class PdfDocumentRenderer {
                     child: pw.Text(
                       node.element.type == DesignElementType.studentPhoto
                           ? 'PHOTO'
+                          : node.element.type ==
+                                DesignElementType.principalSignature
+                          ? 'SIGNATURE'
                           : 'LOGO',
                       style: pw.TextStyle(
                         font: fonts[400],

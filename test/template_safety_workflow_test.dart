@@ -165,6 +165,8 @@ Future<_Backend> _mount(
     ),
   );
   await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('toggle-properties')));
+  await tester.pumpAndSettle();
   return backend;
 }
 

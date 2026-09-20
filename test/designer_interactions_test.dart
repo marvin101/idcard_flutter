@@ -38,6 +38,7 @@ Future<void> mount(
   WidgetTester tester, {
   Size size = const Size(1600, 1800),
   bool snap = false,
+  bool openPanels = true,
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -72,6 +73,11 @@ Future<void> mount(
     ),
   );
   await tester.pumpAndSettle();
+  if (openPanels && size.width >= 1000) {
+    await tester.tap(find.byKey(const Key('toggle-layers')));
+    await tester.tap(find.byKey(const Key('toggle-properties')));
+    await tester.pumpAndSettle();
+  }
 }
 
 DesignDocumentView view(WidgetTester t) =>
@@ -142,7 +148,8 @@ void main() {
         Offset(12.1, 9),
         Offset(9, 12.1),
       ]) {
-        final resizing = inset.dx <= 12 && inset.dy <= 12;
+        final resizesWidth = inset.dx <= 12;
+        final resizesHeight = inset.dy <= 12;
         final pointer = await t.startGesture(
           renderBox.localToGlobal(
             Offset(renderBox.size.width, renderBox.size.height) - inset,
@@ -152,15 +159,15 @@ void main() {
         for (var i = 0; i < 3; i++) {
           await pointer.moveBy(Offset(scale * .4, scale * .2));
           await t.pump();
-          expect(live(t).x, closeTo(resizing ? 10 : 10 + (i + 1) * .4, .001));
-          expect(live(t).y, closeTo(resizing ? 10 : 10 + (i + 1) * .2, .001));
+          expect(live(t).x, closeTo(10, .001));
+          expect(live(t).y, closeTo(10, .001));
           expect(
             live(t).width,
-            closeTo(resizing ? 30 + (i + 1) * .4 : 30, .001),
+            closeTo(resizesWidth ? 30 + (i + 1) * .4 : 30, .001),
           );
           expect(
             live(t).height,
-            closeTo(resizing ? 10 + (i + 1) * .2 : 10, .001),
+            closeTo(resizesHeight ? 10 + (i + 1) * .2 : 10, .001),
           );
         }
         await pointer.up();
@@ -177,6 +184,42 @@ void main() {
       expect(t.takeException(), isNull);
     });
   }
+
+  testWidgets('eight handles resize from the top and left', (t) async {
+    await mount(t);
+    await select(t);
+    for (final handle in [
+      'top-left',
+      'top-right',
+      'bottom-left',
+      'bottom-right',
+      'top',
+      'right',
+      'bottom',
+      'left',
+    ]) {
+      expect(
+        find.byKey(
+          Key(handle == 'bottom-right' ? 'resize-a' : 'resize-a-$handle'),
+        ),
+        findsOneWidget,
+      );
+    }
+    final scale =
+        t.getSize(find.byKey(const Key('design-element-a'))).width / 30;
+    final pointer = await t.startGesture(
+      t.getCenter(find.byKey(const Key('resize-a-top-left'))),
+      kind: PointerDeviceKind.mouse,
+    );
+    await pointer.moveBy(Offset(scale, scale * 2));
+    await t.pump();
+    expect(live(t).x, closeTo(11, .001));
+    expect(live(t).y, closeTo(12, .001));
+    expect(live(t).width, closeTo(29, .001));
+    expect(live(t).height, closeTo(8, .001));
+    await pointer.up();
+    await t.pump();
+  });
 
   testWidgets(
     'all property mutations restore model and Properties through history',

@@ -31,6 +31,9 @@ class DesignRenderScene {
                      logoUrl ??
                          bindings.schoolProfile?.logoUrl ??
                          bindings.schoolProfile?.logoPath,
+                   DesignElementType.principalSignature =>
+                     bindings.schoolProfile?.principalSignatureUrl ??
+                         bindings.schoolProfile?.principalSignaturePath,
                    _ => null,
                  }, assetBaseUrl),
                ),

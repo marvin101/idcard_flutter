@@ -60,7 +60,7 @@ void main() {
     );
     expect(canvas().document.elements, isEmpty);
 
-    tester.widget<TextButton>(find.byKey(const Key('add-text'))).onPressed!();
+    tester.widget<IconButton>(find.byKey(const Key('add-text'))).onPressed!();
     await tester.pump();
     expect(canvas().document.elements, hasLength(1));
 
@@ -137,6 +137,9 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('toggle-layers')));
+    await tester.tap(find.byKey(const Key('toggle-properties')));
     await tester.pumpAndSettle();
     DesignDocumentView view() => tester.widget<DesignDocumentView>(
       find.byKey(const Key('designer-canvas')),

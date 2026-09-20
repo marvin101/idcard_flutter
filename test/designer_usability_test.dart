@@ -307,6 +307,8 @@ void main() {
       ),
     );
     await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('toggle-properties')));
+    await t.pumpAndSettle();
     await h.select(t);
     await t.enterText(h.field('text'), 'Saved text');
     await t.pump();

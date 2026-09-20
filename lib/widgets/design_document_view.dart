@@ -30,6 +30,7 @@ class DesignDocumentView extends StatelessWidget {
     this.onSelect,
     this.onMove,
     this.onResize,
+    this.onResizeHandle,
     this.onGestureStart,
     this.onGestureEnd,
     this.isGestureActive,
@@ -57,6 +58,8 @@ class DesignDocumentView extends StatelessWidget {
   final ValueChanged<String?>? onSelect;
   final void Function(String id, double dx, double dy)? onMove;
   final void Function(String id, double dw, double dh)? onResize;
+  final void Function(String id, String handle, double dx, double dy)?
+  onResizeHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +162,7 @@ class DesignDocumentView extends StatelessWidget {
                       onSelect: onSelect,
                       onMove: onMove,
                       onResize: onResize,
+                      onResizeHandle: onResizeHandle,
                       child: Transform.rotate(
                         angle: node.radians,
                         child: _render(node, scale),
@@ -188,6 +192,30 @@ class DesignDocumentView extends StatelessWidget {
           ),
         );
 
+      case DesignElementType.roundedRectangle:
+      case DesignElementType.ellipse:
+      case DesignElementType.circle:
+      case DesignElementType.triangle:
+      case DesignElementType.bloodDrop:
+        return CustomPaint(
+          painter: _DesignerShapePainter(node.element.type, style, scale),
+          child: node.element.type == DesignElementType.bloodDrop
+              ? Align(
+                  alignment: const Alignment(0, .35),
+                  child: Text(
+                    node.text,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 3.2 * scale,
+                    ),
+                  ),
+                )
+              : null,
+        );
+
       case DesignElementType.line:
         return Center(
           child: Container(
@@ -198,9 +226,29 @@ class DesignDocumentView extends StatelessWidget {
 
       case DesignElementType.studentPhoto:
       case DesignElementType.schoolLogo:
-        final fallbackIcon = node.element.type == DesignElementType.studentPhoto
-            ? Icons.person_outline
-            : Icons.school_outlined;
+      case DesignElementType.principalSignature:
+        final fallbackIcon = switch (node.element.type) {
+          DesignElementType.studentPhoto => Icons.person_outline,
+          DesignElementType.principalSignature => Icons.draw_outlined,
+          _ => Icons.school_outlined,
+        };
+
+        final fallback =
+            node.element.type == DesignElementType.principalSignature
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(fallbackIcon, color: Colors.grey, size: 4 * scale),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Principal signature',
+                      style: TextStyle(color: Colors.grey, fontSize: 2 * scale),
+                    ),
+                  ),
+                ],
+              )
+            : Icon(fallbackIcon, color: Colors.grey, size: 6 * scale);
 
         return Container(
           clipBehavior: Clip.antiAlias,
@@ -225,17 +273,11 @@ class DesignDocumentView extends StatelessWidget {
                   ),
                 ),
           child: node.imageUrl == null
-              ? Icon(fallbackIcon, color: Colors.grey, size: 6 * scale)
+              ? fallback
               : Image.network(
                   node.imageUrl!,
                   fit: style.fit,
-                  errorBuilder: (_, _, _) {
-                    return Icon(
-                      fallbackIcon,
-                      color: Colors.grey,
-                      size: 6 * scale,
-                    );
-                  },
+                  errorBuilder: (_, _, _) => fallback,
                 ),
         );
 
@@ -282,6 +324,84 @@ class DesignDocumentView extends StatelessWidget {
   }
 }
 
+class _DesignerShapePainter extends CustomPainter {
+  const _DesignerShapePainter(this.type, this.style, this.scale);
+  final DesignElementType type;
+  final DesignRenderStyle style;
+  final double scale;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = style.borderWidth * scale;
+    final rect = Rect.fromLTWH(
+      stroke / 2,
+      stroke / 2,
+      math.max(0, size.width - stroke),
+      math.max(0, size.height - stroke),
+    );
+    final path = Path();
+    switch (type) {
+      case DesignElementType.ellipse:
+      case DesignElementType.circle:
+        path.addOval(rect);
+      case DesignElementType.triangle:
+        path.moveTo(rect.center.dx, rect.top);
+        path.lineTo(rect.right, rect.bottom);
+        path.lineTo(rect.left, rect.bottom);
+        path.close();
+      case DesignElementType.bloodDrop:
+        path.moveTo(rect.center.dx, rect.top);
+        path.cubicTo(
+          rect.width * .14,
+          rect.height * .34,
+          rect.left,
+          rect.height * .53,
+          rect.left,
+          rect.height * .69,
+        );
+        path.cubicTo(
+          rect.left,
+          rect.bottom,
+          rect.right,
+          rect.bottom,
+          rect.right,
+          rect.height * .69,
+        );
+        path.cubicTo(
+          rect.right,
+          rect.height * .53,
+          rect.width * .86,
+          rect.height * .34,
+          rect.center.dx,
+          rect.top,
+        );
+        path.close();
+      default:
+        path.addRRect(
+          RRect.fromRectAndRadius(rect, Radius.circular(style.radius * scale)),
+        );
+    }
+    if (style.fill.a > 0) {
+      canvas.drawPath(path, Paint()..color = style.fill);
+    }
+    if (stroke > 0 && style.border.a > 0) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = style.border
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DesignerShapePainter oldDelegate) =>
+      type != oldDelegate.type ||
+      style != oldDelegate.style ||
+      scale != oldDelegate.scale;
+}
+
 // Only pointer bookkeeping is local. Every content/geometry value is supplied
 // by the live document; raw input avoids gesture-arena delay on mouse selection.
 class _InteractiveElement extends StatefulWidget {
@@ -296,6 +416,7 @@ class _InteractiveElement extends StatefulWidget {
     this.onSelect,
     this.onMove,
     this.onResize,
+    this.onResizeHandle,
     this.onGestureStart,
     this.onGestureEnd,
     this.isGestureActive,
@@ -314,25 +435,61 @@ class _InteractiveElement extends StatefulWidget {
   final ValueChanged<String>? onGestureStart;
   final VoidCallback? onGestureEnd;
   final bool Function(String)? isGestureActive;
-  final void Function(String, double, double)? onMove, onResize;
+  final void Function(String, double, double)? onMove;
+  final void Function(String, double, double)? onResize;
+  final void Function(String, String, double, double)? onResizeHandle;
   @override
   State<_InteractiveElement> createState() => _InteractiveElementState();
 }
 
 class _InteractiveElementState extends State<_InteractiveElement> {
   int? _pointer;
-  bool _resizing = false;
+  String? _resizeHandle;
   void _down(PointerDownEvent event) {
     if (!widget.interactive || event.buttons != 1 || _pointer != null) {
       return;
     }
-    const resizeHitSize = 12.0;
     final size = context.size!;
-    _resizing =
-        widget.selected &&
-        !widget.element.locked &&
-        event.localPosition.dx >= size.width - resizeHitSize &&
-        event.localPosition.dy >= size.height - resizeHitSize;
+    _resizeHandle = null;
+    if (widget.selected && !widget.element.locked) {
+      const hit = 12.0;
+      final x = event.localPosition.dx;
+      final y = event.localPosition.dy;
+      final left = x <= hit;
+      final right = x >= size.width - hit;
+      final top = y <= hit;
+      final bottom = y >= size.height - hit;
+      final image = {
+        DesignElementType.studentPhoto,
+        DesignElementType.schoolLogo,
+        DesignElementType.principalSignature,
+        DesignElementType.qrCode,
+        DesignElementType.circle,
+      }.contains(widget.element.type);
+      if (widget.element.type == DesignElementType.line) {
+        if (left) {
+          _resizeHandle = 'left';
+        } else if (right) {
+          _resizeHandle = 'right';
+        }
+      } else if (left && top) {
+        _resizeHandle = 'top-left';
+      } else if (right && top) {
+        _resizeHandle = 'top-right';
+      } else if (left && bottom) {
+        _resizeHandle = 'bottom-left';
+      } else if (right && bottom) {
+        _resizeHandle = 'bottom-right';
+      } else if (!image && left) {
+        _resizeHandle = 'left';
+      } else if (!image && right) {
+        _resizeHandle = 'right';
+      } else if (!image && top) {
+        _resizeHandle = 'top';
+      } else if (!image && bottom) {
+        _resizeHandle = 'bottom';
+      }
+    }
     widget.onSelect?.call(widget.element.id);
     if (widget.element.locked) return;
     _pointer = event.pointer;
@@ -350,12 +507,28 @@ class _InteractiveElementState extends State<_InteractiveElement> {
     final delta =
         box.globalToLocal(event.position) -
         box.globalToLocal(event.position - event.delta);
-    final callback = _resizing ? widget.onResize : widget.onMove;
-    callback?.call(
-      widget.element.id,
-      delta.dx / widget.scaleX,
-      delta.dy / widget.scaleY,
-    );
+    if (_resizeHandle case final String handle) {
+      if (widget.onResizeHandle != null) {
+        widget.onResizeHandle!(
+          widget.element.id,
+          handle,
+          delta.dx / widget.scaleX,
+          delta.dy / widget.scaleY,
+        );
+      } else {
+        widget.onResize?.call(
+          widget.element.id,
+          delta.dx / widget.scaleX,
+          delta.dy / widget.scaleY,
+        );
+      }
+    } else {
+      widget.onMove?.call(
+        widget.element.id,
+        delta.dx / widget.scaleX,
+        delta.dy / widget.scaleY,
+      );
+    }
   }
 
   void _end(PointerEvent event) {
@@ -386,21 +559,60 @@ class _InteractiveElementState extends State<_InteractiveElement> {
           ),
         ),
         if (widget.selected && widget.interactive && !widget.element.locked)
-          Positioned(
-            right: -6,
-            bottom: -6,
-            child: Container(
-              key: Key('resize-${widget.element.id}'),
-              width: 12,
-              height: 12,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border.fromBorderSide(
-                  BorderSide(color: Colors.blue, width: 2),
+          for (final handle in [
+            if (widget.element.type == DesignElementType.line) ...[
+              'left',
+              'right',
+            ] else ...[
+              'top-left',
+              'top-right',
+              'bottom-left',
+              'bottom-right',
+              if (!{
+                DesignElementType.studentPhoto,
+                DesignElementType.schoolLogo,
+                DesignElementType.principalSignature,
+                DesignElementType.qrCode,
+                DesignElementType.circle,
+              }.contains(widget.element.type)) ...[
+                'top',
+                'right',
+                'bottom',
+                'left',
+              ],
+            ],
+          ])
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                  alignment: switch (handle) {
+                    'top-left' => Alignment.topLeft,
+                    'top-right' => Alignment.topRight,
+                    'bottom-left' => Alignment.bottomLeft,
+                    'top' => Alignment.topCenter,
+                    'right' => Alignment.centerRight,
+                    'bottom' => Alignment.bottomCenter,
+                    'left' => Alignment.centerLeft,
+                    _ => Alignment.bottomRight,
+                  },
+                  child: Container(
+                    key: Key(
+                      handle == 'bottom-right'
+                          ? 'resize-${widget.element.id}'
+                          : 'resize-${widget.element.id}-$handle',
+                    ),
+                    width: 12,
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border.fromBorderSide(
+                        BorderSide(color: Colors.blue, width: 2),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
       ],
     ),
   );

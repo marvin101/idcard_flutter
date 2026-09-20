@@ -98,6 +98,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   bool _saving = false;
   bool _localDuplicate = false;
   bool _editingBack = false;
+  bool _showLayers = false;
+  bool _showProperties = false;
   bool _allowPop = false;
   bool _leaveDialogOpen = false;
 
@@ -848,7 +850,23 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         .firstOrNull;
 
     if (live != null) {
-      _replace(change(live), gestureUpdate: gestureUpdate);
+      var next = change(live);
+      if (live.type == DesignElementType.circle) {
+        final widthChanged = next.width != live.width;
+        final heightChanged = next.height != live.height;
+        if (widthChanged != heightChanged) {
+          final side = widthChanged ? next.width : next.height;
+          final bounded = math.min(
+            side,
+            math.min(
+              _document.canvas.width - next.x,
+              _document.canvas.height - next.y,
+            ),
+          );
+          next = next.copyWith(width: bounded, height: bounded);
+        }
+      }
+      _replace(next, gestureUpdate: gestureUpdate);
     }
   }
 
@@ -885,19 +903,27 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
     final isImage =
         type == DesignElementType.studentPhoto ||
-        type == DesignElementType.schoolLogo;
+        type == DesignElementType.schoolLogo ||
+        type == DesignElementType.principalSignature;
 
     final isQr = type == DesignElementType.qrCode;
 
     final isBarcode = type == DesignElementType.barcode;
 
-    final defaultWidth = isImage || isQr
+    final defaultWidth =
+        isImage ||
+            isQr ||
+            type == DesignElementType.circle ||
+            type == DesignElementType.bloodDrop
         ? 20.0
         : isBarcode
         ? 35.0
         : 30.0;
 
-    final defaultHeight = isQr
+    final defaultHeight =
+        isQr ||
+            type == DesignElementType.circle ||
+            type == DesignElementType.bloodDrop
         ? 20.0
         : isImage
         ? 22.0
@@ -905,6 +931,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         ? 15.0
         : type == DesignElementType.line
         ? 1.0
+        : {
+            DesignElementType.roundedRectangle,
+            DesignElementType.ellipse,
+            DesignElementType.triangle,
+          }.contains(type)
+        ? 16.0
         : 6.0;
 
     final element = DesignElement(
@@ -916,15 +948,28 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       height: defaultHeight,
       zIndex: z,
       style: switch (type) {
-        DesignElementType.rectangle => {
-          'fill_color': '#E8EEF8',
-          'border_color': '#242C61',
+        DesignElementType.rectangle ||
+        DesignElementType.roundedRectangle ||
+        DesignElementType.ellipse ||
+        DesignElementType.circle ||
+        DesignElementType.triangle ||
+        DesignElementType.bloodDrop => {
+          'fill_color': type == DesignElementType.bloodDrop
+              ? '#C62828'
+              : '#E8EEF8',
+          'border_color': type == DesignElementType.bloodDrop
+              ? '#C62828'
+              : '#242C61',
           'border_width': 0.5,
-          'corner_radius': 1.0,
+          'corner_radius': type == DesignElementType.roundedRectangle
+              ? 3.0
+              : 0.0,
         },
         DesignElementType.line => {'color': '#242C61', 'border_width': 0.5},
-        DesignElementType.studentPhoto || DesignElementType.schoolLogo => {
-          'fit': type == DesignElementType.schoolLogo ? 'contain' : 'cover',
+        DesignElementType.studentPhoto ||
+        DesignElementType.schoolLogo ||
+        DesignElementType.principalSignature => {
+          'fit': type == DesignElementType.studentPhoto ? 'cover' : 'contain',
           'border_color': '#242C61',
           'border_width': 0.5,
           'corner_radius': 1.0,
@@ -964,6 +1009,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           _previewIdentityType == 'student'
               ? {'field': 'verification_url'}
               : {'field': 'employee_no', 'fallback': 'Employee number'},
+        DesignElementType.bloodDrop => {
+          'field': 'blood_group',
+          'fallback': 'BG',
+        },
         DesignElementType.barcode => {
           'field': _previewIdentityType == 'student'
               ? 'admission_no'
@@ -1032,38 +1081,59 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     }, gestureUpdate: true);
   }
 
-  void _resize(String id, double dw, double dh) {
-    if (!dw.isFinite || !dh.isFinite) {
-      return;
-    }
-
+  void _resize(String id, String handle, double dx, double dy) {
+    if (!dx.isFinite || !dy.isFinite) return;
     _updateElement(id, (element) {
-      if (element.locked) {
-        return element;
+      if (element.locked) return element;
+      final left = handle.contains('left');
+      final right = handle.contains('right');
+      final top = handle.contains('top');
+      final bottom = handle.contains('bottom');
+      final originalRight = element.x + element.width;
+      final originalBottom = element.y + element.height;
+      var x = element.x;
+      var y = element.y;
+      var width = element.width;
+      var height = element.height;
+      if (left) {
+        x += dx;
+        width -= dx;
       }
-
-      final maxW = math.max(2.0, _document.canvas.width - element.x);
-
-      final maxH = math.max(1.0, _document.canvas.height - element.y);
-
-      var width = (element.width + dw).clamp(2.0, maxW);
-
-      var height = (element.height + dh).clamp(1.0, maxH);
-
-      if (element.type == DesignElementType.studentPhoto ||
-          element.type == DesignElementType.schoolLogo ||
-          element.type == DesignElementType.qrCode) {
-        final ratio = element.width / element.height;
-
-        height = (width / ratio).clamp(1.0, maxH);
-
-        width = (height * ratio).clamp(2.0, maxW);
+      if (right) width += dx;
+      if (top) {
+        y += dy;
+        height -= dy;
       }
-
-      final next = element.copyWith(width: width, height: height);
-
+      if (bottom) height += dy;
+      final keepRatio = {
+        DesignElementType.studentPhoto,
+        DesignElementType.schoolLogo,
+        DesignElementType.principalSignature,
+        DesignElementType.qrCode,
+        DesignElementType.circle,
+      }.contains(element.type);
+      if (keepRatio) {
+        final ratio = element.type == DesignElementType.circle
+            ? 1.0
+            : element.width / element.height;
+        if (dx.abs() >= dy.abs()) {
+          height = width / ratio;
+        } else {
+          width = height * ratio;
+        }
+        if (left) x = originalRight - width;
+        if (top) y = originalBottom - height;
+      }
+      width = width.clamp(2.0, _document.canvas.width);
+      height = height.clamp(1.0, _document.canvas.height);
+      if (left) x = originalRight - width;
+      if (top) y = originalBottom - height;
+      x = x.clamp(0.0, _document.canvas.width - width);
+      y = y.clamp(0.0, _document.canvas.height - height);
+      width = math.min(width, _document.canvas.width - x);
+      height = math.min(height, _document.canvas.height - y);
+      final next = element.copyWith(x: x, y: y, width: width, height: height);
       _updateGuides(next);
-
       return next;
     }, gestureUpdate: true);
   }
@@ -2002,21 +2072,19 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               _selectedId,
               _selected?.locked,
               _customFields,
+              _showLayers,
+              _showProperties,
             ),
             _toolbar,
           ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final wideWorkspace =
-                    constraints.maxWidth >=
-                    CardDesignerScreen.recommendedEditorWidth;
-
-                if (wideWorkspace) {
-                  return Row(
-                    children: [
+                return Row(
+                  children: [
+                    if (_showLayers)
                       Container(
-                        width: 280,
+                        width: 240,
                         decoration: const BoxDecoration(
                           color: AppColors.surface,
                           border: Border(
@@ -2025,38 +2093,6 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         ),
                         child: _section(_layerSignature, _layers),
                       ),
-                      Expanded(
-                        child: _section(
-                          () => (
-                            _document,
-                            _selectedId,
-                            _zoom,
-                            _logoUrl,
-                            _schoolProfile,
-                            _previewIdentityType,
-                          ),
-                          _workspace,
-                        ),
-                      ),
-                      Container(
-                        width: 300,
-                        decoration: const BoxDecoration(
-                          color: AppColors.surface,
-                          border: Border(
-                            left: BorderSide(color: AppColors.border),
-                          ),
-                        ),
-                        child: _section(
-                          () => (_template, _selectedId, _canvasError),
-                          _inspector,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
                     Expanded(
                       child: _section(
                         () => (
@@ -2070,19 +2106,20 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         _workspace,
                       ),
                     ),
-                    Container(
-                      width: 300,
-                      decoration: const BoxDecoration(
-                        color: AppColors.surface,
-                        border: Border(
-                          left: BorderSide(color: AppColors.border),
+                    if (_showProperties)
+                      Container(
+                        width: 300,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border(
+                            left: BorderSide(color: AppColors.border),
+                          ),
+                        ),
+                        child: _section(
+                          () => (_template, _selectedId, _canvasError),
+                          _inspector,
                         ),
                       ),
-                      child: _section(
-                        () => (_template, _selectedId, _canvasError),
-                        _inspector,
-                      ),
-                    ),
                   ],
                 );
               },
@@ -2105,6 +2142,25 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
         children: [
+          IconButton(
+            key: const Key('toggle-layers'),
+            onPressed: () => setState(() => _showLayers = !_showLayers),
+            icon: Icon(
+              _showLayers ? Icons.layers_rounded : Icons.layers_outlined,
+            ),
+            tooltip: _showLayers ? 'Hide Layers' : 'Show Layers',
+            isSelected: _showLayers,
+          ),
+          IconButton(
+            key: const Key('toggle-properties'),
+            onPressed: () => setState(() => _showProperties = !_showProperties),
+            icon: Icon(
+              _showProperties ? Icons.tune_rounded : Icons.tune_outlined,
+            ),
+            tooltip: _showProperties ? 'Hide Properties' : 'Show Properties',
+            isSelected: _showProperties,
+          ),
+          _toolbarDivider(),
           _toolbarActionGroup(
             label: 'HISTORY',
             children: [
@@ -2167,6 +2223,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 () => _add(DesignElementType.schoolLogo),
                 key: 'add-logo',
               ),
+              _tool(
+                Icons.draw_outlined,
+                'Signature',
+                () => _add(DesignElementType.principalSignature),
+                key: 'add-principal-signature',
+              ),
             ],
           ),
 
@@ -2186,6 +2248,36 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 'Line',
                 () => _add(DesignElementType.line),
                 key: 'add-line',
+              ),
+              _tool(
+                Icons.rounded_corner,
+                'Rounded rectangle',
+                () => _add(DesignElementType.roundedRectangle),
+                key: 'add-rounded-rectangle',
+              ),
+              _tool(
+                Icons.circle_outlined,
+                'Ellipse',
+                () => _add(DesignElementType.ellipse),
+                key: 'add-ellipse',
+              ),
+              _tool(
+                Icons.circle,
+                'Circle',
+                () => _add(DesignElementType.circle),
+                key: 'add-circle',
+              ),
+              _tool(
+                Icons.change_history_rounded,
+                'Triangle',
+                () => _add(DesignElementType.triangle),
+                key: 'add-triangle',
+              ),
+              _tool(
+                Icons.bloodtype_outlined,
+                'Blood group',
+                () => _add(DesignElementType.bloodDrop),
+                key: 'add-blood-drop',
               ),
             ],
           ),
@@ -2337,17 +2429,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   ? AppColors.textPrimary
                   : AppColors.disabled,
             ),
-            const SizedBox(width: 6),
-            Text(
-              'Custom field',
-              style: TextStyle(
-                color: _availableCustomFields.isNotEmpty
-                    ? AppColors.textPrimary
-                    : AppColors.disabled,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+
             const SizedBox(width: 3),
             Icon(
               Icons.keyboard_arrow_down_rounded,
@@ -2510,20 +2592,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     required String key,
   }) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 3),
-    child: TextButton.icon(
+    child: IconButton(
       key: Key(key),
       onPressed: onTap,
-      icon: Icon(icon, size: 17),
-      label: Text(label),
-      style: TextButton.styleFrom(
+      icon: Icon(icon, size: 19),
+      tooltip: label,
+      style: IconButton.styleFrom(
         foregroundColor: AppColors.textPrimary,
         backgroundColor: AppColors.surfaceSoft,
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(9),
-          side: const BorderSide(color: AppColors.border),
-        ),
+        side: const BorderSide(color: AppColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       ),
     ),
   );
@@ -2540,7 +2618,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           builder: (context, constraints) => SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
-              width: math.max(constraints.maxWidth, 950),
+              width: math.max(constraints.maxWidth, 820),
               child: Row(
                 children: [
                   Container(
@@ -2570,7 +2648,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                           color: AppColors.textSecondary,
                         ),
                         SizedBox(
-                          width: 150,
+                          width: 88,
                           child: Slider(
                             value: _zoom,
                             min: .5,
@@ -2853,7 +2931,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                   onGestureEnd: _endGesture,
                                   isGestureActive: (id) => _gestureId == id,
                                   onMove: _move,
-                                  onResize: _resize,
+                                  onResize: (id, dw, dh) =>
+                                      _resize(id, 'bottom-right', dw, dh),
+                                  onResizeHandle: _resize,
                                 ),
                               ),
                               Positioned.fill(
@@ -2969,6 +3049,147 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               ],
             ),
           ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(top: BorderSide(color: AppColors.border)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 2, bottom: 8),
+                  child: Text(
+                    'LAYER ORDER',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .7,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final buttonWidth = (constraints.maxWidth - 8) / 2;
+
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton(
+                            key: const Key('layer-bring-front'),
+                            onPressed: canMoveForward
+                                ? () => _layer('front')
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                            child: Text('Bring front'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton(
+                            key: const Key('layer-bring-forward'),
+                            onPressed: canMoveForward
+                                ? () => _layer('forward')
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                            child: Text('Forward'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton(
+                            key: const Key('layer-send-backward'),
+                            onPressed: canMoveBackward
+                                ? () => _layer('backward')
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                            child: Text('Backward'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton(
+                            key: const Key('layer-send-back'),
+                            onPressed: canMoveBackward
+                                ? () => _layer('back')
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              disabledForegroundColor: AppColors.disabled,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                            ),
+                            child: Text('Send back'),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: elements.isEmpty
                 ? const Center(
@@ -3004,7 +3225,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 3),
                     itemCount: elements.length,
                     itemBuilder: (context, index) {
                       final element = elements[index];
@@ -3014,7 +3235,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
-                          vertical: 2,
+                          vertical: 1,
                         ),
                         child: Material(
                           color: selected
@@ -3048,6 +3269,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                 key: Key('layer-${element.id}'),
                                 selected: selected,
                                 dense: true,
+                                visualDensity: VisualDensity.compact,
                                 contentPadding: const EdgeInsets.only(
                                   left: 8,
                                   right: 4,
@@ -3128,163 +3350,6 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     },
                   ),
           ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(top: BorderSide(color: AppColors.border)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(left: 2, bottom: 8),
-                  child: Text(
-                    'LAYER ORDER',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: .7,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final buttonWidth = (constraints.maxWidth - 8) / 2;
-
-                    return Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        SizedBox(
-                          width: buttonWidth,
-                          child: OutlinedButton.icon(
-                            key: const Key('layer-bring-front'),
-                            onPressed: canMoveForward
-                                ? () => _layer('front')
-                                : null,
-                            icon: const Icon(
-                              Icons.vertical_align_top_rounded,
-                              size: 17,
-                            ),
-                            label: const Text('Bring front'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              disabledForegroundColor: AppColors.disabled,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 10,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              side: const BorderSide(color: AppColors.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: buttonWidth,
-                          child: OutlinedButton.icon(
-                            key: const Key('layer-bring-forward'),
-                            onPressed: canMoveForward
-                                ? () => _layer('forward')
-                                : null,
-                            icon: const Icon(
-                              Icons.arrow_upward_rounded,
-                              size: 17,
-                            ),
-                            label: const Text('Forward'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              disabledForegroundColor: AppColors.disabled,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 10,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              side: const BorderSide(color: AppColors.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: buttonWidth,
-                          child: OutlinedButton.icon(
-                            key: const Key('layer-send-backward'),
-                            onPressed: canMoveBackward
-                                ? () => _layer('backward')
-                                : null,
-                            icon: const Icon(
-                              Icons.arrow_downward_rounded,
-                              size: 17,
-                            ),
-                            label: const Text('Backward'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              disabledForegroundColor: AppColors.disabled,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 10,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              side: const BorderSide(color: AppColors.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: buttonWidth,
-                          child: OutlinedButton.icon(
-                            key: const Key('layer-send-back'),
-                            onPressed: canMoveBackward
-                                ? () => _layer('back')
-                                : null,
-                            icon: const Icon(
-                              Icons.vertical_align_bottom_rounded,
-                              size: 17,
-                            ),
-                            label: const Text('Send back'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              disabledForegroundColor: AppColors.disabled,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 10,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              side: const BorderSide(color: AppColors.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -3325,6 +3390,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       DesignElementType.studentPhoto => _identityPhotoLabel,
 
       DesignElementType.schoolLogo => 'School logo',
+      DesignElementType.principalSignature => 'Principal signature',
+      DesignElementType.bloodDrop => 'Blood group',
+      DesignElementType.roundedRectangle => 'Rounded rectangle',
+      DesignElementType.ellipse => 'Ellipse',
+      DesignElementType.circle => 'Circle',
+      DesignElementType.triangle => 'Triangle',
 
       DesignElementType.rectangle => 'Rectangle',
 
@@ -4439,20 +4510,27 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                       ),
                     ],
                     if (e.type == DesignElementType.studentPhoto ||
-                        e.type == DesignElementType.schoolLogo) ...[
+                        e.type == DesignElementType.schoolLogo ||
+                        e.type == DesignElementType.principalSignature) ...[
                       _inspectorSectionHeader(
                         icon: e.type == DesignElementType.studentPhoto
                             ? Icons.person_outline_rounded
                             : Icons.school_outlined,
                         title: e.type == DesignElementType.studentPhoto
                             ? 'Photo'
+                            : e.type == DesignElementType.principalSignature
+                            ? 'Principal signature'
                             : 'School logo',
                         description: 'Image scaling and presentation',
                       ),
                       _dropdownProperty<String>(
                         key: ValueKey('image-fit-${e.id}'),
                         label: 'Image fit',
-                        value: e.style['fit'] as String? ?? 'cover',
+                        value:
+                            e.style['fit'] as String? ??
+                            (e.type == DesignElementType.studentPhoto
+                                ? 'cover'
+                                : 'contain'),
                         items: const [
                           DropdownMenuItem(
                             value: 'cover',
@@ -4477,7 +4555,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     if ({
                       DesignElementType.studentPhoto,
                       DesignElementType.schoolLogo,
+                      DesignElementType.principalSignature,
                       DesignElementType.rectangle,
+                      DesignElementType.roundedRectangle,
+                      DesignElementType.ellipse,
+                      DesignElementType.circle,
+                      DesignElementType.triangle,
+                      DesignElementType.bloodDrop,
                     }.contains(e.type)) ...[
                       _inspectorSectionHeader(
                         icon: Icons.palette_outlined,
@@ -4485,7 +4569,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         description: 'Border, radius and visual styling',
                       ),
                       if (e.type == DesignElementType.studentPhoto ||
-                          e.type == DesignElementType.schoolLogo)
+                          e.type == DesignElementType.schoolLogo ||
+                          e.type == DesignElementType.principalSignature)
                         DropdownButtonFormField<String>(
                           key: ValueKey(
                             'image-shape-field-${e.id}-${e.style['image_shape']}',
@@ -4574,7 +4659,14 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         wide: true,
                       ),
                     ],
-                    if (e.type == DesignElementType.rectangle)
+                    if ({
+                      DesignElementType.rectangle,
+                      DesignElementType.roundedRectangle,
+                      DesignElementType.ellipse,
+                      DesignElementType.circle,
+                      DesignElementType.triangle,
+                      DesignElementType.bloodDrop,
+                    }.contains(e.type))
                       _colourProperty(
                         'Fill colour (hex)',
                         e.style['fill_color'] as String? ?? '#FFFFFF',

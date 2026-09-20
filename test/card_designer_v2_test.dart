@@ -65,6 +65,9 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.tap(find.byKey(const Key('toggle-properties')));
+    await tester.tap(find.byKey(const Key('toggle-layers')));
+    await tester.pump();
     expect(find.byKey(const Key('designer-canvas')), findsOneWidget);
     expect(find.byKey(const Key('canvas-properties')), findsOneWidget);
     expect(
@@ -151,6 +154,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Continue anyway'));
     await tester.pump();
+    await tester.tap(find.byKey(const Key('toggle-properties')));
+    await tester.pump();
     expect(find.byKey(const Key('canvas-properties')), findsOneWidget);
     expect(tester.takeException(), isNull);
 
@@ -204,6 +209,8 @@ void main() {
           ),
         ),
       );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('toggle-properties')));
       await tester.pump();
       await tester.tap(
         find.byKey(const ValueKey('canvas-orientation-landscape')),
@@ -273,6 +280,8 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.tap(find.byKey(const Key('toggle-properties')));
+    await tester.pump();
     await tester.tap(
       find.byKey(const ValueKey('canvas-orientation-landscape')),
     );
@@ -311,6 +320,8 @@ void main() {
         ),
       ),
     );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('toggle-properties')));
     await tester.pump();
     final original = CardTemplate.uploadedDesign.document.canvas;
 
