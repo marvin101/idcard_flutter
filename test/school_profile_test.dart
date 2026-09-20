@@ -179,6 +179,40 @@ void main() {
     api.dispose();
   });
 
+  test('principal signature upload uses its own multipart endpoint', () async {
+    late http.Request captured;
+    final api = ApiService(
+      baseUrl: 'https://example.test',
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode({
+            ..._profileJson(),
+            'principal_signature_path': 'schools/school-1/signatures/new.png',
+            'principal_signature_url': 'https://media.test/new.png',
+          }),
+          200,
+        );
+      }),
+    );
+    final signature = XFile.fromData(
+      Uint8List.fromList(const [137, 80, 78, 71]),
+      name: 'signature.png',
+      mimeType: 'image/png',
+    );
+    final result = await api.uploadPrincipalSignature(
+      schoolUuid: 'school-1',
+      signature: signature,
+    );
+    expect(captured.method, 'POST');
+    expect(captured.url.path, '/schools/school-1/principal-signature');
+    expect(latin1.decode(captured.bodyBytes), contains('name="signature"'));
+    expect(
+      result.principalSignaturePath,
+      'schools/school-1/signatures/new.png',
+    );
+    api.dispose();
+  });
   testWidgets('non-admin profile is read-only and hides logo/save controls', (
     tester,
   ) async {

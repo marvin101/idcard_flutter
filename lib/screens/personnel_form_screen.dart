@@ -6,6 +6,7 @@ import '../models/api_personnel.dart';
 import '../models/student_field.dart';
 import '../models/design_bindings.dart';
 import '../services/api_service.dart';
+import '../widgets/photo_source_picker.dart';
 
 class PersonnelFormScreen extends StatefulWidget {
   const PersonnelFormScreen({
@@ -370,8 +371,9 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
                             onPressed: _saving
                                 ? null
                                 : () async {
-                                    final photo = await ImagePicker().pickImage(
-                                      source: ImageSource.gallery,
+                                    final photo = await pickPhotoFromSource(
+                                      context,
+                                      ImageSource.gallery,
                                     );
                                     if (photo != null && mounted) {
                                       setState(() {
@@ -386,6 +388,25 @@ class _PersonnelFormScreenState extends State<PersonnelFormScreen> {
                                   ? 'Upload photo'
                                   : 'Replace photo',
                             ),
+                          ),
+                          OutlinedButton.icon(
+                            key: const Key('take-personnel-photo'),
+                            onPressed: _saving
+                                ? null
+                                : () async {
+                                    final photo = await pickPhotoFromSource(
+                                      context,
+                                      ImageSource.camera,
+                                    );
+                                    if (photo != null && mounted) {
+                                      setState(() {
+                                        _selectedPhoto = photo;
+                                        _removePhoto = false;
+                                      });
+                                    }
+                                  },
+                            icon: const Icon(Icons.photo_camera_outlined),
+                            label: const Text('Take Photo'),
                           ),
                           if (widget.personnel?.photoPath != null &&
                               !_removePhoto)

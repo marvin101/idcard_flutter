@@ -24,6 +24,8 @@ class SchoolProfileProvider extends ChangeNotifier {
   SchoolProfile? profile;
   XFile? selectedLogo;
   Uint8List? selectedLogoBytes;
+  XFile? selectedSignature;
+  Uint8List? selectedSignatureBytes;
   bool loading = false;
   bool saving = false;
   String? error;
@@ -66,6 +68,48 @@ class SchoolProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> chooseSignature(XFile signature) async {
+    if (!canEdit) return;
+    final lowerName = signature.name.toLowerCase();
+    if (!allowedLogoExtensions.any(lowerName.endsWith)) {
+      error = 'Choose a JPEG, PNG or WebP signature.';
+      notifyListeners();
+      return;
+    }
+    final bytes = await signature.readAsBytes();
+    if (bytes.isEmpty || bytes.length > maxLogoBytes) {
+      error = 'Signature must be a non-empty image no larger than 2 MB.';
+      notifyListeners();
+      return;
+    }
+    selectedSignature = signature;
+    selectedSignatureBytes = bytes;
+    error = null;
+    notifyListeners();
+  }
+
+  Future<bool> removeSignature() async {
+    if (!canEdit || saving) return false;
+    saving = true;
+    error = null;
+    notifyListeners();
+    try {
+      profile = await api.removePrincipalSignature(schoolUuid);
+      selectedSignature = null;
+      selectedSignatureBytes = null;
+      return true;
+    } on ApiException catch (e) {
+      error = e.message;
+      return false;
+    } catch (_) {
+      error = 'Unable to remove the principal signature.';
+      return false;
+    } finally {
+      saving = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> removeLogo() async {
     if (!canEdit || saving) return false;
     saving = true;
@@ -105,9 +149,19 @@ class SchoolProfileProvider extends ChangeNotifier {
           schoolUuid: schoolUuid,
           logo: selectedLogo!,
         );
+        selectedLogo = null;
+        selectedLogoBytes = null;
+      }
+      if (selectedSignature != null) {
+        profile = await api.uploadPrincipalSignature(
+          schoolUuid: schoolUuid,
+          signature: selectedSignature!,
+        );
       }
       selectedLogo = null;
       selectedLogoBytes = null;
+      selectedSignature = null;
+      selectedSignatureBytes = null;
       return true;
     } on ApiException catch (exception) {
       error = exception.message;

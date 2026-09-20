@@ -64,6 +64,11 @@ class DesignRenderStyle {
         0,
       ),
       radius = _number(e.style['corner_radius'], 0, 0),
+      imageShape = e.style['image_shape'] == 'oval'
+          ? 'oval'
+          : e.style['image_shape'] == 'rectangle'
+          ? 'rectangle'
+          : 'rounded',
       fontSize = _number(e.style['font_size'], 3, .1),
       weight =
           (((e.style['font_weight'] as num?)?.toInt() ?? 400).clamp(100, 900) ~/
@@ -85,6 +90,7 @@ class DesignRenderStyle {
   static const imageBackground = Color(0xffeef1f5);
   final Color color, qrBackground, fill, border;
   final double borderWidth, radius, fontSize, quietZone;
+  final String imageShape;
   final String errorCorrection;
   final bool showText;
   final int weight, maxLines;

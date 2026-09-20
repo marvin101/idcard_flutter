@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/public_form.dart';
 import '../services/api_service.dart';
+import '../widgets/photo_source_picker.dart';
 
 class PublicStudentFormScreen extends StatefulWidget {
   const PublicStudentFormScreen({
@@ -131,10 +132,12 @@ class _PublicStudentFormScreenState extends State<PublicStudentFormScreen> {
     );
   }
 
-  Future<void> _pickPhoto() async {
-    final photo =
-        await (widget.pickPhoto?.call() ??
-            ImagePicker().pickImage(source: ImageSource.gallery));
+  Future<void> _pickPhoto([ImageSource source = ImageSource.gallery]) async {
+    final photo = await pickPhotoFromSource(
+      context,
+      source,
+      galleryOverride: widget.pickPhoto,
+    );
     if (photo == null) return;
     if (await photo.length() > _form!.maxPhotoSizeBytes) {
       setState(
@@ -297,13 +300,20 @@ class _PublicStudentFormScreenState extends State<PublicStudentFormScreen> {
                         if (form.allowPhoto)
                           OutlinedButton.icon(
                             key: const Key('public-photo-picker'),
-                            onPressed: _pickPhoto,
+                            onPressed: () => _pickPhoto(),
                             icon: const Icon(Icons.photo_camera_outlined),
                             label: Text(
                               _photo == null
                                   ? 'Choose student photo${form.photoRequired ? ' *' : ''}'
                                   : _photo!.name,
                             ),
+                          ),
+                        if (form.allowPhoto)
+                          OutlinedButton.icon(
+                            key: const Key('public-camera-picker'),
+                            onPressed: () => _pickPhoto(ImageSource.camera),
+                            icon: const Icon(Icons.photo_camera_outlined),
+                            label: const Text('Take Photo'),
                           ),
                         if (_error != null)
                           Padding(

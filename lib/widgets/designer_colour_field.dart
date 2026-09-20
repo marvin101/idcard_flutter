@@ -208,6 +208,16 @@ class _ColourDialogState extends State<_ColourDialog> {
                   '#424242',
                   '#9E9E9E',
                   '#EEEEEE',
+                  '#F8FAFC',
+                  '#64748B',
+                  '#1E293B',
+                  '#0F172A',
+                  '#7C2D12',
+                  '#B45309',
+                  '#166534',
+                  '#0F766E',
+                  '#1D4ED8',
+                  '#6D28D9',
                 ])
                   _swatch(hex, 'palette'),
                 for (final hue in [
@@ -220,6 +230,9 @@ class _ColourDialogState extends State<_ColourDialog> {
                   Colors.indigo,
                   Colors.purple,
                   Colors.pink,
+                  Colors.teal,
+                  Colors.lime,
+                  Colors.brown,
                 ])
                   for (final shade in [200, 500, 800])
                     _swatch(_hex(hue[shade]!, false), 'palette'),

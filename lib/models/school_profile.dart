@@ -15,6 +15,8 @@ class SchoolProfile {
     this.logoPath,
     this.logoUrl,
     this.principalName,
+    this.principalSignaturePath,
+    this.principalSignatureUrl,
     required this.isActive,
   });
 
@@ -33,6 +35,8 @@ class SchoolProfile {
   final String? logoPath;
   final String? logoUrl;
   final String? principalName;
+  final String? principalSignaturePath;
+  final String? principalSignatureUrl;
   final bool isActive;
 
   factory SchoolProfile.fromJson(Map<String, dynamic> json) => SchoolProfile(
@@ -51,6 +55,8 @@ class SchoolProfile {
     logoPath: json['logo_path'] as String?,
     logoUrl: json['logo_url'] as String?,
     principalName: json['principal_name'] as String?,
+    principalSignaturePath: json['principal_signature_path'] as String?,
+    principalSignatureUrl: json['principal_signature_url'] as String?,
     isActive: json['is_active'] as bool? ?? true,
   );
 
@@ -96,6 +102,8 @@ class SchoolProfile {
     logoPath: logoPath,
     logoUrl: logoUrl,
     principalName: principalName,
+    principalSignaturePath: principalSignaturePath,
+    principalSignatureUrl: principalSignatureUrl,
     isActive: isActive,
   );
 

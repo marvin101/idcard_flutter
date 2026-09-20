@@ -185,13 +185,66 @@ class PdfDocumentRenderer {
       case DesignElementType.schoolLogo:
         final image = images[node.imageUrl];
 
+        if (style.imageShape == 'oval') {
+          return pw.Stack(
+            children: [
+              pw.Positioned.fill(
+                child: pw.ClipOval(
+                  child: pw.Container(
+                    color: color(DesignRenderStyle.imageBackground),
+                    child: image == null
+                        ? pw.Center(
+                            child: pw.Text(
+                              node.element.type ==
+                                      DesignElementType.studentPhoto
+                                  ? 'PHOTO'
+                                  : 'LOGO',
+                              style: pw.TextStyle(
+                                font: fonts[400],
+                                fontSize: mm(2),
+                                color: PdfColors.grey,
+                              ),
+                            ),
+                          )
+                        : pw.Image(
+                            image,
+                            fit: style.fit == BoxFit.contain
+                                ? pw.BoxFit.contain
+                                : pw.BoxFit.cover,
+                          ),
+                  ),
+                ),
+              ),
+              if (style.borderWidth > 0 && style.border.a > 0)
+                pw.Positioned.fill(
+                  child: pw.Opacity(
+                    opacity: style.border.a,
+                    child: pw.CustomPaint(
+                      painter: (canvas, size) {
+                        canvas.setStrokeColor(color(style.border));
+                        canvas.setLineWidth(mm(style.borderWidth));
+                        canvas.drawEllipse(
+                          size.x / 2,
+                          size.y / 2,
+                          math.max(0, size.x / 2 - mm(style.borderWidth) / 2),
+                          math.max(0, size.y / 2 - mm(style.borderWidth) / 2),
+                        );
+                        canvas.strokePath();
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }
+        final imageRadius = style.imageShape == 'rounded' ? radius : 0.0;
         return pw.ClipRRect(
-          horizontalRadius: mm(radius),
-          verticalRadius: mm(radius),
+          horizontalRadius: mm(imageRadius),
+          verticalRadius: mm(imageRadius),
           child: _box(
             style,
             DesignRenderStyle.imageBackground,
-            radius: radius,
+            radius: imageRadius,
             child: image == null
                 ? pw.Center(
                     child: pw.Text(

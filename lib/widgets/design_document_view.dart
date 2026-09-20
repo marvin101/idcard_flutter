@@ -204,14 +204,26 @@ class DesignDocumentView extends StatelessWidget {
 
         return Container(
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: DesignRenderStyle.imageBackground,
-            border: Border.all(
-              color: style.border,
-              width: style.borderWidth * scale,
-            ),
-            borderRadius: BorderRadius.circular(style.radius * scale),
-          ),
+          decoration: style.imageShape == 'oval'
+              ? ShapeDecoration(
+                  color: DesignRenderStyle.imageBackground,
+                  shape: OvalBorder(
+                    side: BorderSide(
+                      color: style.border,
+                      width: style.borderWidth * scale,
+                    ),
+                  ),
+                )
+              : BoxDecoration(
+                  color: DesignRenderStyle.imageBackground,
+                  border: Border.all(
+                    color: style.border,
+                    width: style.borderWidth * scale,
+                  ),
+                  borderRadius: BorderRadius.circular(
+                    (style.imageShape == 'rounded' ? style.radius : 0) * scale,
+                  ),
+                ),
           child: node.imageUrl == null
               ? Icon(fallbackIcon, color: Colors.grey, size: 6 * scale)
               : Image.network(

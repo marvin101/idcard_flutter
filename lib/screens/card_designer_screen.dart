@@ -4484,6 +4484,53 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         title: 'Appearance',
                         description: 'Border, radius and visual styling',
                       ),
+                      if (e.type == DesignElementType.studentPhoto ||
+                          e.type == DesignElementType.schoolLogo)
+                        DropdownButtonFormField<String>(
+                          key: ValueKey(
+                            'image-shape-field-${e.id}-${e.style['image_shape']}',
+                          ),
+                          initialValue:
+                              e.style['image_shape'] as String? ??
+                              ((e.style['corner_radius'] as num? ?? 0) > 0
+                                  ? 'rounded'
+                                  : 'rectangle'),
+                          decoration: const InputDecoration(
+                            labelText: 'Image shape',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'rectangle',
+                              child: Text('Rectangle'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'rounded',
+                              child: Text('Rounded'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'oval',
+                              child: Text('Oval'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null)
+                              update(
+                                (element) => element.copyWith(
+                                  style: {
+                                    ...element.style,
+                                    'image_shape': value,
+                                    if (value == 'rounded' &&
+                                        ((element.style['corner_radius']
+                                                        as num?)
+                                                    ?.toDouble() ??
+                                                0) ==
+                                            0)
+                                      'corner_radius': 3.0,
+                                  },
+                                ),
+                              );
+                          },
+                        ),
                       _colourProperty(
                         'Border colour (hex)',
                         e.style['border_color'] as String? ?? '#000000',

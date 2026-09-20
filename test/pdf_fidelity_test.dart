@@ -139,6 +139,7 @@ DesignDocument fixture(double width, double height, {bool images = true}) {
         height: 13,
         style: {
           'fit': 'cover',
+          'image_shape': 'oval',
           'border_color': '#AA242C61',
           'border_width': .6,
           'corner_radius': 2,

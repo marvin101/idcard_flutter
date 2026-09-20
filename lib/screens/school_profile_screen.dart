@@ -105,6 +105,38 @@ class _SchoolProfileScreenState extends State<SchoolProfileScreen> {
     }
   }
 
+  Future<void> _pickSignature() async {
+    final signature = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+    );
+    if (signature != null) await _provider.chooseSignature(signature);
+  }
+
+  Future<void> _removeSignature() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove principal signature?'),
+        content: const Text(
+          'The saved signature will be detached from this school.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && await _provider.removeSignature() && mounted) {
+      widget.onSaved?.call(_provider.profile!);
+    }
+  }
+
   Future<void> _removeLogo() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -184,6 +216,73 @@ class _SchoolProfileScreenState extends State<SchoolProfileScreen> {
                         onPickLogo: _pickLogo,
                         onRemoveLogo: _removeLogo,
                       ),
+                      const SizedBox(height: 16),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Principal signature',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: 240,
+                                height: 80,
+                                child: _provider.selectedSignatureBytes != null
+                                    ? Image.memory(
+                                        _provider.selectedSignatureBytes!,
+                                        fit: BoxFit.contain,
+                                      )
+                                    : _provider
+                                              .profile!
+                                              .principalSignatureUrl !=
+                                          null
+                                    ? Image.network(
+                                        _provider
+                                            .profile!
+                                            .principalSignatureUrl!,
+                                        fit: BoxFit.contain,
+                                      )
+                                    : const Center(
+                                        child: Text('No signature uploaded'),
+                                      ),
+                              ),
+                              if (widget.canEdit)
+                                Wrap(
+                                  spacing: 12,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      key: const Key(
+                                        'upload-principal-signature',
+                                      ),
+                                      onPressed: _provider.saving
+                                          ? null
+                                          : _pickSignature,
+                                      icon: const Icon(Icons.upload_file),
+                                      label: const Text('Upload signature'),
+                                    ),
+                                    if (_provider
+                                            .profile!
+                                            .principalSignaturePath !=
+                                        null)
+                                      TextButton(
+                                        key: const Key(
+                                          'remove-principal-signature',
+                                        ),
+                                        onPressed: _provider.saving
+                                            ? null
+                                            : _removeSignature,
+                                        child: const Text('Remove signature'),
+                                      ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                       if (_provider.error != null) ...[
                         const SizedBox(height: 16),
                         Container(
@@ -239,7 +338,7 @@ class _SchoolProfileScreenState extends State<SchoolProfileScreen> {
                                   _field(
                                     width: fieldWidth,
                                     controller: _phone,
-                                    label: 'Phone',
+                                    label: 'Office no.',
                                     keyboardType: TextInputType.phone,
                                   ),
                                   _field(

@@ -573,6 +573,66 @@ class ApiService {
     return SchoolProfile.fromJson(_decodeMap(response));
   }
 
+  Future<SchoolProfile> uploadPrincipalSignature({
+    required String schoolUuid,
+    required XFile signature,
+  }) async {
+    final sourceFilename = signature.name.trim();
+    final lowerName = sourceFilename.toLowerCase();
+    final mimeType =
+        signature.mimeType ??
+        switch (lowerName) {
+          String name when name.endsWith('.jpg') || name.endsWith('.jpeg') =>
+            'image/jpeg',
+          String name when name.endsWith('.png') => 'image/png',
+          String name when name.endsWith('.webp') => 'image/webp',
+          _ => null,
+        };
+    if (!{'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType)) {
+      throw const ApiException(
+        0,
+        'Choose a JPEG, PNG or WebP principal signature.',
+      );
+    }
+    final filename = sourceFilename.isNotEmpty
+        ? sourceFilename
+        : switch (mimeType) {
+            'image/jpeg' => 'principal_signature.jpg',
+            'image/png' => 'principal_signature.png',
+            'image/webp' => 'principal_signature.webp',
+            _ => 'principal_signature',
+          };
+
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/schools/$schoolUuid/principal-signature'),
+    );
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'signature',
+        await signature.readAsBytes(),
+        filename: filename,
+        contentType: MediaType.parse(mimeType!),
+      ),
+    );
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+    return SchoolProfile.fromJson(_decodeMap(response));
+  }
+
+  Future<SchoolProfile> removePrincipalSignature(String schoolUuid) async {
+    final response = await _client.delete(
+      _uri('/schools/$schoolUuid/principal-signature'),
+      headers: _headers,
+    );
+    return SchoolProfile.fromJson(_decodeMap(response));
+  }
+
   Future<List<dynamic>> getUserSchools(String userUuid) async {
     final response = await _client.get(
       _uri('/users/$userUuid/schools'),
@@ -1638,7 +1698,6 @@ class ApiService {
 
     _decodeMap(response);
   }
-
 
   Future<void> removeStudentPhoto({
     required String schoolUuid,

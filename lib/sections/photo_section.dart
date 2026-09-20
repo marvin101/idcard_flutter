@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/api_student_form_provider.dart';
+import '../widgets/photo_source_picker.dart';
 
 class PhotoSection extends StatelessWidget {
   const PhotoSection({super.key});
@@ -54,23 +55,38 @@ class PhotoSection extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
                   children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: provider.saving
-                            ? null
-                            : () => _selectPhoto(context, provider),
-                        icon: const Icon(Icons.upload_file),
-                        label: Text(
-                          localPhoto != null || existingPhotoUrl != null
-                              ? 'Change Photo'
-                              : 'Upload Photo',
-                        ),
+                    OutlinedButton.icon(
+                      onPressed: provider.saving
+                          ? null
+                          : () => _selectPhoto(
+                              context,
+                              provider,
+                              ImageSource.gallery,
+                            ),
+                      icon: const Icon(Icons.upload_file),
+                      label: Text(
+                        localPhoto != null || existingPhotoUrl != null
+                            ? 'Change Photo'
+                            : 'Upload Photo',
                       ),
                     ),
+                    OutlinedButton.icon(
+                      key: const Key('take-student-photo'),
+                      onPressed: provider.saving
+                          ? null
+                          : () => _selectPhoto(
+                              context,
+                              provider,
+                              ImageSource.camera,
+                            ),
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: const Text('Take Photo'),
+                    ),
                     if (localPhoto != null || existingPhotoUrl != null) ...[
-                      const SizedBox(width: 12),
                       OutlinedButton.icon(
                         key: const Key('remove-student-photo'),
                         onPressed: provider.saving
@@ -178,7 +194,6 @@ class PhotoSection extends StatelessWidget {
     );
   }
 
-
   Future<void> _confirmRemovePhoto(
     BuildContext context,
     ApiStudentFormProvider provider,
@@ -209,10 +224,9 @@ class PhotoSection extends StatelessWidget {
   Future<void> _selectPhoto(
     BuildContext context,
     ApiStudentFormProvider provider,
+    ImageSource source,
   ) async {
-    final picker = ImagePicker();
-
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await pickPhotoFromSource(context, source);
 
     if (image == null || !context.mounted) {
       return;
