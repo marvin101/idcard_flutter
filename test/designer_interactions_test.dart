@@ -33,12 +33,28 @@ const elementB = DesignElement(
   height: 10,
   data: {'text': 'Second'},
 );
+const boundElement = DesignElement(
+  id: 'bound',
+  type: DesignElementType.boundText,
+  x: 10,
+  y: 10,
+  width: 35,
+  height: 8,
+  data: {'field': 'full_name', 'fallback': 'Student name'},
+  style: {
+    'font_size': 3.0,
+    'font_weight': 400,
+    'alignment': 'left',
+    'color': '#112233',
+  },
+);
 
 Future<void> mount(
   WidgetTester tester, {
   Size size = const Size(1600, 1800),
   bool snap = false,
   bool openPanels = true,
+  List<DesignElement> elements = const [elementA, elementB],
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -61,7 +77,7 @@ Future<void> mount(
           name: 'Test',
           document: DesignDocument(
             canvas: const DesignCanvas(width: 100, height: 80),
-            elements: const [elementA, elementB],
+            elements: elements,
             settings: {
               'snap_enabled': snap,
               'grid_enabled': snap,
@@ -739,6 +755,136 @@ void main() {
       await t.pump();
       expect(live(t).width, greaterThan(width));
       expect(controller.value, Matrix4.identity());
+    },
+  );
+
+  testWidgets('double click edits static text inline as one history entry', (
+    t,
+  ) async {
+    await mount(t, openPanels: false);
+
+    final element = find.byKey(const Key('design-element-a'));
+
+    await t.tap(element);
+    await t.pump(const Duration(milliseconds: 50));
+    await t.tap(element);
+    await t.pump();
+
+    final editor = find.byKey(const Key('inline-text-editor-a'));
+
+    expect(editor, findsOneWidget);
+
+    final textField = t.widget<TextField>(editor);
+    expect(textField.controller!.text, 'First');
+    expect(textField.focusNode!.hasFocus, isTrue);
+
+    // Resize handles are hidden while the element is being edited.
+    expect(find.byKey(const Key('resize-a')), findsNothing);
+
+    await t.enterText(editor, 'Edited directly');
+
+    await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await t.sendKeyEvent(LogicalKeyboardKey.enter);
+    await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await t.pump();
+
+    expect(editor, findsNothing);
+    expect(live(t).data['text'], 'Edited directly');
+
+    // One undo restores the original text.
+    await t.tap(find.byTooltip('Undo'));
+    await t.pump();
+
+    expect(live(t).data['text'], 'First');
+
+    // There must not be another intermediate keystroke history entry.
+    expect(enabled(t, 'Undo'), isFalse);
+
+    await t.tap(find.byTooltip('Redo'));
+    await t.pump();
+
+    expect(live(t).data['text'], 'Edited directly');
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('Escape cancels inline text editing without dirtying history', (
+    t,
+  ) async {
+    await mount(t, openPanels: false);
+
+    final element = find.byKey(const Key('design-element-a'));
+
+    await t.tap(element);
+    await t.pump(const Duration(milliseconds: 50));
+    await t.tap(element);
+    await t.pump();
+
+    final editor = find.byKey(const Key('inline-text-editor-a'));
+    expect(editor, findsOneWidget);
+
+    await t.enterText(editor, 'This must be discarded');
+
+    await t.sendKeyEvent(LogicalKeyboardKey.escape);
+    await t.pump();
+
+    expect(editor, findsNothing);
+    expect(live(t).data['text'], 'First');
+
+    expect(enabled(t, 'Undo'), isFalse);
+    expect(find.text('Saved'), findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
+  testWidgets('F2 starts inline editing for selected static text', (t) async {
+    await mount(t, openPanels: false);
+
+    await select(t, 'a');
+
+    await t.sendKeyEvent(LogicalKeyboardKey.f2);
+    await t.pump();
+
+    expect(find.byKey(const Key('inline-text-editor-a')), findsOneWidget);
+
+    expect(
+      t
+          .widget<TextField>(find.byKey(const Key('inline-text-editor-a')))
+          .controller!
+          .text,
+      'First',
+    );
+
+    await t.sendKeyEvent(LogicalKeyboardKey.escape);
+    await t.pump();
+
+    expect(find.byKey(const Key('inline-text-editor-a')), findsNothing);
+
+    expect(t.takeException(), isNull);
+  });
+  testWidgets(
+    'double click on bound text preserves binding and opens Properties',
+    (t) async {
+      await mount(t, openPanels: false, elements: const [boundElement]);
+
+      final element = find.byKey(const Key('design-element-bound'));
+
+      await t.tap(element);
+      await t.pump(const Duration(milliseconds: 50));
+      await t.tap(element);
+      await t.pump();
+
+      expect(find.byKey(const Key('inline-text-editor-bound')), findsNothing);
+
+      final current = view(t).document.elements.single;
+
+      expect(current.type, DesignElementType.boundText);
+      expect(current.data['field'], 'full_name');
+      expect(current.data['fallback'], 'Student name');
+
+      expect(view(t).selectedId, 'bound');
+
+      // Bound text should redirect the user to its existing Properties editor.
+      expect(find.byKey(const ValueKey('student-field-bound')), findsOneWidget);
+
+      expect(t.takeException(), isNull);
     },
   );
 }

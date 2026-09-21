@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-enum DesignerCommand { undo, redo, save, delete, duplicate, deselect, nudge }
+enum DesignerCommand {
+  undo,
+  redo,
+  save,
+  delete,
+  duplicate,
+  deselect,
+  nudge,
+  editText,
+}
 
 class _CommandIntent extends Intent {
   const _CommandIntent(this.command, [this.delta = Offset.zero]);
@@ -27,6 +36,9 @@ class DesignerShortcuts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bindings = <ShortcutActivator, Intent>{
+      const SingleActivator(LogicalKeyboardKey.f2): const _CommandIntent(
+        DesignerCommand.editText,
+      ),
       const SingleActivator(LogicalKeyboardKey.keyY, control: true):
           const _CommandIntent(DesignerCommand.redo),
       const SingleActivator(LogicalKeyboardKey.delete): const _CommandIntent(
@@ -103,6 +115,7 @@ class _CommandAction extends Action<_CommandIntent> {
         DesignerCommand.undo,
         DesignerCommand.redo,
         DesignerCommand.save,
+        DesignerCommand.editText,
       ].contains(intent.command) ||
       !DesignerShortcuts.editingText;
   @override

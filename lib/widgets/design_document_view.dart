@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/api_student.dart';
 import '../models/api_personnel.dart';
@@ -34,6 +35,12 @@ class DesignDocumentView extends StatelessWidget {
     this.onGestureStart,
     this.onGestureEnd,
     this.isGestureActive,
+    this.inlineEditingId,
+    this.inlineTextController,
+    this.inlineTextFocusNode,
+    this.onInlineTextEditRequest,
+    this.onInlineTextCommit,
+    this.onInlineTextCancel,
   }) : assert(student != null || personnel != null);
 
   final String? schoolName;
@@ -49,6 +56,13 @@ class DesignDocumentView extends StatelessWidget {
   final String? photoUrl;
   final String? logoUrl;
   final String? selectedId;
+  final String? inlineEditingId;
+  final TextEditingController? inlineTextController;
+  final FocusNode? inlineTextFocusNode;
+
+  final ValueChanged<String>? onInlineTextEditRequest;
+  final VoidCallback? onInlineTextCommit;
+  final VoidCallback? onInlineTextCancel;
 
   final ValueChanged<String>? onGestureStart;
   final VoidCallback? onGestureEnd;
@@ -152,6 +166,7 @@ class DesignDocumentView extends StatelessWidget {
                     child: _InteractiveElement(
                       element: node.element,
                       selected: selectedId == node.element.id,
+                      editing: inlineEditingId == node.element.id,
                       interactive: interactive,
                       scaleX: scale,
                       scaleY: scale,
@@ -163,15 +178,79 @@ class DesignDocumentView extends StatelessWidget {
                       onMove: onMove,
                       onResize: onResize,
                       onResizeHandle: onResizeHandle,
+                      onDoubleTap: onInlineTextEditRequest,
                       child: Transform.rotate(
                         angle: node.radians,
-                        child: _render(node, scale),
+                        child:
+                            inlineEditingId == node.element.id &&
+                                node.element.type == DesignElementType.text
+                            ? _inlineEditor(node, scale)
+                            : _render(node, scale),
                       ),
                     ),
                   ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _inlineEditor(DesignRenderElement node, double scale) {
+    final controller = inlineTextController;
+    final focusNode = inlineTextFocusNode;
+
+    if (controller == null || focusNode == null) {
+      return _render(node, scale);
+    }
+
+    final style = node.style;
+
+    return Focus(
+      onKeyEvent: (_, event) {
+        if (event is! KeyDownEvent) {
+          return KeyEventResult.ignored;
+        }
+
+        if (event.logicalKey == LogicalKeyboardKey.escape) {
+          onInlineTextCancel?.call();
+          return KeyEventResult.handled;
+        }
+
+        final commitShortcut =
+            event.logicalKey == LogicalKeyboardKey.enter &&
+            (HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isMetaPressed);
+
+        if (commitShortcut) {
+          onInlineTextCommit?.call();
+          return KeyEventResult.handled;
+        }
+
+        return KeyEventResult.ignored;
+      },
+      child: TextField(
+        key: Key('inline-text-editor-${node.element.id}'),
+        controller: controller,
+        focusNode: focusNode,
+        autofocus: true,
+        textAlign: style.alignment,
+        textAlignVertical: TextAlignVertical.center,
+        maxLines: style.maxLines,
+        style: style
+            .textStyle(scale)
+            .copyWith(textBaseline: TextBaseline.alphabetic),
+        cursorColor: style.color,
+        decoration: const InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onTapOutside: (_) {
+          onInlineTextCommit?.call();
+        },
       ),
     );
   }
@@ -212,6 +291,7 @@ class DesignDocumentView extends StatelessWidget {
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 3.2 * scale,
+                      textBaseline: TextBaseline.alphabetic,
                     ),
                   ),
                 )
@@ -245,7 +325,11 @@ class DesignDocumentView extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       'Principal signature',
-                      style: TextStyle(color: Colors.grey, fontSize: 2 * scale),
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 2 * scale,
+                        textBaseline: TextBaseline.alphabetic,
+                      ),
                     ),
                   ),
                 ],
@@ -419,6 +503,7 @@ class _InteractiveElement extends StatefulWidget {
     required this.scaleY,
     required this.canvasContext,
     required this.child,
+    required this.editing,
     this.onSelect,
     this.onMove,
     this.onResize,
@@ -426,6 +511,7 @@ class _InteractiveElement extends StatefulWidget {
     this.onGestureStart,
     this.onGestureEnd,
     this.isGestureActive,
+    this.onDoubleTap,
   });
 
   final DesignElement element;
@@ -439,11 +525,14 @@ class _InteractiveElement extends StatefulWidget {
 
   final ValueChanged<String?>? onSelect;
   final ValueChanged<String>? onGestureStart;
+  final ValueChanged<String>? onDoubleTap;
   final VoidCallback? onGestureEnd;
   final bool Function(String)? isGestureActive;
   final void Function(String, double, double)? onMove;
   final void Function(String, double, double)? onResize;
   final void Function(String, String, double, double)? onResizeHandle;
+  final bool editing;
+
   @override
   State<_InteractiveElement> createState() => _InteractiveElementState();
 }
@@ -451,20 +540,62 @@ class _InteractiveElement extends StatefulWidget {
 class _InteractiveElementState extends State<_InteractiveElement> {
   int? _pointer;
   String? _resizeHandle;
+
+  Duration? _lastClickTime;
+  Offset? _lastClickPosition;
+  bool _pointerMoved = false;
+
+  bool get _isTextElement => {
+    DesignElementType.text,
+    DesignElementType.boundText,
+    DesignElementType.customFieldText,
+  }.contains(widget.element.type);
   void _down(PointerDownEvent event) {
-    if (!widget.interactive || event.buttons != 1 || _pointer != null) {
+    if (!widget.interactive ||
+        widget.editing ||
+        event.buttons != 1 ||
+        _pointer != null) {
       return;
     }
+
+    final lastClickTime = _lastClickTime;
+    final lastClickPosition = _lastClickPosition;
+
+    final isDoubleClick =
+        _isTextElement &&
+        !widget.element.locked &&
+        lastClickTime != null &&
+        lastClickPosition != null &&
+        event.timeStamp - lastClickTime <= const Duration(milliseconds: 350) &&
+        (event.position - lastClickPosition).distance <= 16;
+
+    // The previous click has now either formed a double-click or expired
+    // as the first click in a new sequence.
+    _lastClickTime = null;
+    _lastClickPosition = null;
+
+    if (isDoubleClick) {
+      widget.onSelect?.call(widget.element.id);
+      widget.onDoubleTap?.call(widget.element.id);
+      return;
+    }
+
     final size = context.size!;
+
     _resizeHandle = null;
+    _pointerMoved = false;
+
     if (widget.selected && !widget.element.locked) {
       const hit = 12.0;
+
       final x = event.localPosition.dx;
       final y = event.localPosition.dy;
+
       final left = x <= hit;
       final right = x >= size.width - hit;
       final top = y <= hit;
       final bottom = y >= size.height - hit;
+
       final image = {
         DesignElementType.studentPhoto,
         DesignElementType.schoolLogo,
@@ -472,6 +603,7 @@ class _InteractiveElementState extends State<_InteractiveElement> {
         DesignElementType.qrCode,
         DesignElementType.circle,
       }.contains(widget.element.type);
+
       if (widget.element.type == DesignElementType.line) {
         if (left) {
           _resizeHandle = 'left';
@@ -496,8 +628,13 @@ class _InteractiveElementState extends State<_InteractiveElement> {
         _resizeHandle = 'bottom';
       }
     }
+
     widget.onSelect?.call(widget.element.id);
-    if (widget.element.locked) return;
+
+    if (widget.element.locked) {
+      return;
+    }
+
     _pointer = event.pointer;
     widget.onGestureStart?.call(widget.element.id);
   }
@@ -506,6 +643,9 @@ class _InteractiveElementState extends State<_InteractiveElement> {
     if (event.pointer != _pointer ||
         widget.isGestureActive?.call(widget.element.id) == false) {
       return;
+    }
+    if (event.delta.distanceSquared > 0) {
+      _pointerMoved = true;
     }
     final box = widget.canvasContext.findRenderObject()! as RenderBox;
     // Convert both endpoints through the same canvas transform. This includes
@@ -538,97 +678,128 @@ class _InteractiveElementState extends State<_InteractiveElement> {
   }
 
   void _end(PointerEvent event) {
-    if (event.pointer != _pointer) return;
+    if (event.pointer != _pointer) {
+      return;
+    }
+
+    final rememberClick =
+        event is PointerUpEvent &&
+        !_pointerMoved &&
+        _resizeHandle == null &&
+        _isTextElement;
+
+    if (rememberClick) {
+      _lastClickTime = event.timeStamp;
+      _lastClickPosition = event.position;
+    } else {
+      _lastClickTime = null;
+      _lastClickPosition = null;
+    }
+
     _pointer = null;
+    _resizeHandle = null;
+    _pointerMoved = false;
+
     widget.onGestureEnd?.call();
   }
 
   @override
-  Widget build(BuildContext context) => MouseRegion(
-    cursor: widget.element.locked
-        ? SystemMouseCursors.basic
-        : SystemMouseCursors.move,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanUpdate: widget.interactive && !widget.element.locked ? (_) {} : null,
-      child: Listener(
-        key: Key('design-element-${widget.element.id}'),
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.editing
+          ? SystemMouseCursors.text
+          : widget.element.locked
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.move,
+      child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onPointerDown: _down,
-        onPointerMove: _move,
-        onPointerUp: _end,
-        onPointerCancel: _end,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: widget.selected
-                      ? Border.all(color: Colors.blue, width: 1.5)
-                      : null,
+        onPanUpdate:
+            widget.interactive && !widget.element.locked && !widget.editing
+            ? (_) {}
+            : null,
+        child: Listener(
+          key: Key('design-element-${widget.element.id}'),
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: _down,
+          onPointerMove: _move,
+          onPointerUp: _end,
+          onPointerCancel: _end,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: widget.selected
+                        ? Border.all(color: Colors.blue, width: 1.5)
+                        : null,
+                  ),
+                  child: RepaintBoundary(child: widget.child),
                 ),
-                child: RepaintBoundary(child: widget.child),
               ),
-            ),
-            if (widget.selected && widget.interactive && !widget.element.locked)
-              for (final handle in [
-                if (widget.element.type == DesignElementType.line) ...[
-                  'left',
-                  'right',
-                ] else ...[
-                  'top-left',
-                  'top-right',
-                  'bottom-left',
-                  'bottom-right',
-                  if (!{
-                    DesignElementType.studentPhoto,
-                    DesignElementType.schoolLogo,
-                    DesignElementType.principalSignature,
-                    DesignElementType.qrCode,
-                    DesignElementType.circle,
-                  }.contains(widget.element.type)) ...[
-                    'top',
-                    'right',
-                    'bottom',
+              if (widget.selected &&
+                  widget.interactive &&
+                  !widget.element.locked &&
+                  !widget.editing)
+                for (final handle in [
+                  if (widget.element.type == DesignElementType.line) ...[
                     'left',
+                    'right',
+                  ] else ...[
+                    'top-left',
+                    'top-right',
+                    'bottom-left',
+                    'bottom-right',
+                    if (!{
+                      DesignElementType.studentPhoto,
+                      DesignElementType.schoolLogo,
+                      DesignElementType.principalSignature,
+                      DesignElementType.qrCode,
+                      DesignElementType.circle,
+                    }.contains(widget.element.type)) ...[
+                      'top',
+                      'right',
+                      'bottom',
+                      'left',
+                    ],
                   ],
-                ],
-              ])
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: Align(
-                      alignment: switch (handle) {
-                        'top-left' => Alignment.topLeft,
-                        'top-right' => Alignment.topRight,
-                        'bottom-left' => Alignment.bottomLeft,
-                        'top' => Alignment.topCenter,
-                        'right' => Alignment.centerRight,
-                        'bottom' => Alignment.bottomCenter,
-                        'left' => Alignment.centerLeft,
-                        _ => Alignment.bottomRight,
-                      },
-                      child: Container(
-                        key: Key(
-                          handle == 'bottom-right'
-                              ? 'resize-${widget.element.id}'
-                              : 'resize-${widget.element.id}-$handle',
-                        ),
-                        width: 12,
-                        height: 12,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          border: Border.fromBorderSide(
-                            BorderSide(color: Colors.blue, width: 2),
+                ])
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: switch (handle) {
+                          'top-left' => Alignment.topLeft,
+                          'top-right' => Alignment.topRight,
+                          'bottom-left' => Alignment.bottomLeft,
+                          'top' => Alignment.topCenter,
+                          'right' => Alignment.centerRight,
+                          'bottom' => Alignment.bottomCenter,
+                          'left' => Alignment.centerLeft,
+                          _ => Alignment.bottomRight,
+                        },
+                        child: Container(
+                          key: Key(
+                            handle == 'bottom-right'
+                                ? 'resize-${widget.element.id}'
+                                : 'resize-${widget.element.id}-$handle',
+                          ),
+                          width: 12,
+                          height: 12,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border.fromBorderSide(
+                              BorderSide(color: Colors.blue, width: 2),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

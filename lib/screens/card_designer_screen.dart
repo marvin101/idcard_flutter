@@ -65,6 +65,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'designer canvas');
 
+  final TextEditingController _inlineText = TextEditingController();
+
+  final FocusNode _inlineTextFocus = FocusNode(
+    debugLabel: 'designer inline text',
+  );
+
+  String? _inlineEditingId;
+  String? _inlineOriginalText;
+
   final GlobalKey _canvasCoordinates = GlobalKey();
 
   final ValueNotifier<List<DesignerGuide>> _guides =
@@ -333,6 +342,8 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _canvasBackground.dispose();
 
     _canvasFocus.dispose();
+    _inlineText.dispose();
+    _inlineTextFocus.dispose();
 
     _viewTransform.dispose();
 
@@ -356,9 +367,14 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _select(String? id) {
-    _canvasFocus.requestFocus();
+    if (_inlineEditingId != null && _inlineEditingId != id) {
+      _commitInlineTextEdit();
+    }
 
     if (_selectedId == id) {
+      if (_inlineEditingId == null) {
+        _canvasFocus.requestFocus();
+      }
       return;
     }
 
@@ -373,6 +389,117 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         _localDuplicate,
       );
     });
+
+    // Selection rebuilds the workspace. Restore keyboard focus after that
+    // rebuild so arrow-key nudging and other canvas shortcuts keep working.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _inlineEditingId != null) {
+        return;
+      }
+
+      _canvasFocus.requestFocus();
+    });
+  }
+
+  void _beginInlineTextEdit(String id) {
+    final element = _document.elements
+        .where((element) => element.id == id)
+        .firstOrNull;
+
+    if (element == null || element.locked || !element.visible) {
+      return;
+    }
+
+    // Bound values must remain bindings. Double-clicking them simply
+    // selects the element and opens Properties instead of converting
+    // their rendered preview value into static text.
+    if (element.type == DesignElementType.boundText ||
+        element.type == DesignElementType.customFieldText) {
+      _select(id);
+
+      if (!_showProperties) {
+        setState(() {
+          _showProperties = true;
+        });
+      }
+
+      return;
+    }
+
+    if (element.type != DesignElementType.text) {
+      return;
+    }
+
+    _endGesture();
+    _select(id);
+
+    final text = element.data['text'] as String? ?? '';
+
+    _inlineText.value = TextEditingValue(
+      text: text,
+      selection: TextSelection(baseOffset: 0, extentOffset: text.length),
+    );
+
+    setState(() {
+      _inlineEditingId = id;
+      _inlineOriginalText = text;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _inlineEditingId != id) {
+        return;
+      }
+
+      _inlineTextFocus.requestFocus();
+    });
+  }
+
+  void _commitInlineTextEdit() {
+    final id = _inlineEditingId;
+
+    if (id == null) {
+      return;
+    }
+
+    final original = _inlineOriginalText ?? '';
+    final nextText = _inlineText.text;
+
+    _updateUi(() {
+      _inlineEditingId = null;
+      _inlineOriginalText = null;
+    });
+
+    if (nextText != original) {
+      _updateElement(id, (element) {
+        if (element.type != DesignElementType.text) {
+          return element;
+        }
+
+        return element.copyWith(data: {...element.data, 'text': nextText});
+      });
+    }
+
+    _canvasFocus.requestFocus();
+  }
+
+  void _cancelInlineTextEdit() {
+    if (_inlineEditingId == null) {
+      return;
+    }
+
+    final original = _inlineOriginalText ?? '';
+
+    _inlineText.value = TextEditingValue(
+      text: original,
+      selection: TextSelection.collapsed(offset: original.length),
+    );
+
+    _updateUi(() {
+      _inlineEditingId = null;
+      _inlineOriginalText = null;
+    });
+
+    _canvasFocus.requestFocus();
   }
 
   Future<void> _applyCanvasDimensions() async {
@@ -762,6 +889,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _switchSide(bool showBack) {
+    _commitInlineTextEdit();
     if (_editingBack == showBack) {
       return;
     }
@@ -830,6 +958,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _undo() {
+    _commitInlineTextEdit();
     _endGesture();
 
     if (_canUndo) {
@@ -838,6 +967,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   }
 
   void _redo() {
+    _commitInlineTextEdit();
     _endGesture();
 
     if (_canRedo) {
@@ -1327,10 +1457,40 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   ),
                 ),
         );
+
+      case DesignerCommand.editText:
+        final id = _selectedId;
+
+        if (id != null) {
+          _beginInlineTextEdit(id);
+        }
+
+        if (id == null) {
+          return;
+        }
+
+        // Keyboard nudges remain precise even when
+        // pointer grid snapping is enabled.
+        _updateElement(
+          id,
+          (element) => element.locked
+              ? element
+              : element.copyWith(
+                  x: (element.x + delta.dx).clamp(
+                    0.0,
+                    math.max(0.0, _document.canvas.width - element.width),
+                  ),
+                  y: (element.y + delta.dy).clamp(
+                    0.0,
+                    math.max(0.0, _document.canvas.height - element.height),
+                  ),
+                ),
+        );
     }
   }
 
   Future<bool> _save() async {
+    _commitInlineTextEdit();
     if (_localDuplicate) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2103,6 +2263,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         () => (
                           _document,
                           _selectedId,
+                          _inlineEditingId,
                           _zoom,
                           _workspacePanning,
                           _logoUrl,
@@ -2888,6 +3049,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                   key: _canvasCoordinates,
                                   child: DesignDocumentView(
                                     key: const Key('designer-canvas'),
+
                                     document: _document,
                                     student: _previewIdentityType == 'student'
                                         ? _sampleStudent
@@ -2947,6 +3109,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                     assetBaseUrl: widget.api.baseUrl,
                                     selectedId: _selectedId,
                                     interactive: true,
+
+                                    inlineEditingId: _inlineEditingId,
+                                    inlineTextController: _inlineText,
+                                    inlineTextFocusNode: _inlineTextFocus,
+                                    onInlineTextEditRequest:
+                                        _beginInlineTextEdit,
+                                    onInlineTextCommit: _commitInlineTextEdit,
+                                    onInlineTextCancel: _cancelInlineTextEdit,
+
                                     onSelect: _select,
                                     onGestureStart: _beginGesture,
                                     onGestureEnd: _endGesture,
