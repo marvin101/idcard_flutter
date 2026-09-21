@@ -184,10 +184,12 @@ class DesignDocumentView extends StatelessWidget {
         return DecoratedBox(
           decoration: BoxDecoration(
             color: style.fill,
-            border: Border.all(
-              color: style.border,
-              width: style.borderWidth * scale,
-            ),
+            border: style.borderWidth > 0
+                ? Border.all(
+                    color: style.border,
+                    width: style.borderWidth * scale,
+                  )
+                : null,
             borderRadius: BorderRadius.circular(style.radius * scale),
           ),
         );
@@ -256,18 +258,22 @@ class DesignDocumentView extends StatelessWidget {
               ? ShapeDecoration(
                   color: DesignRenderStyle.imageBackground,
                   shape: OvalBorder(
-                    side: BorderSide(
-                      color: style.border,
-                      width: style.borderWidth * scale,
-                    ),
+                    side: style.borderWidth > 0
+                        ? BorderSide(
+                            color: style.border,
+                            width: style.borderWidth * scale,
+                          )
+                        : BorderSide.none,
                   ),
                 )
               : BoxDecoration(
                   color: DesignRenderStyle.imageBackground,
-                  border: Border.all(
-                    color: style.border,
-                    width: style.borderWidth * scale,
-                  ),
+                  border: style.borderWidth > 0
+                      ? Border.all(
+                          color: style.border,
+                          width: style.borderWidth * scale,
+                        )
+                      : null,
                   borderRadius: BorderRadius.circular(
                     (style.imageShape == 'rounded' ? style.radius : 0) * scale,
                   ),
@@ -538,82 +544,91 @@ class _InteractiveElementState extends State<_InteractiveElement> {
   }
 
   @override
-  Widget build(BuildContext context) => Listener(
-    key: Key('design-element-${widget.element.id}'),
-    behavior: HitTestBehavior.opaque,
-    onPointerDown: _down,
-    onPointerMove: _move,
-    onPointerUp: _end,
-    onPointerCancel: _end,
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: widget.selected
-                  ? Border.all(color: Colors.blue, width: 1.5)
-                  : null,
-            ),
-            child: RepaintBoundary(child: widget.child),
-          ),
-        ),
-        if (widget.selected && widget.interactive && !widget.element.locked)
-          for (final handle in [
-            if (widget.element.type == DesignElementType.line) ...[
-              'left',
-              'right',
-            ] else ...[
-              'top-left',
-              'top-right',
-              'bottom-left',
-              'bottom-right',
-              if (!{
-                DesignElementType.studentPhoto,
-                DesignElementType.schoolLogo,
-                DesignElementType.principalSignature,
-                DesignElementType.qrCode,
-                DesignElementType.circle,
-              }.contains(widget.element.type)) ...[
-                'top',
-                'right',
-                'bottom',
-                'left',
-              ],
-            ],
-          ])
+  Widget build(BuildContext context) => MouseRegion(
+    cursor: widget.element.locked
+        ? SystemMouseCursors.basic
+        : SystemMouseCursors.move,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanUpdate: widget.interactive && !widget.element.locked ? (_) {} : null,
+      child: Listener(
+        key: Key('design-element-${widget.element.id}'),
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _down,
+        onPointerMove: _move,
+        onPointerUp: _end,
+        onPointerCancel: _end,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
             Positioned.fill(
-              child: IgnorePointer(
-                child: Align(
-                  alignment: switch (handle) {
-                    'top-left' => Alignment.topLeft,
-                    'top-right' => Alignment.topRight,
-                    'bottom-left' => Alignment.bottomLeft,
-                    'top' => Alignment.topCenter,
-                    'right' => Alignment.centerRight,
-                    'bottom' => Alignment.bottomCenter,
-                    'left' => Alignment.centerLeft,
-                    _ => Alignment.bottomRight,
-                  },
-                  child: Container(
-                    key: Key(
-                      handle == 'bottom-right'
-                          ? 'resize-${widget.element.id}'
-                          : 'resize-${widget.element.id}-$handle',
-                    ),
-                    width: 12,
-                    height: 12,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      border: Border.fromBorderSide(
-                        BorderSide(color: Colors.blue, width: 2),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: widget.selected
+                      ? Border.all(color: Colors.blue, width: 1.5)
+                      : null,
+                ),
+                child: RepaintBoundary(child: widget.child),
+              ),
+            ),
+            if (widget.selected && widget.interactive && !widget.element.locked)
+              for (final handle in [
+                if (widget.element.type == DesignElementType.line) ...[
+                  'left',
+                  'right',
+                ] else ...[
+                  'top-left',
+                  'top-right',
+                  'bottom-left',
+                  'bottom-right',
+                  if (!{
+                    DesignElementType.studentPhoto,
+                    DesignElementType.schoolLogo,
+                    DesignElementType.principalSignature,
+                    DesignElementType.qrCode,
+                    DesignElementType.circle,
+                  }.contains(widget.element.type)) ...[
+                    'top',
+                    'right',
+                    'bottom',
+                    'left',
+                  ],
+                ],
+              ])
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Align(
+                      alignment: switch (handle) {
+                        'top-left' => Alignment.topLeft,
+                        'top-right' => Alignment.topRight,
+                        'bottom-left' => Alignment.bottomLeft,
+                        'top' => Alignment.topCenter,
+                        'right' => Alignment.centerRight,
+                        'bottom' => Alignment.bottomCenter,
+                        'left' => Alignment.centerLeft,
+                        _ => Alignment.bottomRight,
+                      },
+                      child: Container(
+                        key: Key(
+                          handle == 'bottom-right'
+                              ? 'resize-${widget.element.id}'
+                              : 'resize-${widget.element.id}-$handle',
+                        ),
+                        width: 12,
+                        height: 12,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: Colors.blue, width: 2),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-      ],
+          ],
+        ),
+      ),
     ),
   );
 }

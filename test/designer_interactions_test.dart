@@ -636,4 +636,109 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
+  for (final zoom in [.5, 1.0, 2.0]) {
+    testWidgets('empty workspace pans at $zoom without editing the template', (
+      t,
+    ) async {
+      await mount(t);
+      await select(t);
+      t.widget<Slider>(find.byType(Slider)).onChanged!(zoom);
+      await t.pump();
+      final viewer = t.widget<InteractiveViewer>(
+        find.byType(InteractiveViewer),
+      );
+      expect(viewer.panEnabled, isTrue);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is MouseRegion && w.cursor == SystemMouseCursors.grab,
+        ),
+        findsWidgets,
+      );
+      final controller = viewer.transformationController!;
+      final before = view(t).document.toJson();
+      final saveStateBefore = t
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const Key('designer-save-state')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data;
+      final start = t.getCenter(
+        find.byKey(const Key('design-document-surface')),
+      );
+      final pointer = await t.startGesture(
+        start,
+        kind: PointerDeviceKind.mouse,
+      );
+      await pointer.moveBy(const Offset(30, 20));
+      await t.pump();
+      await pointer.moveBy(const Offset(30, 20));
+      await t.pump();
+      expect(controller.value.getTranslation().x, greaterThan(0));
+      expect(controller.value.getTranslation().y, greaterThan(0));
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is MouseRegion && w.cursor == SystemMouseCursors.grabbing,
+        ),
+        findsWidgets,
+      );
+      await pointer.up();
+      await t.pumpAndSettle();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is MouseRegion && w.cursor == SystemMouseCursors.grab,
+        ),
+        findsWidgets,
+      );
+      expect(view(t).document.toJson(), before);
+      expect(
+        t
+            .widget<Text>(
+              find.descendant(
+                of: find.byKey(const Key('designer-save-state')),
+                matching: find.byType(Text),
+              ),
+            )
+            .data,
+        saveStateBefore,
+      );
+      expect(enabled(t, 'Undo'), false);
+      await t.tap(find.text('Fit canvas'));
+      await t.pump();
+      expect(controller.value, Matrix4.identity());
+    });
+  }
+
+  testWidgets(
+    'element drag moves only the element, and resize remains active',
+    (t) async {
+      await mount(t);
+      final controller = t
+          .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+          .transformationController!;
+      final box = find.byKey(const Key('design-element-a'));
+      final pointer = await t.startGesture(
+        t.getCenter(box),
+        kind: PointerDeviceKind.mouse,
+      );
+      await pointer.moveBy(const Offset(20, 10));
+      await t.pump();
+      await pointer.up();
+      await t.pump();
+      expect(live(t).x, greaterThan(10));
+      expect(controller.value, Matrix4.identity());
+      final width = live(t).width;
+      final resize = await t.startGesture(
+        t.getCenter(find.byKey(const Key('resize-a'))),
+        kind: PointerDeviceKind.mouse,
+      );
+      await resize.moveBy(const Offset(20, 10));
+      await t.pump();
+      await resize.up();
+      await t.pump();
+      expect(live(t).width, greaterThan(width));
+      expect(controller.value, Matrix4.identity());
+    },
+  );
 }

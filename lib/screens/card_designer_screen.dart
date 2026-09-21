@@ -76,6 +76,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   final List<String> _recentColours = <String>[];
 
+  final Map<String, double> _previousBorderWidths = <String, double>{};
+
+  String _borderWidthKey(String id) => '${_editingBack ? 'back' : 'front'}:$id';
+
   CardTemplate? _gestureStart;
 
   String? _gestureId;
@@ -92,6 +96,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   double _zoom = 1;
 
+  bool _workspacePanning = false;
   bool _syncingName = false;
   bool _smallScreenAccepted = false;
   bool _dirtyValue = false;
@@ -2099,6 +2104,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                           _document,
                           _selectedId,
                           _zoom,
+                          _workspacePanning,
                           _logoUrl,
                           _schoolProfile,
                           _previewIdentityType,
@@ -2848,128 +2854,146 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               return Focus(
                 focusNode: _canvasFocus,
                 child: AppScaleGestureBoundary(
-                  child: InteractiveViewer(
-                    transformationController: _viewTransform,
-                    panEnabled: _selectedId == null,
-                    minScale: .5,
-                    maxScale: 3,
-                    child: Center(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 24,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: SizedBox(
-                          key: const Key('designer-canvas-frame'),
-                          width: displayWidth,
-                          child: Stack(
-                            children: [
-                              KeyedSubtree(
-                                key: _canvasCoordinates,
-                                child: DesignDocumentView(
-                                  key: const Key('designer-canvas'),
-                                  document: _document,
-                                  student: _previewIdentityType == 'student'
-                                      ? _sampleStudent
-                                      : null,
-                                  personnel: _previewIdentityType == 'student'
-                                      ? null
-                                      : ApiPersonnel(
-                                          uuid: _samplePersonnel.uuid,
-                                          personnelType:
-                                              _previewIdentityType == 'teacher'
-                                              ? PersonnelType.teacher
-                                              : PersonnelType.staff,
-                                          employeeNo:
-                                              _samplePersonnel.employeeNo,
-                                          fullName: _samplePersonnel.fullName,
-                                          designation:
-                                              _previewIdentityType == 'teacher'
-                                              ? _samplePersonnel.designation
-                                              : 'Office Administrator',
-                                          department:
-                                              _previewIdentityType == 'teacher'
-                                              ? _samplePersonnel.department
-                                              : 'Administration',
-                                          dob: _samplePersonnel.dob,
-                                          gender: _samplePersonnel.gender,
-                                          bloodGroup:
-                                              _samplePersonnel.bloodGroup,
-                                          mobile: _samplePersonnel.mobile,
-                                          email: _samplePersonnel.email,
-                                          address: _samplePersonnel.address,
-                                          photoPath: _samplePersonnel.photoPath,
-                                          verificationStatus: _samplePersonnel
-                                              .verificationStatus,
-                                          lifecycleStatus:
-                                              _samplePersonnel.lifecycleStatus,
-                                          correctionNote: null,
-                                          verifiedAt: null,
-                                          verifiedByName: null,
-                                          printedAt: null,
-                                          printedByName: null,
-                                          printCount: 0,
-                                          isActive: true,
-                                          createdAt: _samplePersonnel.createdAt,
-                                          updatedAt: _samplePersonnel.updatedAt,
-                                        ),
-                                  sessionName: '2026-2028',
-                                  className: 'XII',
-                                  sectionName: 'A',
-                                  logoUrl: _logoUrl,
-                                  schoolProfile: _schoolProfile,
-                                  assetBaseUrl: widget.api.baseUrl,
-                                  selectedId: _selectedId,
-                                  interactive: true,
-                                  onSelect: _select,
-                                  onGestureStart: _beginGesture,
-                                  onGestureEnd: _endGesture,
-                                  isGestureActive: (id) => _gestureId == id,
-                                  onMove: _move,
-                                  onResize: (id, dw, dh) =>
-                                      _resize(id, 'bottom-right', dw, dh),
-                                  onResizeHandle: _resize,
+                  child: MouseRegion(
+                    cursor: _workspacePanning
+                        ? SystemMouseCursors.grabbing
+                        : SystemMouseCursors.grab,
+                    child: InteractiveViewer(
+                      transformationController: _viewTransform,
+                      panEnabled: true,
+                      boundaryMargin: const EdgeInsets.all(double.infinity),
+                      onInteractionStart: (_) =>
+                          _updateUi(() => _workspacePanning = true),
+                      onInteractionEnd: (_) =>
+                          _updateUi(() => _workspacePanning = false),
+                      minScale: .5,
+                      maxScale: 3,
+                      child: Center(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            key: const Key('designer-canvas-frame'),
+                            width: displayWidth,
+                            child: Stack(
+                              children: [
+                                KeyedSubtree(
+                                  key: _canvasCoordinates,
+                                  child: DesignDocumentView(
+                                    key: const Key('designer-canvas'),
+                                    document: _document,
+                                    student: _previewIdentityType == 'student'
+                                        ? _sampleStudent
+                                        : null,
+                                    personnel: _previewIdentityType == 'student'
+                                        ? null
+                                        : ApiPersonnel(
+                                            uuid: _samplePersonnel.uuid,
+                                            personnelType:
+                                                _previewIdentityType ==
+                                                    'teacher'
+                                                ? PersonnelType.teacher
+                                                : PersonnelType.staff,
+                                            employeeNo:
+                                                _samplePersonnel.employeeNo,
+                                            fullName: _samplePersonnel.fullName,
+                                            designation:
+                                                _previewIdentityType ==
+                                                    'teacher'
+                                                ? _samplePersonnel.designation
+                                                : 'Office Administrator',
+                                            department:
+                                                _previewIdentityType ==
+                                                    'teacher'
+                                                ? _samplePersonnel.department
+                                                : 'Administration',
+                                            dob: _samplePersonnel.dob,
+                                            gender: _samplePersonnel.gender,
+                                            bloodGroup:
+                                                _samplePersonnel.bloodGroup,
+                                            mobile: _samplePersonnel.mobile,
+                                            email: _samplePersonnel.email,
+                                            address: _samplePersonnel.address,
+                                            photoPath:
+                                                _samplePersonnel.photoPath,
+                                            verificationStatus: _samplePersonnel
+                                                .verificationStatus,
+                                            lifecycleStatus: _samplePersonnel
+                                                .lifecycleStatus,
+                                            correctionNote: null,
+                                            verifiedAt: null,
+                                            verifiedByName: null,
+                                            printedAt: null,
+                                            printedByName: null,
+                                            printCount: 0,
+                                            isActive: true,
+                                            createdAt:
+                                                _samplePersonnel.createdAt,
+                                            updatedAt:
+                                                _samplePersonnel.updatedAt,
+                                          ),
+                                    sessionName: '2026-2028',
+                                    className: 'XII',
+                                    sectionName: 'A',
+                                    logoUrl: _logoUrl,
+                                    schoolProfile: _schoolProfile,
+                                    assetBaseUrl: widget.api.baseUrl,
+                                    selectedId: _selectedId,
+                                    interactive: true,
+                                    onSelect: _select,
+                                    onGestureStart: _beginGesture,
+                                    onGestureEnd: _endGesture,
+                                    isGestureActive: (id) => _gestureId == id,
+                                    onMove: _move,
+                                    onResize: (id, dw, dh) =>
+                                        _resize(id, 'bottom-right', dw, dh),
+                                    onResizeHandle: _resize,
+                                  ),
                                 ),
-                              ),
-                              Positioned.fill(
-                                child:
-                                    ValueListenableBuilder<List<DesignerGuide>>(
-                                      valueListenable: _guides,
-                                      builder: (context, guides, _) =>
-                                          guides.isEmpty
-                                          ? const SizedBox.shrink()
-                                          : DesignerGuideOverlay(
-                                              key: const Key(
-                                                'designer-smart-guides',
-                                              ),
-                                              guides: guides,
-                                              canvasWidth:
-                                                  _document.canvas.width,
-                                              viewScale: _viewTransform.value
-                                                  .getMaxScaleOnAxis(),
-                                            ),
-                                    ),
-                              ),
-                              if (_document.settings['grid_enabled'] != false)
                                 Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: CustomPaint(
-                                      painter: _GridPainter(
-                                        (_document.settings['grid_size']
-                                                    as num?)
-                                                ?.toDouble() ??
-                                            2,
-                                        _document.canvas.width,
+                                  child:
+                                      ValueListenableBuilder<
+                                        List<DesignerGuide>
+                                      >(
+                                        valueListenable: _guides,
+                                        builder: (context, guides, _) =>
+                                            guides.isEmpty
+                                            ? const SizedBox.shrink()
+                                            : DesignerGuideOverlay(
+                                                key: const Key(
+                                                  'designer-smart-guides',
+                                                ),
+                                                guides: guides,
+                                                canvasWidth:
+                                                    _document.canvas.width,
+                                                viewScale: _viewTransform.value
+                                                    .getMaxScaleOnAxis(),
+                                              ),
+                                      ),
+                                ),
+                                if (_document.settings['grid_enabled'] != false)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: CustomPaint(
+                                        painter: _GridPainter(
+                                          (_document.settings['grid_size']
+                                                      as num?)
+                                                  ?.toDouble() ??
+                                              2,
+                                          _document.canvas.width,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -4626,23 +4650,50 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                 style: {
                                   ...element.style,
                                   'border_color': value.toUpperCase(),
+                                  if (((element.style['border_width'] as num?)
+                                              ?.toDouble() ??
+                                          0) <=
+                                      0)
+                                    'border_width':
+                                        _previousBorderWidths[_borderWidthKey(
+                                          element.id,
+                                        )] ??
+                                        .5,
                                 },
                               ),
                             );
                           }
                         },
+                        allowNone: true,
+                        noneSelected:
+                            ((e.style['border_width'] as num?)?.toDouble() ??
+                                0) ==
+                            0,
+                        onNone: () => update((element) {
+                          final width =
+                              (element.style['border_width'] as num?)
+                                  ?.toDouble() ??
+                              0;
+                          if (width > 0)
+                            _previousBorderWidths[_borderWidthKey(element.id)] =
+                                width;
+                          return element.copyWith(
+                            style: {...element.style, 'border_width': 0.0},
+                          );
+                        }),
                       ),
                       _numberField(
                         'Border width',
                         (e.style['border_width'] as num?)?.toDouble() ?? 0,
-                        (value) => update(
-                          (element) => element.copyWith(
-                            style: {
-                              ...element.style,
-                              'border_width': value.clamp(0, 10),
-                            },
-                          ),
-                        ),
+                        (value) => update((element) {
+                          final width = value.clamp(0, 10).toDouble();
+                          if (width > 0)
+                            _previousBorderWidths[_borderWidthKey(element.id)] =
+                                width;
+                          return element.copyWith(
+                            style: {...element.style, 'border_width': width},
+                          );
+                        }),
                         wide: true,
                       ),
                       _numberField(
@@ -5108,14 +5159,20 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   Widget _colourProperty(
     String label,
     String value,
-    ValueChanged<String> apply,
-  ) => _propertyControl(
+    ValueChanged<String> apply, {
+    bool allowNone = false,
+    bool noneSelected = false,
+    VoidCallback? onNone,
+  }) => _propertyControl(
     DesignerColourField(
       fieldKey: Key('property-${label.toLowerCase().replaceAll(' ', '-')}'),
       ownerId: _selectedId,
       value: value,
       decoration: _propertyDecoration(label),
       recentColours: _recentColours,
+      allowNone: allowNone,
+      noneSelected: noneSelected,
+      onNone: onNone,
       onChanged: (colour) {
         _rememberColour(colour);
 

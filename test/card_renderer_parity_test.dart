@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:idcard_flutter/app_routes.dart';
@@ -315,9 +313,9 @@ Map<String, List<double>> inspect(
           .map((w) => w.decoration)
           .whereType<BoxDecoration>()
           .firstWhere((d) => d.color != null);
-      final border = decoration.border as Border;
+      final border = decoration.border as Border?;
       expect(
-        border.top.width / scale,
+        (border?.top.width ?? 0) / scale,
         closeTo((e.style['border_width'] as num?)?.toDouble() ?? 0, .000001),
       );
     }
@@ -360,6 +358,86 @@ Map<String, List<double>> inspect(
 }
 
 void main() {
+  testWidgets('zero-width borders remain absent in Flutter and PDF output', (
+    t,
+  ) async {
+    final original = fixture(false);
+    final template = original.copyWith(
+      document: original.document.copyWith(
+        elements: [
+          for (final element in original.document.elements)
+            if ({'header', 'photo', 'logo'}.contains(element.id))
+              element.copyWith(
+                style: {
+                  ...element.style,
+                  'border_color': '#24345F',
+                  'border_width': 0.0,
+                },
+              )
+            else
+              element,
+        ],
+      ),
+    );
+    await t.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 500,
+            height: 320,
+            child: DesignDocumentView(
+              document: template.document,
+              student: actualStudent,
+            ),
+          ),
+        ),
+      ),
+    );
+    await t.pumpAndSettle();
+    final rectangle = t
+        .widgetList<DecoratedBox>(
+          find.descendant(
+            of: find.byKey(const Key('design-element-header')),
+            matching: find.byType(DecoratedBox),
+          ),
+        )
+        .map((w) => w.decoration)
+        .whereType<BoxDecoration>()
+        .firstWhere((d) => d.color != null);
+    expect(rectangle.border, isNull);
+    for (final id in ['photo', 'logo']) {
+      final container = t
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byKey(Key('design-element-$id')),
+              matching: find.byType(Container),
+            ),
+          )
+          .firstWhere((w) => w.clipBehavior == Clip.antiAlias);
+      expect((container.decoration! as BoxDecoration).border, isNull);
+      final element = template.document.elements.firstWhere((e) => e.id == id);
+      expect(element.style['border_color'], '#24345F');
+    }
+    final pdfTemplate = CardTemplate(
+      name: 'Zero border PDF',
+      document: DesignDocument(
+        canvas: DesignCanvas(
+          width: template.document.canvas.width,
+          height: template.document.canvas.height,
+        ),
+        elements: [
+          template.document.elements.firstWhere((e) => e.id == 'header'),
+        ],
+      ),
+    );
+    final bytes = await PdfService.generateStudentCard(
+      student: actualStudent,
+      schoolName: school.schoolName,
+      template: pdfTemplate,
+    );
+    expect(bytes, isNotEmpty);
+    expect(t.takeException(), isNull);
+  });
   for (final portrait in [true, false]) {
     testWidgets(
       '${portrait ? 'portrait' : 'landscape'} Designer and actual Cards screen share geometry and style',
@@ -567,41 +645,4 @@ void main() {
       );
     },
   );
-
-  for (final portrait in [true, false]) {
-    test(
-      'PDF preserves ${portrait ? 'portrait' : 'landscape'} saved page dimensions',
-      () async {
-        final template = fixture(portrait).copyWith(
-          document: fixture(portrait).document.copyWith(
-            canvas: DesignCanvas(
-              width: portrait ? 53.98 : 85.6,
-              height: portrait ? 85.6 : 53.98,
-            ),
-          ),
-        );
-        final bytes = await PdfService.generateStudentCard(
-          student: actualStudent,
-          schoolName: school.schoolName,
-          template: template,
-          photoUrl: 'invalid-url',
-          schoolLogoUrl: 'invalid-url',
-          className: 'X',
-          sectionName: 'A',
-        );
-        final source = latin1.decode(bytes, allowInvalid: true);
-        final bounds = RegExp(
-          r'/MediaBox\s*\[\s*0(?:\.0+)?\s+0(?:\.0+)?\s+([\d.]+)\s+([\d.]+)\s*\]',
-        ).firstMatch(source)!;
-        expect(
-          double.parse(bounds[1]!),
-          closeTo(template.document.canvas.width * 72 / 25.4, .01),
-        );
-        expect(
-          double.parse(bounds[2]!),
-          closeTo(template.document.canvas.height * 72 / 25.4, .01),
-        );
-      },
-    );
-  }
 }

@@ -21,6 +21,9 @@ class DesignerColourField extends StatefulWidget {
     required this.decoration,
     required this.onChanged,
     required this.recentColours,
+    this.allowNone = false,
+    this.noneSelected = false,
+    this.onNone,
   });
   final Key fieldKey;
   final String? ownerId;
@@ -28,6 +31,9 @@ class DesignerColourField extends StatefulWidget {
   final InputDecoration decoration;
   final ValueChanged<String> onChanged;
   final List<String> recentColours;
+  final bool allowNone;
+  final bool noneSelected;
+  final VoidCallback? onNone;
   @override
   State<DesignerColourField> createState() => _DesignerColourFieldState();
 }
@@ -67,9 +73,15 @@ class _DesignerColourFieldState extends State<DesignerColourField> {
       builder: (_) => _ColourDialog(
         value: widget.value,
         recent: List.of(widget.recentColours),
+        allowNone: widget.allowNone,
+        noneSelected: widget.noneSelected,
       ),
     );
     if (!mounted || value == null) return;
+    if (value == _noColourChoice) {
+      widget.onNone?.call();
+      return;
+    }
     _controller.text = value;
     widget.onChanged(value);
   }
@@ -87,10 +99,15 @@ class _DesignerColourFieldState extends State<DesignerColourField> {
           width: 22,
           height: 22,
           decoration: BoxDecoration(
-            color: colorFromHex(widget.value, Colors.black),
+            color: widget.noneSelected
+                ? Colors.white
+                : colorFromHex(widget.value, Colors.black),
             border: Border.all(color: Colors.grey),
             borderRadius: BorderRadius.circular(3),
           ),
+          child: widget.noneSelected
+              ? const Icon(Icons.close, size: 18, color: Colors.red)
+              : null,
         ),
       ),
     ),
@@ -100,10 +117,19 @@ class _DesignerColourFieldState extends State<DesignerColourField> {
   );
 }
 
+const _noColourChoice = '__designer_none__';
+
 class _ColourDialog extends StatefulWidget {
-  const _ColourDialog({required this.value, required this.recent});
+  const _ColourDialog({
+    required this.value,
+    required this.recent,
+    required this.allowNone,
+    required this.noneSelected,
+  });
   final String value;
   final List<String> recent;
+  final bool allowNone;
+  final bool noneSelected;
   @override
   State<_ColourDialog> createState() => _ColourDialogState();
 }
@@ -179,6 +205,27 @@ class _ColourDialogState extends State<_ColourDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (widget.allowNone)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('colour-no-border'),
+                  onPressed: () => Navigator.pop(context, _noColourChoice),
+                  icon: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(
+                        color: widget.noneSelected ? Colors.black : Colors.grey,
+                        width: widget.noneSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: const Icon(Icons.close, size: 20, color: Colors.red),
+                  ),
+                  label: const Text('No border'),
+                ),
+              ),
             Container(
               key: const Key('colour-current'),
               height: 32,
