@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/api_student_form_provider.dart';
 import '../utils/validators.dart';
 import '../widgets/app_text_input.dart';
+import '../widgets/app_dropdown.dart';
 import '../widgets/dob_input.dart';
 import '../widgets/responsive_row.dart';
 
@@ -12,7 +13,7 @@ class PersonalInformationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<ApiStudentFormProvider>();
+    final provider = context.watch<ApiStudentFormProvider>();
 
     return Card(
       elevation: 3,
@@ -43,13 +44,18 @@ class PersonalInformationSection extends StatelessWidget {
                   validator: (value) => Validators.required(value, "Full Name"),
                 ),
 
-                AppTextInput(
-                  controller: provider.fatherNameController,
-                  label: "Father Name",
-                  hintText: "Enter Father's Name",
-                  autoCapitalizeWords: true,
-                  textCapitalization: TextCapitalization.words,
-                ),
+                if (provider.isFieldEnabled('father_name'))
+                  AppTextInput(
+                    controller: provider.fatherNameController,
+                    label: "Father Name",
+                    hintText: "Enter Father's Name",
+                    requiredField: provider.isFieldRequired('father_name'),
+                    validator: provider.isFieldRequired('father_name')
+                        ? (value) => Validators.required(value, 'Father Name')
+                        : null,
+                    autoCapitalizeWords: true,
+                    textCapitalization: TextCapitalization.words,
+                  ),
               ],
             ),
 
@@ -57,22 +63,54 @@ class PersonalInformationSection extends StatelessWidget {
 
             ResponsiveRow(
               children: [
-                AppTextInput(
-                  controller: provider.motherNameController,
-                  label: "Mother Name",
-                  hintText: "Enter Mother's Name",
-                  autoCapitalizeWords: true,
-                  textCapitalization: TextCapitalization.words,
-                ),
+                if (provider.isFieldEnabled('mother_name'))
+                  AppTextInput(
+                    controller: provider.motherNameController,
+                    label: "Mother Name",
+                    hintText: "Enter Mother's Name",
+                    requiredField: provider.isFieldRequired('mother_name'),
+                    validator: provider.isFieldRequired('mother_name')
+                        ? (value) => Validators.required(value, 'Mother Name')
+                        : null,
+                    autoCapitalizeWords: true,
+                    textCapitalization: TextCapitalization.words,
+                  ),
 
-                DobInput(
-                  label: "Date of Birth",
-                  dayController: provider.dobDayController,
-                  monthController: provider.dobMonthController,
-                  yearController: provider.dobYearController,
-                ),
+                if (provider.isFieldEnabled('dob'))
+                  DobInput(
+                    label: provider.isFieldRequired('dob')
+                        ? 'Date of Birth *'
+                        : 'Date of Birth',
+                    dayController: provider.dobDayController,
+                    monthController: provider.dobMonthController,
+                    yearController: provider.dobYearController,
+                  ),
               ],
             ),
+            if (provider.isFieldEnabled('gender')) ...[
+              const SizedBox(height: 20),
+              ResponsiveRow(
+                children: [
+                  AppDropdown<String>(
+                    label: 'Gender',
+                    value: provider.selectedGender,
+                    requiredField: provider.isFieldRequired('gender'),
+                    items: const [
+                      DropdownMenuItem(value: 'Male', child: Text('Male')),
+                      DropdownMenuItem(value: 'Female', child: Text('Female')),
+                      DropdownMenuItem(value: 'Other', child: Text('Other')),
+                    ],
+                    onChanged: provider.setGender,
+                    validator: provider.isFieldRequired('gender')
+                        ? (value) => value == null || value.isEmpty
+                              ? 'Please select a gender'
+                              : null
+                        : null,
+                  ),
+                  const SizedBox(),
+                ],
+              ),
+            ],
           ],
         ),
       ),

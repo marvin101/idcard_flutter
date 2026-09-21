@@ -29,6 +29,58 @@ class StudentFieldDefinition {
       );
 }
 
+class BuiltinStudentField {
+  const BuiltinStudentField({
+    required this.key,
+    required this.label,
+    required this.dataType,
+    required this.enabled,
+    required this.required,
+    required this.protected,
+    required this.displayOrder,
+  });
+
+  final String key;
+  final String label;
+  final String dataType;
+  final bool enabled;
+  final bool required;
+  final bool protected;
+  final int displayOrder;
+
+  BuiltinStudentField copyWith({
+    bool? enabled,
+    bool? required,
+    int? displayOrder,
+  }) => BuiltinStudentField(
+    key: key,
+    label: label,
+    dataType: dataType,
+    enabled: enabled ?? this.enabled,
+    required: required ?? this.required,
+    protected: protected,
+    displayOrder: displayOrder ?? this.displayOrder,
+  );
+
+  factory BuiltinStudentField.fromJson(Map<String, dynamic> json) =>
+      BuiltinStudentField(
+        key: json['key'] as String,
+        label: json['label'] as String,
+        dataType: json['data_type'] as String,
+        enabled: json['enabled'] == true,
+        required: json['required'] == true,
+        protected: json['protected'] == true,
+        displayOrder: (json['display_order'] as num?)?.toInt() ?? 0,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'key': key,
+    'enabled': enabled,
+    'required': required,
+    'display_order': displayOrder,
+  };
+}
+
 class StudentCustomFieldValue {
   const StudentCustomFieldValue({
     required this.fieldUuid,
@@ -46,10 +98,7 @@ class StudentCustomFieldValue {
   final String? dataType;
   final bool isActive;
 
-  Map<String, dynamic> toJson() => {
-    'field_uuid': fieldUuid,
-    'value': value,
-  };
+  Map<String, dynamic> toJson() => {'field_uuid': fieldUuid, 'value': value};
 
   factory StudentCustomFieldValue.fromJson(Map<String, dynamic> json) =>
       StudentCustomFieldValue(

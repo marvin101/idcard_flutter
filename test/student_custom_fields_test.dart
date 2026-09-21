@@ -35,12 +35,47 @@ Map<String, dynamic> _studentJson({List<dynamic> customFields = const []}) => {
   'custom_fields': customFields,
 };
 
+http.Response _builtinConfigResponse() => http.Response(
+  jsonEncode({
+    'fields': [
+      for (final entry in {
+        'session_uuid': 'Academic session',
+        'class_uuid': 'Class',
+        'section_uuid': 'Section',
+        'admission_no': 'Admission number',
+        'full_name': 'Full name',
+        'roll_no': 'Roll number',
+        'stream': 'Stream',
+        'father_name': 'Father name',
+        'mother_name': 'Mother name',
+        'dob': 'Date of birth',
+        'gender': 'Gender',
+        'blood_group': 'Blood group',
+        'mobile': 'Mobile',
+        'aadhaar': 'Aadhaar',
+        'address': 'Address',
+      }.entries.toList().asMap().entries)
+        {
+          'key': entry.value.key,
+          'label': entry.value.value,
+          'data_type': 'text',
+          'enabled': true,
+          'required': entry.key < 5,
+          'protected': entry.key < 5,
+          'display_order': entry.key,
+        },
+    ],
+  }),
+  200,
+);
+
 Future<void> _waitUntilLoaded(ApiStudentFormProvider provider) async {
   if (!provider.loading) return;
   final done = Completer<void>();
   void listener() {
     if (!provider.loading && !done.isCompleted) done.complete();
   }
+
   provider.addListener(listener);
   await done.future.timeout(const Duration(seconds: 2));
   provider.removeListener(listener);
@@ -53,7 +88,10 @@ void main() {
       isTrue,
     );
     expect(
-      canManageStudentFields(isPlatformAdmin: false, schoolRole: 'school_admin'),
+      canManageStudentFields(
+        isPlatformAdmin: false,
+        schoolRole: 'school_admin',
+      ),
       isTrue,
     );
     for (final role in ['card_operator', 'teacher', 'staff']) {
@@ -66,48 +104,88 @@ void main() {
 
   test('student model restores returned custom field values', () {
     final student = ApiStudent.fromJson(
-      _studentJson(customFields: [
-        {
-          'field_uuid': 'field-1',
-          'field_key': 'house',
-          'label': 'House',
-          'data_type': 'text',
-          'value': 'Blue',
-          'is_active': true,
-        },
-      ]),
+      _studentJson(
+        customFields: [
+          {
+            'field_uuid': 'field-1',
+            'field_key': 'house',
+            'label': 'House',
+            'data_type': 'text',
+            'value': 'Blue',
+            'is_active': true,
+          },
+        ],
+      ),
     );
     expect(student.customFields.single.fieldUuid, 'field-1');
     expect(student.customFields.single.value, 'Blue');
   });
 
-  test('update serializes custom field values without changing legacy fields', () async {
-    late Map<String, dynamic> body;
-    final api = ApiService(
-      baseUrl: 'https://example.test',
-      client: MockClient((request) async {
-        body = jsonDecode(request.body) as Map<String, dynamic>;
-        return http.Response(jsonEncode(_studentJson()), 200);
-      }),
-    );
-    await api.updateStudent(
-      schoolUuid: 'school-1',
-      studentUuid: 'student-1',
-      sessionUuid: 'session-1',
-      classUuid: 'class-1',
-      sectionUuid: 'section-1',
-      admissionNo: 'A-1',
-      fullName: 'Student One',
-      customFields: const [
-        StudentCustomFieldValue(fieldUuid: 'field-1', value: 'Blue'),
-      ],
-    );
-    expect(body['full_name'], 'Student One');
-    expect(body['custom_fields'], [
-      {'field_uuid': 'field-1', 'value': 'Blue'},
-    ]);
-    api.dispose();
-  });
+  test(
+    'update serializes custom field values without changing legacy fields',
+    () async {
+      late Map<String, dynamic> body;
+      final api = ApiService(
+        baseUrl: 'https://example.test',
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(jsonEncode(_studentJson()), 200);
+        }),
+      );
+      await api.updateStudent(
+        schoolUuid: 'school-1',
+        studentUuid: 'student-1',
+        sessionUuid: 'session-1',
+        classUuid: 'class-1',
+        sectionUuid: 'section-1',
+        admissionNo: 'A-1',
+        fullName: 'Student One',
+        customFields: const [
+          StudentCustomFieldValue(fieldUuid: 'field-1', value: 'Blue'),
+        ],
+      );
+      expect(body['full_name'], 'Student One');
+      expect(body['custom_fields'], [
+        {'field_uuid': 'field-1', 'value': 'Blue'},
+      ]);
+      api.dispose();
+    },
+  );
+
+  test(
+    'update omits disabled built-in values instead of clearing them',
+    () async {
+      late Map<String, dynamic> body;
+      final api = ApiService(
+        baseUrl: 'https://example.test',
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(jsonEncode(_studentJson()), 200);
+        }),
+      );
+      await api.updateStudent(
+        schoolUuid: 'school-1',
+        studentUuid: 'student-1',
+        sessionUuid: 'session-1',
+        classUuid: 'class-1',
+        sectionUuid: 'section-1',
+        admissionNo: 'A-1',
+        fullName: 'Student One',
+        aadhaar: 'should-not-be-sent',
+        enabledFields: const {
+          'session_uuid',
+          'class_uuid',
+          'section_uuid',
+          'admission_no',
+          'full_name',
+        },
+        customFields: const [],
+      );
+      expect(body.containsKey('aadhaar'), isFalse);
+      expect(body['full_name'], 'Student One');
+      api.dispose();
+    },
+  );
 
   test('zero custom fields preserves the existing form state', () async {
     final api = ApiService(
@@ -118,6 +196,8 @@ void main() {
           case '/schools/school-1/classes':
           case '/schools/school-1/student-fields':
             return http.Response('[]', 200);
+          case '/schools/school-1/student-field-config':
+            return _builtinConfigResponse();
           default:
             fail('Unexpected request: ${request.url}');
         }
@@ -134,16 +214,18 @@ void main() {
 
   test('edit form controllers restore saved active custom values', () async {
     final student = ApiStudent.fromJson(
-      _studentJson(customFields: [
-        {
-          'field_uuid': 'field-1',
-          'field_key': 'house',
-          'label': 'House',
-          'data_type': 'text',
-          'value': 'Blue',
-          'is_active': true,
-        },
-      ]),
+      _studentJson(
+        customFields: [
+          {
+            'field_uuid': 'field-1',
+            'field_key': 'house',
+            'label': 'House',
+            'data_type': 'text',
+            'value': 'Blue',
+            'is_active': true,
+          },
+        ],
+      ),
     );
     final api = ApiService(
       baseUrl: 'https://example.test',
@@ -152,7 +234,12 @@ void main() {
           case '/schools/school-1/academic-sessions':
             return http.Response(
               jsonEncode([
-                {'uuid': 'session-1', 'name': '2026', 'is_current': true, 'is_active': true},
+                {
+                  'uuid': 'session-1',
+                  'name': '2026',
+                  'is_current': true,
+                  'is_active': true,
+                },
               ]),
               200,
             );
@@ -178,6 +265,8 @@ void main() {
               ]),
               200,
             );
+          case '/schools/school-1/student-field-config':
+            return _builtinConfigResponse();
           case '/schools/school-1/classes/class-1/sections':
             return http.Response(
               jsonEncode([
@@ -229,6 +318,9 @@ void main() {
             request.url.path == '/schools/school-1/classes') {
           return http.Response('[]', 200);
         }
+        if (request.url.path == '/schools/school-1/student-field-config') {
+          return _builtinConfigResponse();
+        }
         fail('Unexpected request: ${request.url}');
       }),
     );
@@ -241,10 +333,7 @@ void main() {
         value: provider,
         child: MaterialApp(
           home: Scaffold(
-            body: Form(
-              key: formKey,
-              child: const CustomStudentFieldsSection(),
-            ),
+            body: Form(key: formKey, child: const CustomStudentFieldsSection()),
           ),
         ),
       ),

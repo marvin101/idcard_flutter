@@ -94,7 +94,24 @@ class _StudentGridScreenState extends State<StudentGridScreen> {
   String? _sectionFilter;
 
   List<_Column> get _columns => [
-    ..._systemColumns,
+    ...(_page?.systemFields.isNotEmpty == true
+        ? _page!.systemFields
+              .where((field) => field.enabled)
+              .map(
+                (field) => _Column(
+                  field.key,
+                  field.label,
+                  kind: switch (field.key) {
+                    'session_uuid' => 'session',
+                    'class_uuid' => 'class',
+                    'section_uuid' => 'section',
+                    'blood_group' => 'blood',
+                    _ => field.dataType,
+                  },
+                  required: field.required,
+                ),
+              )
+        : _systemColumns),
     ...?_page?.customFields.map(
       (field) => _Column(
         'custom:${field.uuid}',

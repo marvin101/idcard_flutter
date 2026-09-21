@@ -52,6 +52,18 @@ class ApiStudentFormProvider extends ChangeNotifier {
   List<SchoolClass> classes = const [];
   List<SchoolSection> sections = const [];
   List<StudentFieldDefinition> customFields = const [];
+  List<BuiltinStudentField> builtinFields = const [];
+
+  bool isFieldEnabled(String key) =>
+      builtinFields.isEmpty ||
+      builtinFields.any((field) => field.key == key && field.enabled);
+  bool isFieldRequired(String key) => builtinFields.any(
+    (field) => field.key == key && field.enabled && field.required,
+  );
+  Set<String> get enabledBuiltinKeys => builtinFields
+      .where((field) => field.enabled)
+      .map((field) => field.key)
+      .toSet();
 
   String? selectedSessionUuid;
   String? selectedClassUuid;
@@ -143,6 +155,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
     try {
       sessions = await api.getAcademicSessions(schoolUuid);
       classes = await api.getClasses(schoolUuid);
+      builtinFields = await api.getBuiltinStudentFields(schoolUuid);
       customFields = await api.getStudentFields(schoolUuid);
       for (final field in customFields) {
         customFieldControllers[field.uuid] = TextEditingController();
@@ -360,6 +373,29 @@ class ApiStudentFormProvider extends ChangeNotifier {
       return false;
     }
 
+    final values = <String, Object?>{
+      'roll_no': rollNoController.text,
+      'stream': streamController.text,
+      'father_name': fatherNameController.text,
+      'mother_name': motherNameController.text,
+      'dob': dob,
+      'gender': selectedGender,
+      'blood_group': selectedBloodGroup,
+      'mobile': mobileController.text,
+      'aadhaar': aadhaarController.text,
+      'address': addressController.text,
+    };
+    for (final field in builtinFields.where(
+      (item) => item.enabled && item.required,
+    )) {
+      final value = values[field.key];
+      if (value == null || (value is String && value.trim().isEmpty)) {
+        _error = '${field.label} is required.';
+        notifyListeners();
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -408,6 +444,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
           aadhaar: _nullable(aadhaarController.text),
           address: _nullable(addressController.text),
           customFields: serializedCustomFields,
+          enabledFields: enabledBuiltinKeys,
         );
 
         // ------------------------------------------------------
@@ -449,6 +486,7 @@ class ApiStudentFormProvider extends ChangeNotifier {
           aadhaar: _nullable(aadhaarController.text),
           address: _nullable(addressController.text),
           customFields: serializedCustomFields,
+          enabledFields: enabledBuiltinKeys,
         );
 
         // ------------------------------------------------------

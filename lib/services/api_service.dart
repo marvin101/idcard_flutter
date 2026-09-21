@@ -1625,6 +1625,7 @@ class ApiService {
     String? aadhaar,
     String? address,
     List<StudentCustomFieldValue> customFields = const [],
+    Set<String>? enabledFields,
   }) async {
     final request = http.MultipartRequest(
       'POST',
@@ -1638,22 +1639,26 @@ class ApiService {
         ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
     );
 
-    final studentData = {
+    final enabled = enabledFields;
+    final studentData = <String, dynamic>{
       'session_uuid': sessionUuid,
       'class_uuid': classUuid,
       'section_uuid': sectionUuid,
       'admission_no': admissionNo,
-      'roll_no': rollNo,
-      'stream': stream,
       'full_name': fullName,
-      'father_name': fatherName,
-      'mother_name': motherName,
-      'dob': _formatDate(dob),
-      'gender': gender,
-      'blood_group': bloodGroup,
-      'mobile': mobile,
-      'aadhaar': aadhaar,
-      'address': address,
+      if (enabled == null || enabled.contains('roll_no')) 'roll_no': rollNo,
+      if (enabled == null || enabled.contains('stream')) 'stream': stream,
+      if (enabled == null || enabled.contains('father_name'))
+        'father_name': fatherName,
+      if (enabled == null || enabled.contains('mother_name'))
+        'mother_name': motherName,
+      if (enabled == null || enabled.contains('dob')) 'dob': _formatDate(dob),
+      if (enabled == null || enabled.contains('gender')) 'gender': gender,
+      if (enabled == null || enabled.contains('blood_group'))
+        'blood_group': bloodGroup,
+      if (enabled == null || enabled.contains('mobile')) 'mobile': mobile,
+      if (enabled == null || enabled.contains('aadhaar')) 'aadhaar': aadhaar,
+      if (enabled == null || enabled.contains('address')) 'address': address,
       'custom_fields': customFields.map((item) => item.toJson()).toList(),
     };
 
@@ -1730,26 +1735,37 @@ class ApiService {
     String? address,
     String? photoPath,
     List<StudentCustomFieldValue>? customFields,
+    Set<String>? enabledFields,
   }) async {
     final response = await _client.put(
       _uri('/schools/$schoolUuid/students/$studentUuid'),
       headers: _headers,
-      body: jsonEncode({
+      body: jsonEncode(<String, dynamic>{
         'session_uuid': sessionUuid,
         'class_uuid': classUuid,
         'section_uuid': sectionUuid,
         'admission_no': admissionNo,
-        'roll_no': rollNo,
-        'stream': stream,
         'full_name': fullName,
-        'father_name': fatherName,
-        'mother_name': motherName,
-        'dob': _formatDate(dob),
-        'gender': gender,
-        'blood_group': bloodGroup,
-        'mobile': mobile,
-        'aadhaar': aadhaar,
-        'address': address,
+        if (enabledFields == null || enabledFields.contains('roll_no'))
+          'roll_no': rollNo,
+        if (enabledFields == null || enabledFields.contains('stream'))
+          'stream': stream,
+        if (enabledFields == null || enabledFields.contains('father_name'))
+          'father_name': fatherName,
+        if (enabledFields == null || enabledFields.contains('mother_name'))
+          'mother_name': motherName,
+        if (enabledFields == null || enabledFields.contains('dob'))
+          'dob': _formatDate(dob),
+        if (enabledFields == null || enabledFields.contains('gender'))
+          'gender': gender,
+        if (enabledFields == null || enabledFields.contains('blood_group'))
+          'blood_group': bloodGroup,
+        if (enabledFields == null || enabledFields.contains('mobile'))
+          'mobile': mobile,
+        if (enabledFields == null || enabledFields.contains('aadhaar'))
+          'aadhaar': aadhaar,
+        if (enabledFields == null || enabledFields.contains('address'))
+          'address': address,
         'photo_path': photoPath,
         if (customFields != null)
           'custom_fields': customFields.map((item) => item.toJson()).toList(),
@@ -1771,6 +1787,40 @@ class ApiService {
         .map(
           (item) =>
               StudentFieldDefinition.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  Future<List<BuiltinStudentField>> getBuiltinStudentFields(
+    String schoolUuid,
+  ) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/student-field-config'),
+      headers: _headers,
+    );
+    final fields = _decodeMap(response)['fields'] as List<dynamic>? ?? const [];
+    return fields
+        .map(
+          (item) => BuiltinStudentField.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  Future<List<BuiltinStudentField>> updateBuiltinStudentFields({
+    required String schoolUuid,
+    required List<BuiltinStudentField> fields,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/student-field-config'),
+      headers: _headers,
+      body: jsonEncode({
+        'fields': fields.map((item) => item.toJson()).toList(),
+      }),
+    );
+    final values = _decodeMap(response)['fields'] as List<dynamic>? ?? const [];
+    return values
+        .map(
+          (item) => BuiltinStudentField.fromJson(item as Map<String, dynamic>),
         )
         .toList();
   }

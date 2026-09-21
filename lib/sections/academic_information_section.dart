@@ -75,11 +75,16 @@ class AcademicInformationSection extends StatelessWidget {
                   validator: (value) =>
                       Validators.required(value, 'Admission No.'),
                 ),
-                AppTextInput(
-                  controller: provider.rollNoController,
-                  label: 'Roll No.',
-                  hintText: 'Enter Roll Number',
-                ),
+                if (provider.isFieldEnabled('roll_no'))
+                  AppTextInput(
+                    controller: provider.rollNoController,
+                    label: 'Roll No.',
+                    hintText: 'Enter Roll Number',
+                    requiredField: provider.isFieldRequired('roll_no'),
+                    validator: provider.isFieldRequired('roll_no')
+                        ? (value) => Validators.required(value, 'Roll No.')
+                        : null,
+                  ),
               ],
             ),
 
@@ -175,11 +180,16 @@ class AcademicInformationSection extends StatelessWidget {
                   },
                 ),
 
-                AppTextInput(
-                  controller: provider.streamController,
-                  label: 'Stream',
-                  hintText: 'Science / Commerce / Arts',
-                ),
+                if (provider.isFieldEnabled('stream'))
+                  AppTextInput(
+                    controller: provider.streamController,
+                    label: 'Stream',
+                    hintText: 'Science / Commerce / Arts',
+                    requiredField: provider.isFieldRequired('stream'),
+                    validator: provider.isFieldRequired('stream')
+                        ? (value) => Validators.required(value, 'Stream')
+                        : null,
+                  ),
               ],
             ),
 
@@ -188,26 +198,33 @@ class AcademicInformationSection extends StatelessWidget {
             // --------------------------------------------------
             // Blood Group
             // --------------------------------------------------
-            ResponsiveRow(
-              children: [
-                AppDropdown<String>(
-                  label: 'Blood Group',
-                  value: provider.selectedBloodGroup,
-                  items: const [
-                    DropdownMenuItem(value: 'A+', child: Text('A+')),
-                    DropdownMenuItem(value: 'A-', child: Text('A-')),
-                    DropdownMenuItem(value: 'B+', child: Text('B+')),
-                    DropdownMenuItem(value: 'B-', child: Text('B-')),
-                    DropdownMenuItem(value: 'AB+', child: Text('AB+')),
-                    DropdownMenuItem(value: 'AB-', child: Text('AB-')),
-                    DropdownMenuItem(value: 'O+', child: Text('O+')),
-                    DropdownMenuItem(value: 'O-', child: Text('O-')),
-                  ],
-                  onChanged: provider.setBloodGroup,
-                ),
-                const SizedBox(),
-              ],
-            ),
+            if (provider.isFieldEnabled('blood_group'))
+              ResponsiveRow(
+                children: [
+                  AppDropdown<String>(
+                    label: 'Blood Group',
+                    value: provider.selectedBloodGroup,
+                    requiredField: provider.isFieldRequired('blood_group'),
+                    items: const [
+                      DropdownMenuItem(value: 'A+', child: Text('A+')),
+                      DropdownMenuItem(value: 'A-', child: Text('A-')),
+                      DropdownMenuItem(value: 'B+', child: Text('B+')),
+                      DropdownMenuItem(value: 'B-', child: Text('B-')),
+                      DropdownMenuItem(value: 'AB+', child: Text('AB+')),
+                      DropdownMenuItem(value: 'AB-', child: Text('AB-')),
+                      DropdownMenuItem(value: 'O+', child: Text('O+')),
+                      DropdownMenuItem(value: 'O-', child: Text('O-')),
+                    ],
+                    onChanged: provider.setBloodGroup,
+                    validator: provider.isFieldRequired('blood_group')
+                        ? (value) => value == null || value.isEmpty
+                              ? 'Please select a blood group'
+                              : null
+                        : null,
+                  ),
+                  const SizedBox(),
+                ],
+              ),
           ],
         ),
       ),

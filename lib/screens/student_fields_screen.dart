@@ -4,30 +4,10 @@ import '../layouts/main_layout.dart';
 import '../models/student_field.dart';
 import '../services/api_service.dart';
 
-const systemStudentFields = <String>[
-  'Photo',
-  'Student Name',
-  'Admission Number',
-  'Roll Number',
-  "Father's Name",
-  "Mother's Name",
-  'Date of Birth',
-  'Gender',
-  'Blood Group',
-  'Mobile',
-  'Aadhaar',
-  'Address',
-  'Stream',
-  'Academic Session',
-  'Class',
-  'Section',
-];
-
 bool canManageStudentFields({
   required bool isPlatformAdmin,
   required String? schoolRole,
-}) =>
-    isPlatformAdmin || schoolRole == 'school_admin' || schoolRole == 'admin';
+}) => isPlatformAdmin || schoolRole == 'school_admin' || schoolRole == 'admin';
 
 class StudentFieldsScreen extends StatefulWidget {
   const StudentFieldsScreen({
@@ -46,6 +26,7 @@ class StudentFieldsScreen extends StatefulWidget {
 }
 
 class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
+  List<BuiltinStudentField> _builtinFields = const [];
   List<StudentFieldDefinition> _fields = const [];
   bool _loading = true;
   String? _error;
@@ -62,16 +43,71 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
       _error = null;
     });
     try {
-      final fields = await widget.api.getStudentFields(
-        widget.schoolUuid,
-        includeInactive: true,
-      );
-      if (mounted) setState(() => _fields = fields);
+      final values = await Future.wait([
+        widget.api.getBuiltinStudentFields(widget.schoolUuid),
+        widget.api.getStudentFields(widget.schoolUuid, includeInactive: true),
+      ]);
+      if (mounted) {
+        setState(() {
+          _builtinFields = values[0] as List<BuiltinStudentField>;
+          _fields = values[1] as List<StudentFieldDefinition>;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _saveBuiltin(List<BuiltinStudentField> fields) async {
+    setState(() => _builtinFields = fields);
+    try {
+      final saved = await widget.api.updateBuiltinStudentFields(
+        schoolUuid: widget.schoolUuid,
+        fields: fields,
+      );
+      if (mounted) setState(() => _builtinFields = saved);
+    } catch (error) {
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _toggleBuiltinEnabled(int index, bool enabled) {
+    final field = _builtinFields[index];
+    if (field.protected) return;
+    final updated = [..._builtinFields];
+    updated[index] = field.copyWith(
+      enabled: enabled,
+      required: enabled ? field.required : false,
+    );
+    _saveBuiltin(updated);
+  }
+
+  void _toggleBuiltinRequired(int index, bool required) {
+    final field = _builtinFields[index];
+    if (field.protected || !field.enabled) return;
+    final updated = [..._builtinFields];
+    updated[index] = field.copyWith(required: required);
+    _saveBuiltin(updated);
+  }
+
+  void _reorderBuiltin(int oldIndex, int newIndex) {
+    final updated = [..._builtinFields];
+    final item = updated.removeAt(oldIndex);
+    updated.insert(newIndex, item);
+    _saveBuiltin([
+      for (var index = 0; index < updated.length; index++)
+        updated[index].copyWith(displayOrder: index),
+    ]);
   }
 
   Future<void> _edit([StudentFieldDefinition? field]) async {
@@ -102,7 +138,10 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -119,7 +158,10 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -140,7 +182,10 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -167,23 +212,64 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'SYSTEM FIELDS',
+                  'BUILT-IN FIELDS',
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
                 const SizedBox(height: 8),
-                Card(
-                  child: Column(
-                    children: [
-                      for (final field in systemStudentFields)
-                        ListTile(
-                          leading: const Icon(Icons.lock_outline),
-                          title: Text(field),
-                          subtitle: const Text(
-                            'System field · typed database column',
-                          ),
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  itemCount: _builtinFields.length,
+                  onReorderItem: _reorderBuiltin,
+                  itemBuilder: (context, index) {
+                    final field = _builtinFields[index];
+                    return Card(
+                      key: ValueKey('builtin-${field.key}'),
+                      child: ListTile(
+                        leading: ReorderableDragStartListener(
+                          index: index,
+                          child: const Icon(Icons.drag_handle),
                         ),
-                    ],
-                  ),
+                        title: Text(field.label),
+                        subtitle: Text(
+                          field.protected
+                              ? 'Required by CampusID'
+                              : field.dataType,
+                        ),
+                        trailing: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (field.protected)
+                              const Tooltip(
+                                message: 'Required by CampusID',
+                                child: Icon(Icons.lock_outline),
+                              ),
+                            const Text('Enabled'),
+                            Switch(
+                              key: Key('builtin-enabled-${field.key}'),
+                              value: field.enabled,
+                              onChanged: field.protected
+                                  ? null
+                                  : (value) =>
+                                        _toggleBuiltinEnabled(index, value),
+                            ),
+                            const Text('Required'),
+                            Checkbox(
+                              key: Key('builtin-required-${field.key}'),
+                              value: field.required,
+                              onChanged: field.protected || !field.enabled
+                                  ? null
+                                  : (value) => _toggleBuiltinRequired(
+                                      index,
+                                      value ?? false,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 28),
                 Row(
@@ -286,7 +372,9 @@ class _FieldDialogState extends State<_FieldDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.field == null ? 'Add Student Field' : 'Edit Student Field'),
+    title: Text(
+      widget.field == null ? 'Add Student Field' : 'Edit Student Field',
+    ),
     content: SizedBox(
       width: 440,
       child: Form(
@@ -298,7 +386,8 @@ class _FieldDialogState extends State<_FieldDialog> {
               controller: _keyController,
               enabled: widget.field == null,
               decoration: const InputDecoration(labelText: 'Field key'),
-              validator: (value) => RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(value?.trim() ?? '')
+              validator: (value) =>
+                  RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(value?.trim() ?? '')
                   ? null
                   : 'Use lowercase letters, numbers, and underscores.',
             ),
@@ -306,14 +395,17 @@ class _FieldDialogState extends State<_FieldDialog> {
             TextFormField(
               controller: _labelController,
               decoration: const InputDecoration(labelText: 'Label'),
-              validator: (value) => (value?.trim().isEmpty ?? true) ? 'Label is required.' : null,
+              validator: (value) =>
+                  (value?.trim().isEmpty ?? true) ? 'Label is required.' : null,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: _dataType,
               decoration: const InputDecoration(labelText: 'Type'),
               items: const ['text', 'multiline', 'number', 'date', 'phone']
-                  .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                  .map(
+                    (type) => DropdownMenuItem(value: type, child: Text(type)),
+                  )
                   .toList(),
               onChanged: (value) => setState(() => _dataType = value!),
             ),
@@ -328,7 +420,10 @@ class _FieldDialogState extends State<_FieldDialog> {
       ),
     ),
     actions: [
-      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
       FilledButton(
         onPressed: () {
           if (!(_formKey.currentState?.validate() ?? false)) return;

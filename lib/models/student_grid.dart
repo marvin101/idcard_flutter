@@ -68,6 +68,7 @@ class StudentGridPage {
     required this.limit,
     required this.hasMore,
     required this.customFields,
+    this.systemFields = const [],
     required this.sessions,
     required this.classes,
     required this.sections,
@@ -79,6 +80,7 @@ class StudentGridPage {
   final int limit;
   final bool hasMore;
   final List<StudentFieldDefinition> customFields;
+  final List<BuiltinStudentField> systemFields;
   final List<StudentGridLookupItem> sessions;
   final List<StudentGridLookupItem> classes;
   final List<StudentGridLookupItem> sections;
@@ -98,6 +100,12 @@ class StudentGridPage {
             .map(
               (item) =>
                   StudentFieldDefinition.fromJson(item as Map<String, dynamic>),
+            )
+            .toList(),
+        systemFields: (json['system_fields'] as List<dynamic>? ?? const [])
+            .map(
+              (item) =>
+                  BuiltinStudentField.fromJson(item as Map<String, dynamic>),
             )
             .toList(),
         sessions: _lookups(json['sessions']),

@@ -11,7 +11,13 @@ class ContactInformationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<ApiStudentFormProvider>();
+    final provider = context.watch<ApiStudentFormProvider>();
+
+    if (!provider.isFieldEnabled('mobile') &&
+        !provider.isFieldEnabled('aadhaar') &&
+        !provider.isFieldEnabled('address')) {
+      return const SizedBox.shrink();
+    }
 
     return Card(
       elevation: 3,
@@ -32,58 +38,72 @@ class ContactInformationSection extends StatelessWidget {
 
             ResponsiveRow(
               children: [
-                AppTextInput(
-                  controller: provider.mobileController,
-                  label: "Mobile No.",
-                  hintText: "10-digit mobile number",
-                  keyboardType: TextInputType.phone,
-                  maxLength: 10,
-                  requiredField: true,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return "Mobile number is required";
-                    }
+                if (provider.isFieldEnabled('mobile'))
+                  AppTextInput(
+                    controller: provider.mobileController,
+                    label: "Mobile No.",
+                    hintText: "10-digit mobile number",
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    requiredField: provider.isFieldRequired('mobile'),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return provider.isFieldRequired('mobile')
+                            ? "Mobile number is required"
+                            : null;
+                      }
 
-                    if (value.length != 10) {
-                      return "Enter a valid 10-digit mobile number";
-                    }
+                      if (value.length != 10) {
+                        return "Enter a valid 10-digit mobile number";
+                      }
 
-                    return null;
-                  },
-                ),
-
-                AppTextInput(
-                  controller: provider.aadhaarController,
-                  label: "Aadhaar No.",
-                  hintText: "12-digit Aadhaar number",
-                  keyboardType: TextInputType.number,
-                  maxLength: 12,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
                       return null;
-                    }
+                    },
+                  ),
 
-                    if (value.length != 12) {
-                      return "Aadhaar must contain 12 digits";
-                    }
+                if (provider.isFieldEnabled('aadhaar'))
+                  AppTextInput(
+                    controller: provider.aadhaarController,
+                    label: "Aadhaar No.",
+                    hintText: "12-digit Aadhaar number",
+                    keyboardType: TextInputType.number,
+                    maxLength: 12,
+                    requiredField: provider.isFieldRequired('aadhaar'),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return provider.isFieldRequired('aadhaar')
+                            ? 'Aadhaar is required'
+                            : null;
+                      }
 
-                    return null;
-                  },
-                ),
+                      if (value.length != 12) {
+                        return "Aadhaar must contain 12 digits";
+                      }
+
+                      return null;
+                    },
+                  ),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            AppTextInput(
-              controller: provider.addressController,
-              label: "Address",
-              hintText: "House No., Street, City, State, PIN",
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-            ),
+            if (provider.isFieldEnabled('address'))
+              AppTextInput(
+                controller: provider.addressController,
+                label: "Address",
+                hintText: "House No., Street, City, State, PIN",
+                requiredField: provider.isFieldRequired('address'),
+                validator: provider.isFieldRequired('address')
+                    ? (value) => value == null || value.trim().isEmpty
+                          ? 'Address is required'
+                          : null
+                    : null,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+              ),
           ],
         ),
       ),

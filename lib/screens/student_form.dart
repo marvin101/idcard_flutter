@@ -3,9 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../layouts/main_layout.dart';
 import '../providers/api_student_form_provider.dart';
-import '../sections/academic_information_section.dart';
-import '../sections/contact_information_section.dart';
-import '../sections/personal_information_section.dart';
+import '../sections/builtin_student_fields_section.dart';
 import '../sections/photo_section.dart';
 import '../sections/custom_student_fields_section.dart';
 import '../services/api_service.dart';
@@ -85,13 +83,7 @@ class _StudentFormView extends StatelessWidget {
                 StudentLifecycleSummary(student: provider.student!),
                 const SizedBox(height: 24),
               ],
-              const PersonalInformationSection(),
-              const SizedBox(height: 24),
-
-              const AcademicInformationSection(),
-              const SizedBox(height: 24),
-
-              const ContactInformationSection(),
+              const BuiltinStudentFieldsSection(),
               const SizedBox(height: 24),
 
               const CustomStudentFieldsSection(),
