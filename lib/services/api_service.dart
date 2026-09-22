@@ -502,6 +502,76 @@ class ApiService {
     return _decodeMap(response);
   }
 
+  Future<Map<String, dynamic>> updateMe({
+    required String fullName,
+    String? mobile,
+  }) async {
+    final response = await _client.patch(
+      _uri('/users/me'),
+      headers: _headers,
+      body: jsonEncode({
+        'full_name': fullName.trim(),
+        'mobile': _nullIfEmpty(mobile),
+      }),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> uploadProfilePhoto(XFile photo) async {
+    final sourceFilename = photo.name.trim();
+    final lowerName = sourceFilename.toLowerCase();
+    final mimeType =
+        photo.mimeType ??
+        switch (lowerName) {
+          String name when name.endsWith('.jpg') || name.endsWith('.jpeg') =>
+            'image/jpeg',
+          String name when name.endsWith('.png') => 'image/png',
+          String name when name.endsWith('.webp') => 'image/webp',
+          _ => null,
+        };
+    if (!{'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType)) {
+      throw const ApiException(0, 'Choose a JPEG, PNG or WebP profile photo.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/users/me/profile-photo'),
+    );
+    request.headers.addAll(
+      Map<String, String>.from(_headers)
+        ..removeWhere((key, value) => key.toLowerCase() == 'content-type'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'photo',
+        await photo.readAsBytes(),
+        filename: sourceFilename.isEmpty ? 'profile-photo' : sourceFilename,
+        contentType: MediaType.parse(mimeType!),
+      ),
+    );
+    return _decodeMap(
+      await http.Response.fromStream(await _client.send(request)),
+    );
+  }
+
+  Future<Map<String, dynamic>> removeProfilePhoto() async => _decodeMap(
+    await _client.delete(_uri('/users/me/profile-photo'), headers: _headers),
+  );
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _client.post(
+      _uri('/users/me/change-password'),
+      headers: _headers,
+      body: jsonEncode({
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      }),
+    );
+    _decode(response);
+  }
+
   Future<List<dynamic>> getSchools() async {
     final response = await _client.get(_uri('/schools'), headers: _headers);
     return _decodeList(response);

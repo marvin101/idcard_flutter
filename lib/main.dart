@@ -13,6 +13,7 @@ import 'navigation/app_router.dart';
 import 'providers/auth_provider.dart';
 import 'providers/display_scale_provider.dart';
 import 'screens/academic_sessions_screen.dart';
+import 'screens/account_screen.dart';
 import 'screens/bulk_photo_import_screen.dart';
 import 'screens/card_designer_route_screen.dart';
 import 'screens/cards_screen.dart';
@@ -189,6 +190,16 @@ class _AuthenticatedRoute extends StatelessWidget {
       return AuthenticatedShell(
         child: PlatformAdministrationScreen(
           api: context.read<AuthProvider>().api,
+        ),
+      );
+    }
+    if (routeName == AppRoutes.accountProfile ||
+        routeName == AppRoutes.accountSecurity) {
+      return AuthenticatedShell(
+        child: AccountScreen(
+          initialSection: routeName == AppRoutes.accountSecurity
+              ? AccountSection.security
+              : AccountSection.profile,
         ),
       );
     }

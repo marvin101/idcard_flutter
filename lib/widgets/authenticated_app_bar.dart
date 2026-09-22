@@ -44,6 +44,7 @@ class AuthenticatedAppBar extends StatelessWidget
     final navigation =
         persistentAuthenticatedNavigationOf(context) ??
         const AuthenticatedNavigationStrip();
+    final user = context.watch<AuthProvider>().user;
 
     return AppBar(
       toolbarHeight: 58,
@@ -76,28 +77,75 @@ class AuthenticatedAppBar extends StatelessWidget
       ),
       actions: [
         ...actions,
+        PopupMenuButton<_AccountMenuAction>(
+          key: const Key('account-avatar-menu'),
+          tooltip: 'Account',
+          onSelected: (action) async {
+            switch (action) {
+              case _AccountMenuAction.profile:
+                AppNavigation.navigateToModule(
+                  context,
+                  AppRoutes.accountProfile,
+                );
+              case _AccountMenuAction.security:
+                AppNavigation.navigateToModule(
+                  context,
+                  AppRoutes.accountSecurity,
+                );
+              case _AccountMenuAction.logout:
+                await _signOut(context);
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              key: Key('account-menu-profile'),
+              value: _AccountMenuAction.profile,
+              child: ListTile(
+                leading: Icon(Icons.person_outline_rounded),
+                title: Text('Profile'),
+              ),
+            ),
+            PopupMenuItem(
+              key: Key('account-menu-security'),
+              value: _AccountMenuAction.security,
+              child: ListTile(
+                leading: Icon(Icons.shield_outlined),
+                title: Text('Security'),
+              ),
+            ),
+            PopupMenuDivider(),
+            PopupMenuItem(
+              key: Key('account-menu-logout'),
+              value: _AccountMenuAction.logout,
+              child: ListTile(
+                leading: Icon(Icons.logout_rounded),
+                title: Text('Sign out'),
+              ),
+            ),
+          ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: AppColors.accentSoft,
+              foregroundColor: AppColors.primary,
+              backgroundImage: user?.profilePhotoUrl == null
+                  ? null
+                  : NetworkImage(user!.profilePhotoUrl!),
+              child: user?.profilePhotoUrl == null
+                  ? Text(
+                      user?.initials ?? '?',
+                      key: const Key('account-avatar-initials'),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    )
+                  : null,
+            ),
+          ),
+        ),
         IconButton(
           key: const Key('authenticated-sign-out'),
           tooltip: 'Sign out',
-          onPressed: () async {
-            final guard = AppNavigationGuard.maybeOf(context);
-
-            if (guard != null && !await guard.onNavigateAway()) {
-              return;
-            }
-
-            if (!context.mounted) {
-              return;
-            }
-
-            await context.read<AuthProvider>().logout();
-
-            if (!context.mounted) {
-              return;
-            }
-
-            AppNavigation.resetToPublicRoot(context);
-          },
+          onPressed: () => _signOut(context),
           icon: const Icon(Icons.logout_rounded),
         ),
         const SizedBox(width: 4),
@@ -114,7 +162,18 @@ class AuthenticatedAppBar extends StatelessWidget
       ),
     );
   }
+
+  Future<void> _signOut(BuildContext context) async {
+    final guard = AppNavigationGuard.maybeOf(context);
+    if (guard != null && !await guard.onNavigateAway()) return;
+    if (!context.mounted) return;
+    await context.read<AuthProvider>().logout();
+    if (!context.mounted) return;
+    AppNavigation.resetToPublicRoot(context);
+  }
 }
+
+enum _AccountMenuAction { profile, security, logout }
 
 class AuthenticatedNavigationStrip extends StatefulWidget {
   const AuthenticatedNavigationStrip({super.key});

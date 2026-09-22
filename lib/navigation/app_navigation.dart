@@ -89,6 +89,8 @@ abstract final class AppNavigation {
     AppRoutes.users,
     AppRoutes.design,
     AppRoutes.cards,
+    AppRoutes.accountProfile,
+    AppRoutes.accountSecurity,
   };
 
   static const nestedWorkflowRoutes = <String>{

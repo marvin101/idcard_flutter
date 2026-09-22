@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/auth_models.dart';
@@ -278,6 +279,32 @@ class AuthProvider extends ChangeNotifier {
       _selectedSchool = updated;
     }
     notifyListeners();
+  }
+
+  Future<AuthUser> updateSelfProfile({
+    required String fullName,
+    String? mobile,
+  }) async {
+    final updated = AuthUser.fromJson(
+      await _api.updateMe(fullName: fullName, mobile: mobile),
+    );
+    _user = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  Future<AuthUser> uploadProfilePhoto(XFile photo) async {
+    final updated = AuthUser.fromJson(await _api.uploadProfilePhoto(photo));
+    _user = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  Future<AuthUser> removeProfilePhoto() async {
+    final updated = AuthUser.fromJson(await _api.removeProfilePhoto());
+    _user = updated;
+    notifyListeners();
+    return updated;
   }
 
   Future<void> logout({bool notify = true}) async {

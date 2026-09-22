@@ -7,6 +7,11 @@ class AuthUser {
     this.mobile,
     this.designation,
     this.platformRole,
+    this.profilePhotoUrl,
+    this.lastLogin,
+    this.createdAt,
+    this.updatedAt,
+    this.schoolContexts = const [],
     required this.isPlatformAdmin,
     required this.isActive,
   });
@@ -18,11 +23,29 @@ class AuthUser {
   final String? mobile;
   final String? designation;
   final String? platformRole;
+  final String? profilePhotoUrl;
+  final DateTime? lastLogin;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final List<ProfileSchoolContext> schoolContexts;
   final bool isPlatformAdmin;
   final bool isActive;
 
   bool get isPlatformAdministrator =>
       platformRole == 'platform_admin' || isPlatformAdmin;
+
+  String get initials {
+    final parts = fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) {
+      return username.isEmpty ? '?' : username[0].toUpperCase();
+    }
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
     uuid: json['uuid'] as String,
@@ -32,9 +55,36 @@ class AuthUser {
     mobile: json['mobile'] as String?,
     designation: json['designation'] as String?,
     platformRole: json['platform_role'] as String?,
+    profilePhotoUrl: json['profile_photo_url'] as String?,
+    lastLogin: DateTime.tryParse(json['last_login'] as String? ?? ''),
+    createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+    updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? ''),
+    schoolContexts: (json['school_contexts'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(ProfileSchoolContext.fromJson)
+        .toList(),
     isPlatformAdmin: json['is_platform_admin'] as bool? ?? false,
     isActive: json['is_active'] as bool? ?? true,
   );
+}
+
+class ProfileSchoolContext {
+  const ProfileSchoolContext({
+    required this.schoolUuid,
+    required this.schoolName,
+    required this.role,
+  });
+
+  final String schoolUuid;
+  final String schoolName;
+  final String role;
+
+  factory ProfileSchoolContext.fromJson(Map<String, dynamic> json) =>
+      ProfileSchoolContext(
+        schoolUuid: json['school_uuid'] as String,
+        schoolName: json['school_name'] as String,
+        role: json['role'] as String,
+      );
 }
 
 class SchoolSummary {

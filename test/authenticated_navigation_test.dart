@@ -407,6 +407,11 @@ void main() {
         findsOneWidget,
         reason: 'missing authenticated navigation on $route',
       );
+      expect(
+        find.byKey(const Key('account-avatar-menu')),
+        findsOneWidget,
+        reason: 'missing account menu on $route',
+      );
       expect(find.byKey(const Key('top-nav-/dashboard')), findsOneWidget);
     }
   });

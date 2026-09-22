@@ -36,6 +36,8 @@ abstract final class AppRoutes {
   static const users = '/users';
   static const design = '/design';
   static const cards = '/cards';
+  static const accountProfile = '/account/profile';
+  static const accountSecurity = '/account/security';
   static const privacy = '/privacy';
   static const terms = '/terms';
   static const support = '/support';
@@ -68,6 +70,8 @@ abstract final class AppRoutes {
     users,
     design,
     cards,
+    accountProfile,
+    accountSecurity,
   };
 
   static bool isProtected(String? routeName) =>
