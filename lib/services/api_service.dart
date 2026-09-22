@@ -503,14 +503,18 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> updateMe({
+    required String username,
     required String fullName,
+    String? email,
     String? mobile,
   }) async {
     final response = await _client.patch(
       _uri('/users/me'),
       headers: _headers,
       body: jsonEncode({
+        'username': username.trim(),
         'full_name': fullName.trim(),
+        'email': _nullIfEmpty(email),
         'mobile': _nullIfEmpty(mobile),
       }),
     );

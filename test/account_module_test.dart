@@ -86,15 +86,17 @@ class _AccountAuthProvider extends AuthProvider {
 
   @override
   Future<AuthUser> updateSelfProfile({
+    required String username,
     required String fullName,
+    String? email,
     String? mobile,
   }) async {
     if (profileError != null) throw profileError!;
     _user = AuthUser(
       uuid: _user.uuid,
-      username: _user.username,
+      username: username.trim(),
       fullName: fullName.trim(),
-      email: _user.email,
+      email: email?.trim().isEmpty == true ? null : email?.trim(),
       mobile: mobile?.trim(),
       designation: _user.designation,
       platformRole: _user.platformRole,
@@ -165,11 +167,21 @@ void main() {
     expect(find.byKey(const Key('account-avatar-menu')), findsOneWidget);
   });
 
-  testWidgets('profile saves editable name and phone', (tester) async {
+  testWidgets('profile saves editable username, name, email, and phone', (
+    tester,
+  ) async {
     final provider = await _pumpAccount(tester);
+    await tester.enterText(
+      find.byKey(const Key('profile-username')),
+      'updated.user',
+    );
     await tester.enterText(
       find.byKey(const Key('profile-full-name')),
       'Updated User',
+    );
+    await tester.enterText(
+      find.byKey(const Key('profile-email')),
+      'updated@example.com',
     );
     await tester.enterText(
       find.byKey(const Key('profile-phone')),
@@ -179,12 +191,14 @@ void main() {
     await tester.tap(find.byKey(const Key('profile-save')));
     await tester.pumpAndSettle();
 
+    expect(provider.user.username, 'updated.user');
     expect(provider.user.fullName, 'Updated User');
+    expect(provider.user.email, 'updated@example.com');
     expect(provider.user.mobile, '+1 202 555 0199');
     expect(find.text('Profile updated.'), findsOneWidget);
   });
 
-  testWidgets('profile leaves email and role read-only and reports errors', (
+  testWidgets('profile leaves only role read-only and reports errors', (
     tester,
   ) async {
     final provider = await _pumpAccount(tester);
@@ -205,7 +219,7 @@ void main() {
         matching: find.byType(EditableText),
       ),
     );
-    expect(email.readOnly, isTrue);
+    expect(email.readOnly, isFalse);
     expect(role.readOnly, isTrue);
 
     await tester.ensureVisible(find.byKey(const Key('profile-save')));

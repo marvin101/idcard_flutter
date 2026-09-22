@@ -109,6 +109,7 @@ class _PlatformAdministrationScreenState
           text: field == 'password' ? '' : (user?[field] as String? ?? ''),
         ),
     };
+    var platformRole = 'regular';
     final key = GlobalKey<FormState>();
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -133,6 +134,30 @@ class _PlatformAdministrationScreenState
                     if (user != null)
                       const Text(
                         'Account edits affect every assigned school. Leave password empty to keep it.',
+                      ),
+                    if (!school && user == null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: DropdownButtonFormField<String>(
+                          key: const ValueKey('admin-platform_role'),
+                          initialValue: platformRole,
+                          decoration: const InputDecoration(
+                            labelText: 'Account type',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'regular',
+                              child: Text('Regular user'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'platform_admin',
+                              child: Text('Platform administrator'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) platformRole = value;
+                          },
+                        ),
                       ),
                     for (final field in fields)
                       Padding(
@@ -183,6 +208,10 @@ class _PlatformAdministrationScreenState
                       field: field == 'password'
                           ? controllers[field]!.text
                           : controllers[field]!.text.trim(),
+                  if (!school && user == null)
+                    'platform_role': platformRole == 'platform_admin'
+                        ? 'platform_admin'
+                        : null,
                 });
               },
               child: const Text('Save'),
@@ -467,8 +496,16 @@ class _PlatformAdministrationScreenState
                               if (action == 'access') await _memberships(user);
                               if (action == 'active' &&
                                   await _confirm(
-                                    'Change account activation?',
-                                    'This affects every school and revokes existing sessions.',
+                                    user['is_active'] == true
+                                        ? 'Deactivate account?'
+                                        : 'Activate account?',
+                                    user['is_active'] == true &&
+                                            (user['platform_role'] ==
+                                                    'platform_admin' ||
+                                                user['is_platform_admin'] ==
+                                                    true)
+                                        ? 'Deactivate this platform administrator? This affects every school, revokes existing sessions, and is blocked if this is the last active platform administrator.'
+                                        : 'This affects every school and revokes existing sessions.',
                                   )) {
                                 await _run(() async {
                                   await widget.api.updateAccount(
@@ -479,8 +516,14 @@ class _PlatformAdministrationScreenState
                               }
                               if (action == 'platform' &&
                                   await _confirm(
-                                    'Change platform authority?',
-                                    'Platform administrators can administer every school and account.',
+                                    user['platform_role'] == 'platform_admin' ||
+                                            user['is_platform_admin'] == true
+                                        ? 'Demote platform administrator?'
+                                        : 'Promote to platform administrator?',
+                                    user['platform_role'] == 'platform_admin' ||
+                                            user['is_platform_admin'] == true
+                                        ? 'Demote this account to a regular user? This is blocked if it is the last active platform administrator.'
+                                        : 'Promote this account? Platform administrators can administer every school and account.',
                                   )) {
                                 await _run(() async {
                                   await widget.api.updateAccount(
@@ -516,9 +559,14 @@ class _PlatformAdministrationScreenState
                                         : 'Activate account',
                                   ),
                                 ),
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'platform',
-                                  child: Text('Change platform role'),
+                                  child: Text(
+                                    user['platform_role'] == 'platform_admin' ||
+                                            user['is_platform_admin'] == true
+                                        ? 'Demote to regular user'
+                                        : 'Promote to platform administrator',
+                                  ),
                                 ),
                               ],
                             ],

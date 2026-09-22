@@ -26,6 +26,7 @@ void main() {
       ];
       final accounts = <Map<String, dynamic>>[];
       var activations = 0;
+      final accountUpdates = <Map<String, dynamic>>[];
       final api = ApiService(
         baseUrl: 'https://example.test',
         client: MockClient((request) async {
@@ -65,9 +66,16 @@ void main() {
                 ...body..remove('password'),
                 'uuid': 'new-user',
                 'is_active': true,
-                'is_platform_admin': false,
+                'is_platform_admin': body['platform_role'] == 'platform_admin',
               });
               return http.Response(jsonEncode(accounts.last), 201);
+            case '/users/new-user/account':
+              final body = jsonDecode(request.body) as Map<String, dynamic>;
+              accountUpdates.add(body);
+              accounts[0].addAll(body);
+              accounts[0]['is_platform_admin'] =
+                  accounts[0]['platform_role'] == 'platform_admin';
+              return http.Response(jsonEncode(accounts[0]), 200);
             default:
               throw StateError('Unexpected ${request.method} ${request.url}');
           }
@@ -119,9 +127,48 @@ void main() {
         find.byKey(const ValueKey('admin-password')),
         'password123',
       );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('admin-platform_role')),
+      );
+      await tester.tap(find.byKey(const ValueKey('admin-platform_role')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Platform administrator').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       expect(find.text('New worker'), findsOneWidget);
+      expect(find.textContaining('Platform Admin'), findsOneWidget);
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demote to regular user'));
+      await tester.pumpAndSettle();
+      expect(accountUpdates, isEmpty);
+      expect(find.text('Demote platform administrator?'), findsOneWidget);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(accountUpdates.last['platform_role'], isNull);
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Promote to platform administrator'));
+      await tester.pumpAndSettle();
+      expect(find.text('Promote to platform administrator?'), findsOneWidget);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(accountUpdates.last['platform_role'], 'platform_admin');
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Deactivate account'));
+      await tester.pumpAndSettle();
+      expect(find.text('Deactivate account?'), findsOneWidget);
+      expect(
+        find.textContaining('last active platform administrator'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       auth.dispose();

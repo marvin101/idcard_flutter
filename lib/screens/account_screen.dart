@@ -132,7 +132,9 @@ class _ProfilePanel extends StatefulWidget {
 
 class _ProfilePanelState extends State<_ProfilePanel> {
   final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
   final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
@@ -143,14 +145,18 @@ class _ProfilePanelState extends State<_ProfilePanel> {
     super.didChangeDependencies();
     if (_initialized) return;
     final user = context.read<AuthProvider>().user;
+    _usernameController.text = user?.username ?? '';
     _nameController.text = user?.fullName ?? '';
+    _emailController.text = user?.email ?? '';
     _phoneController.text = user?.mobile ?? '';
     _initialized = true;
   }
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _nameController.dispose();
+    _emailController.dispose();
     _phoneController.dispose();
     super.dispose();
   }
@@ -171,7 +177,7 @@ class _ProfilePanelState extends State<_ProfilePanel> {
               Text('Profile', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 6),
               const Text(
-                'Manage your personal account details. Your email and access roles are controlled by an administrator.',
+                'Manage your personal account details. Your access roles are controlled by an administrator.',
                 style: TextStyle(color: AppColors.textSecondary),
               ),
               const SizedBox(height: 28),
@@ -182,6 +188,23 @@ class _ProfilePanelState extends State<_ProfilePanel> {
                 onRemove: user.profilePhotoUrl == null ? null : _removePhoto,
               ),
               const SizedBox(height: 28),
+              TextFormField(
+                key: const Key('profile-username'),
+                controller: _usernameController,
+                decoration: const InputDecoration(labelText: 'Username'),
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  final username = value?.trim() ?? '';
+                  if (username.length < 3 || username.length > 100) {
+                    return 'Use 3 to 100 characters.';
+                  }
+                  if (RegExp(r'\s').hasMatch(username)) {
+                    return 'Username cannot contain spaces.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: AppDimensions.fieldSpacing),
               TextFormField(
                 key: const Key('profile-full-name'),
                 controller: _nameController,
@@ -194,12 +217,21 @@ class _ProfilePanelState extends State<_ProfilePanel> {
               const SizedBox(height: AppDimensions.fieldSpacing),
               TextFormField(
                 key: const Key('profile-email'),
-                initialValue: user.email ?? 'Not provided',
-                readOnly: true,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  suffixIcon: Icon(Icons.lock_outline_rounded, size: 18),
-                ),
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'Email'),
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  final email = value?.trim() ?? '';
+                  if (email.isEmpty) return null;
+                  final at = email.lastIndexOf('@');
+                  if (at <= 0 ||
+                      !email.substring(at + 1).contains('.') ||
+                      RegExp(r'\s').hasMatch(email)) {
+                    return 'Enter a valid email address.';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: AppDimensions.fieldSpacing),
               TextFormField(
@@ -271,7 +303,9 @@ class _ProfilePanelState extends State<_ProfilePanel> {
     setState(() => _saving = true);
     try {
       await context.read<AuthProvider>().updateSelfProfile(
+        username: _usernameController.text,
         fullName: _nameController.text,
+        email: _emailController.text,
         mobile: _phoneController.text,
       );
       if (!mounted) return;
@@ -418,7 +452,6 @@ class _AccountMetadata extends StatelessWidget {
         runSpacing: 12,
         children: [
           _metadata('Account status', user.isActive ? 'Active' : 'Inactive'),
-          _metadata('Username', user.username),
           if (user.lastLogin != null)
             _metadata('Last sign in', _formatDate(user.lastLogin!)),
           if (user.createdAt != null)

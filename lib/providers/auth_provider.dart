@@ -282,11 +282,18 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<AuthUser> updateSelfProfile({
+    required String username,
     required String fullName,
+    String? email,
     String? mobile,
   }) async {
     final updated = AuthUser.fromJson(
-      await _api.updateMe(fullName: fullName, mobile: mobile),
+      await _api.updateMe(
+        username: username,
+        fullName: fullName,
+        email: email,
+        mobile: mobile,
+      ),
     );
     _user = updated;
     notifyListeners();
