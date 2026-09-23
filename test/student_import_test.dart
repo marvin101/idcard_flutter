@@ -64,7 +64,13 @@ class _StudentImportApi extends ApiService {
     invalidRows: 0,
     duplicateRows: 0,
     canImport: true,
-    rows: [],
+    rows: [
+      StudentImportPreviewRow(
+        rowNumber: 2,
+        values: {'full_name': 'Asha Sharma'},
+        errors: [],
+      ),
+    ],
   );
 
   @override
@@ -352,18 +358,49 @@ void main() {
     expect(find.text('Open import'), findsOneWidget);
     expect(find.byType(StudentImportScreen), findsNothing);
   });
+
+  testWidgets('preview renders parsed row values and validation status', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await _pumpImportScreen(
+      tester,
+      api: _StudentImportApi(),
+      pickFile: () async => PlatformFile(
+        name: 'students.csv',
+        size: 3,
+        bytes: Uint8List.fromList([1, 2, 3]),
+      ),
+    );
+
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Preview import'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('student-import-preview-table')),
+      findsOneWidget,
+    );
+    expect(find.text('Asha Sharma'), findsOneWidget);
+    expect(find.text('Ready to import'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpImportScreen(
   WidgetTester tester, {
   required StudentImportFilePicker pickFile,
+  ApiService? api,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       home: StudentImportScreen(
         schoolUuid: 'school-1',
         schoolName: 'Campus School',
-        api: ApiService(baseUrl: 'https://example.test'),
+        api: api ?? ApiService(baseUrl: 'https://example.test'),
         pickFile: pickFile,
       ),
     ),

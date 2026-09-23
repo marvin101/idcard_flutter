@@ -198,6 +198,18 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
     });
   }
 
+  void _chooseAnotherFile() {
+    setState(() {
+      _step = 0;
+      _confirmed = false;
+      _error = null;
+      _upload = null;
+      _preview = null;
+      _summary = null;
+      _mappingBySource.clear();
+    });
+  }
+
   Future<void> _runPreview() async {
     setState(() {
       _busy = true;
@@ -423,9 +435,20 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
           ),
         Align(
           alignment: Alignment.centerRight,
-          child: FilledButton(
-            onPressed: _busy ? null : _runPreview,
-            child: Text(_busy ? 'Validating…' : 'Preview import'),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _busy ? null : _chooseAnotherFile,
+                child: const Text('Choose another file'),
+              ),
+              FilledButton(
+                onPressed: _busy ? null : _runPreview,
+                child: Text(_busy ? 'Validating…' : 'Preview import'),
+              ),
+            ],
           ),
         ),
       ],
@@ -451,23 +474,23 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        if (preview.rows.any((row) => row.errors.isNotEmpty))
-          ...preview.rows
-              .where((row) => row.errors.isNotEmpty)
-              .take(100)
-              .map(
-                (row) => ListTile(
-                  leading: const Icon(
-                    Icons.error_outline,
-                    color: AppColors.danger,
-                  ),
-                  title: Text('Spreadsheet row ${row.rowNumber}'),
-                  subtitle: Text(row.errors.join('\n')),
-                ),
-              ),
+        _previewTable(preview),
+        if (preview.rows.length > 100)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Showing the first 100 of ${preview.rows.length} rows. All rows were validated.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            TextButton(
+              onPressed: _chooseAnotherFile,
+              child: const Text('Choose another file'),
+            ),
             TextButton(
               onPressed: () => setState(() => _step = 1),
               child: const Text('Back to mapping'),
@@ -487,6 +510,73 @@ class _StudentImportScreenState extends State<StudentImportScreen> {
 
   Widget _metric(String label, int value) =>
       Chip(label: Text('$label: $value'));
+
+  Widget _previewTable(StudentImportPreview preview) {
+    final labelByKey = {
+      for (final field
+          in _upload?.targetFields ?? const <StudentImportTargetField>[])
+        field.key: field.label,
+    };
+    final visibleFields = <String>[];
+    for (final mapping in _mappings) {
+      if (!visibleFields.contains(mapping.targetField)) {
+        visibleFields.add(mapping.targetField);
+      }
+    }
+
+    return Card(
+      key: const Key('student-import-preview-table'),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: [
+            const DataColumn(label: Text('Row')),
+            const DataColumn(label: Text('Status')),
+            for (final field in visibleFields)
+              DataColumn(label: Text(labelByKey[field] ?? field)),
+            const DataColumn(label: Text('Validation')),
+          ],
+          rows: [
+            for (final row in preview.rows.take(100))
+              DataRow(
+                color: row.errors.isEmpty
+                    ? null
+                    : WidgetStateProperty.all(
+                        AppColors.danger.withValues(alpha: 0.06),
+                      ),
+                cells: [
+                  DataCell(Text('${row.rowNumber}')),
+                  DataCell(
+                    Icon(
+                      row.errors.isEmpty
+                          ? Icons.check_circle_outline
+                          : Icons.error_outline,
+                      color: row.errors.isEmpty
+                          ? Colors.green
+                          : AppColors.danger,
+                      semanticLabel: row.errors.isEmpty ? 'Valid' : 'Invalid',
+                    ),
+                  ),
+                  for (final field in visibleFields)
+                    DataCell(Text('${row.values[field] ?? ''}')),
+                  DataCell(
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 320),
+                      child: Text(
+                        row.errors.isEmpty
+                            ? 'Ready to import'
+                            : row.errors.join('\n'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _confirmStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
