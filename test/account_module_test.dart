@@ -321,10 +321,12 @@ void main() {
   });
 
   testWidgets('existing logout control still signs out', (tester) async {
-    await _pumpAccount(tester);
+    final provider = await _pumpAccount(tester);
     await tester.tap(find.byKey(const Key('authenticated-sign-out')));
     await tester.pumpAndSettle();
-    expect(find.byType(LoginScreen), findsNothing);
+    expect(provider.isAuthenticated, isFalse);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byKey(const Key('authenticated-sign-out')), findsNothing);
     expect(find.text('CampusID'), findsWidgets);
   });
 }
