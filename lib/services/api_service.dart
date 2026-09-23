@@ -193,6 +193,42 @@ class ApiService {
     return PublicFormConfig.fromJson(_decodeMap(response));
   }
 
+  Future<PublicFormSubmissionPage> getPublicFormSubmissions(
+    String schoolUuid, {
+    String? status,
+  }) async {
+    final query = status == null ? '' : '?status_filter=${Uri.encodeQueryComponent(status)}';
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/public-form/submissions$query'),
+      headers: _headers,
+    );
+    return PublicFormSubmissionPage.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicFormSubmission> approvePublicFormSubmission(
+    String schoolUuid,
+    String submissionUuid,
+  ) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/public-form/submissions/$submissionUuid/approve'),
+      headers: _headers,
+    );
+    return PublicFormSubmission.fromJson(_decodeMap(response));
+  }
+
+  Future<PublicFormSubmission> rejectPublicFormSubmission(
+    String schoolUuid,
+    String submissionUuid, {
+    String? note,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$schoolUuid/public-form/submissions/$submissionUuid/reject'),
+      headers: _headers,
+      body: jsonEncode({'note': note}),
+    );
+    return PublicFormSubmission.fromJson(_decodeMap(response));
+  }
+
   Future<PublicFormView> getPublicForm(String token) async {
     final response = await _client.get(
       _uri('/public/forms/${Uri.encodeComponent(token)}'),

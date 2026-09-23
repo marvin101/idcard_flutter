@@ -109,3 +109,56 @@ class PublicFormView {
     successMessage: json['success_message'] as String?,
   );
 }
+
+class PublicFormSubmission {
+  const PublicFormSubmission({
+    required this.uuid,
+    required this.reference,
+    required this.status,
+    required this.payload,
+    required this.createdAt,
+    this.photoUrl,
+    this.reviewedAt,
+    this.rejectionNote,
+    this.studentUuid,
+  });
+
+  final String uuid;
+  final String reference;
+  final String status;
+  final Map<String, dynamic> payload;
+  final String? photoUrl;
+  final DateTime createdAt;
+  final DateTime? reviewedAt;
+  final String? rejectionNote;
+  final String? studentUuid;
+
+  factory PublicFormSubmission.fromJson(Map<String, dynamic> json) =>
+      PublicFormSubmission(
+        uuid: json['uuid'] as String,
+        reference: json['reference'] as String,
+        status: json['status'] as String,
+        payload: Map<String, dynamic>.from(json['payload'] as Map),
+        photoUrl: json['photo_url'] as String?,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        reviewedAt: json['reviewed_at'] == null
+            ? null
+            : DateTime.parse(json['reviewed_at'] as String),
+        rejectionNote: json['rejection_note'] as String?,
+        studentUuid: json['student_uuid'] as String?,
+      );
+}
+
+class PublicFormSubmissionPage {
+  const PublicFormSubmissionPage({required this.items, required this.total});
+  final List<PublicFormSubmission> items;
+  final int total;
+
+  factory PublicFormSubmissionPage.fromJson(Map<String, dynamic> json) =>
+      PublicFormSubmissionPage(
+        items: (json['items'] as List<dynamic>)
+            .map((item) => PublicFormSubmission.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        total: (json['total'] as num).toInt(),
+      );
+}

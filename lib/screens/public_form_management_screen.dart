@@ -64,6 +64,8 @@ class _PublicFormManagementScreenState
   bool _requireAll = false;
   bool _allowPhoto = false;
   DateTime? _expiresAt;
+  List<PublicFormSubmission>? _submissions;
+  bool _loadingSubmissions = false;
 
   @override
   void initState() {
@@ -108,6 +110,45 @@ class _PublicFormManagementScreenState
       _error = error.toString();
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadSubmissions() async {
+    setState(() => _loadingSubmissions = true);
+    try {
+      final page = await widget.api.getPublicFormSubmissions(widget.schoolUuid);
+      if (mounted) setState(() => _submissions = page.items);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loadingSubmissions = false);
+    }
+  }
+
+  Future<void> _process(PublicFormSubmission submission, bool approve) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(approve ? 'Approve submission?' : 'Reject submission?'),
+        content: Text(approve
+            ? 'This will create a student record. Current validation and duplicate checks will run again.'
+            : 'No student record will be created.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(approve ? 'Approve' : 'Reject')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      if (approve) {
+        await widget.api.approvePublicFormSubmission(widget.schoolUuid, submission.uuid);
+      } else {
+        await widget.api.rejectPublicFormSubmission(widget.schoolUuid, submission.uuid);
+      }
+      await _loadSubmissions();
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
   }
 
   PublicFormConfig _draft() => PublicFormConfig(
@@ -436,6 +477,55 @@ class _PublicFormManagementScreenState
                           : const Icon(Icons.save_outlined),
                       label: const Text('Save public form'),
                     ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(child: Text('Submissions', style: Theme.of(context).textTheme.titleLarge)),
+                        OutlinedButton.icon(
+                          key: const Key('load-public-submissions'),
+                          onPressed: _loadingSubmissions ? null : _loadSubmissions,
+                          icon: const Icon(Icons.refresh),
+                          label: Text(_submissions == null ? 'View submissions' : 'Refresh'),
+                        ),
+                      ],
+                    ),
+                    if (_loadingSubmissions) const LinearProgressIndicator(),
+                    if (_submissions != null && _submissions!.isEmpty)
+                      const Padding(padding: EdgeInsets.all(16), child: Text('No submissions yet.')),
+                    ...?_submissions?.map((submission) => Card(
+                      key: Key('public-submission-${submission.uuid}'),
+                      child: ExpansionTile(
+                        title: Text((submission.payload['full_name'] as String?) ?? submission.reference),
+                        subtitle: Text('${submission.status.toUpperCase()} • ${submission.reference} • ${submission.createdAt.toLocal()}'),
+                        trailing: Chip(label: Text(submission.status)),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ...submission.payload.entries.where((entry) => entry.key != 'custom_fields').map(
+                                  (entry) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Text('${entry.key.replaceAll('_', ' ')}: ${entry.value ?? '—'}'),
+                                  ),
+                                ),
+                                if (submission.photoUrl != null)
+                                  Image.network(submission.photoUrl!, height: 180, alignment: Alignment.centerLeft),
+                                if (submission.status == 'pending')
+                                  Wrap(
+                                    spacing: 8,
+                                    children: [
+                                      FilledButton(onPressed: () => _process(submission, true), child: const Text('Approve')),
+                                      OutlinedButton(onPressed: () => _process(submission, false), child: const Text('Reject')),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
                   ],
                 ),
               ),
