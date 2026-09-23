@@ -26,6 +26,7 @@ void main() {
       ];
       final accounts = <Map<String, dynamic>>[];
       var activations = 0;
+      var rejectNextAccountUpdate = false;
       final accountUpdates = <Map<String, dynamic>>[];
       final api = ApiService(
         baseUrl: 'https://example.test',
@@ -70,6 +71,14 @@ void main() {
               });
               return http.Response(jsonEncode(accounts.last), 201);
             case '/users/new-user/account':
+              if (rejectNextAccountUpdate) {
+                rejectNextAccountUpdate = false;
+                return http.Response(
+                  '{"detail":"The last active platform administrator must be retained"}',
+                  409,
+                  headers: {'content-type': 'application/json'},
+                );
+              }
               final body = jsonDecode(request.body) as Map<String, dynamic>;
               accountUpdates.add(body);
               accounts[0].addAll(body);
@@ -167,13 +176,74 @@ void main() {
         find.textContaining('last active platform administrator'),
         findsOneWidget,
       );
-      await tester.tap(find.text('Cancel'));
+      rejectNextAccountUpdate = true;
+      await tester.tap(find.text('Confirm'));
       await tester.pumpAndSettle();
+      expect(
+        find.text('The last active platform administrator must be retained'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       auth.dispose();
     },
   );
+
+  testWidgets('platform administration controls are hidden from regular users', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final api = ApiService(
+      baseUrl: 'https://example.test',
+      client: MockClient((request) async {
+        switch (request.url.path) {
+          case '/auth/login':
+            return http.Response('{"access_token":"token"}', 200);
+          case '/users/me':
+            return http.Response(
+              '{"uuid":"worker","username":"worker","full_name":"Worker","is_platform_admin":false,"platform_role":null,"is_active":true}',
+              200,
+            );
+          case '/schools':
+            if (request.url.queryParameters['include_inactive'] != 'true') {
+              return http.Response('[]', 200);
+            }
+            return http.Response(
+              '{"detail":"Platform administrator required"}',
+              403,
+            );
+          case '/users/worker/schools':
+            return http.Response('[]', 200);
+          case '/users':
+            return http.Response(
+              '{"detail":"Platform administrator required"}',
+              403,
+            );
+          default:
+            throw StateError('Unexpected ${request.method} ${request.url}');
+        }
+      }),
+    );
+    final auth = AuthProvider(api: api);
+    await auth.login('worker', 'password');
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: auth,
+        child: MaterialApp(home: PlatformAdministrationScreen(api: api)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Platform administrator access required.'),
+      findsOneWidget,
+    );
+    expect(find.text('Create account'), findsNothing);
+    expect(find.text('Accounts'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    auth.dispose();
+  });
 
   testWidgets('student list requests bounded pages and searches on server', (
     tester,
