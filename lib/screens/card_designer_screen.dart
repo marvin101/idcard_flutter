@@ -183,7 +183,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     aadhaar: '216232301889',
     address: 'Basai Toli, Sundi, Ranchi',
     verificationUrl:
-        'https://idcard-flutter-web.vercel.app/verify/sample-verification-token',
+        'https://campusid.co.in/verify/sample-verification-token',
     isActive: true,
   );
 

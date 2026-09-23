@@ -260,11 +260,11 @@ vercel .\build\web --prod
 
 Copying `vercel.json` into `build/web` ensures the deployed static directory contains the SPA rewrite required by clean-path routing. Keep the root copy as the source-controlled configuration.
 
-Current production alias: `https://idcard-flutter-web.vercel.app`
+Canonical production origin: `https://campusid.co.in`
 
 After deployment, verify direct navigation and browser refresh on protected and public clean paths, including `/verify/<token>`. Then smoke-test sign-in, school switching, role-specific navigation, student and Teacher/Staff CRUD/photos/lifecycle, personnel imports and grids, Public Forms, Card Designer, student verification disclosure/revocation, and PDFs.
 
-Deploy the backend migration and API before publishing this Flutter build. Render must set `PUBLIC_APP_URL=https://idcard-flutter-web.vercel.app` (or the approved canonical alias), otherwise generated student QR links will point at the wrong frontend origin.
+Deploy the backend migration and API before publishing this Flutter build. Render must set `PUBLIC_APP_URL=https://campusid.co.in`, otherwise generated student QR links will point at the wrong frontend origin.
 
 ## Versioning
 
