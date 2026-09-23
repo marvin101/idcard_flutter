@@ -181,7 +181,7 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
         ? switch (error.statusCode) {
             403 => 'Permission denied: ${error.message}',
             404 => 'Import not found: ${error.message}',
-            409 => 'This import was already completed. ${error.message}',
+            409 => 'The import can no longer be confirmed. ${error.message}',
             410 => 'This import has expired. ${error.message}',
             422 => 'The archive could not be processed: ${error.message}',
             _ => error.message,
@@ -349,6 +349,13 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
       ),
       const SizedBox(height: 8),
       const Text('Accepted images: JPG, JPEG, PNG and WEBP.'),
+      const SizedBox(height: 4),
+      Text(
+        _isPersonnel
+            ? 'Filename example: EMPLOYEE_NUMBER.jpg'
+            : 'Filename example: ADMISSION_NUMBER.jpg',
+        key: const Key('bulk-photo-filename-guidance'),
+      ),
       const SizedBox(height: 16),
       FilledButton.icon(
         key: const Key('bulk-photo-choose-archive'),
@@ -386,6 +393,7 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
           ('Ready', preview.readyCount),
           ('Unmatched', preview.unmatchedCount),
           ('Invalid', preview.invalidCount),
+          ('Duplicate / Ambiguous', preview.duplicateCount),
           ('Replacements', preview.replacementCount),
         ]),
         const SizedBox(height: 16),
@@ -393,7 +401,7 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
         if (!preview.canCommit) ...[
           const SizedBox(height: 12),
           const Text(
-            'Unmatched or invalid files must be corrected before commit.',
+            'Unmatched, invalid, or duplicate/ambiguous files must be corrected before commit.',
             key: Key('bulk-photo-cannot-commit-message'),
             style: TextStyle(color: AppColors.danger),
           ),
@@ -420,8 +428,12 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text('School: ${widget.schoolName}'),
         Text('${preview.readyCount} photos will be uploaded.'),
         Text('${preview.replacementCount} existing photos will be replaced.'),
+        Text(
+          '${preview.unmatchedCount + preview.invalidCount + preview.duplicateCount} files will be skipped.',
+        ),
         const SizedBox(height: 12),
         CheckboxListTile(
           key: const Key('bulk-photo-confirmation'),
@@ -480,6 +492,7 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
           ('Failed', summary.failedCount),
           ('Unmatched', summary.unmatchedCount),
           ('Invalid', summary.invalidCount),
+          ('Duplicate / Ambiguous', summary.duplicateCount),
           ('Replacements', summary.replacementCount),
         ]),
         if (summary.items.isNotEmpty) ...[
@@ -627,7 +640,12 @@ class _BulkPhotoImportScreenState extends State<BulkPhotoImportScreen> {
     final color = switch (normalized) {
       'ready' || 'uploaded' || 'success' => AppColors.success,
       'replacement' => AppColors.warning,
-      'unmatched' || 'invalid' || 'failed' || 'error' => AppColors.danger,
+      'unmatched' ||
+      'invalid' ||
+      'duplicate' ||
+      'ambiguous' ||
+      'failed' ||
+      'error' => AppColors.danger,
       _ => AppColors.primaryLight,
     };
     return Chip(

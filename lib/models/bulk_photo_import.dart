@@ -60,6 +60,7 @@ class BulkPhotoPreviewResponse {
     required this.replacementCount,
     required this.canCommit,
     required this.items,
+    this.duplicateCount = 0,
   });
 
   final String manifestUuid;
@@ -67,6 +68,7 @@ class BulkPhotoPreviewResponse {
   final int readyCount;
   final int unmatchedCount;
   final int invalidCount;
+  final int duplicateCount;
   final int replacementCount;
   final bool canCommit;
   final List<BulkPhotoItem> items;
@@ -78,6 +80,7 @@ class BulkPhotoPreviewResponse {
         readyCount: (json['ready_count'] as num).toInt(),
         unmatchedCount: (json['unmatched_count'] as num).toInt(),
         invalidCount: (json['invalid_count'] as num).toInt(),
+        duplicateCount: (json['duplicate_count'] as num?)?.toInt() ?? 0,
         replacementCount: (json['replacement_count'] as num).toInt(),
         canCommit: json['can_commit'] == true,
         items: (json['items'] as List<dynamic>? ?? const [])
@@ -126,6 +129,7 @@ class BulkPhotoCommitResponse {
     required this.replacementCount,
     required this.completed,
     required this.items,
+    this.duplicateCount = 0,
   });
 
   final String manifestUuid;
@@ -134,6 +138,7 @@ class BulkPhotoCommitResponse {
   final int failedCount;
   final int unmatchedCount;
   final int invalidCount;
+  final int duplicateCount;
   final int replacementCount;
   final bool completed;
   final List<BulkPhotoCommitItem> items;
@@ -146,6 +151,7 @@ class BulkPhotoCommitResponse {
         failedCount: (json['failed_count'] as num).toInt(),
         unmatchedCount: (json['unmatched_count'] as num).toInt(),
         invalidCount: (json['invalid_count'] as num).toInt(),
+        duplicateCount: (json['duplicate_count'] as num?)?.toInt() ?? 0,
         replacementCount: (json['replacement_count'] as num).toInt(),
         completed: json['completed'] == true,
         items: (json['items'] as List<dynamic>? ?? const [])

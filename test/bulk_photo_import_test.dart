@@ -96,15 +96,23 @@ const _items = [
     detail: 'Existing photo will be replaced',
     hasExistingPhoto: true,
   ),
+  BulkPhotoItem(
+    filename: 'A-1.jpeg',
+    admissionNo: 'A-1',
+    status: 'duplicate',
+    detail: 'Multiple files map to the same admission number.',
+    hasExistingPhoto: false,
+  ),
 ];
 
 BulkPhotoPreviewResponse _preview({bool canCommit = true}) =>
     BulkPhotoPreviewResponse(
       manifestUuid: 'manifest-1',
-      totalFiles: 4,
+      totalFiles: 5,
       readyCount: 2,
       unmatchedCount: canCommit ? 0 : 1,
       invalidCount: canCommit ? 0 : 1,
+      duplicateCount: canCommit ? 0 : 1,
       replacementCount: 1,
       canCommit: canCommit,
       items: _items,
@@ -145,6 +153,7 @@ void main() {
       'ready_count': 2,
       'unmatched_count': 1,
       'invalid_count': 1,
+      'duplicate_count': 1,
       'replacement_count': 1,
       'can_commit': false,
       'items': [
@@ -184,6 +193,7 @@ void main() {
     expect(upload.expiresAt.isUtc, isTrue);
     expect(preview.items.single.hasExistingPhoto, isTrue);
     expect(preview.canCommit, isFalse);
+    expect(preview.duplicateCount, 1);
     expect(commit.uploadedCount, 3);
     expect(commit.completed, isTrue);
     expect(commit.items.single.status, 'uploaded');
@@ -227,6 +237,7 @@ void main() {
   ) async {
     final api = _BulkPhotoApi(preview: _preview(canCommit: false));
     await _pumpScreen(tester, api);
+    expect(find.text('Filename example: ADMISSION_NUMBER.jpg'), findsOneWidget);
     await _chooseArchive(tester);
 
     expect(find.byKey(const Key('bulk-photo-status-ready')), findsOneWidget);
@@ -235,6 +246,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('bulk-photo-status-invalid')), findsOneWidget);
+    expect(
+      find.byKey(const Key('bulk-photo-status-duplicate')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const Key('bulk-photo-status-replacement')),
       findsOneWidget,
@@ -247,6 +262,10 @@ void main() {
     expect(continueButton.onPressed, isNull);
     expect(
       find.byKey(const Key('bulk-photo-cannot-commit-message')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('bulk-photo-count-duplicate-/-ambiguous')),
       findsOneWidget,
     );
   });
