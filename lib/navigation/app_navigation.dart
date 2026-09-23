@@ -256,6 +256,42 @@ abstract final class AppNavigation {
     ).pushNamedAndRemoveUntil(AppRoutes.dashboard, (route) => false);
   }
 
+  static void redirectToSignIn(
+    BuildContext context,
+    String protectedRoute, {
+    Object? arguments,
+  }) {
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      Router.neglect(
+        context,
+        () => delegate.redirectToSignIn(
+          protectedRoute,
+          arguments: arguments,
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pushReplacementNamed(AppRoutes.signIn);
+  }
+
+  static void completeAuthentication(
+    BuildContext context, {
+    required bool resumeProtectedRoute,
+  }) {
+    final delegate = _delegate(context);
+    if (delegate != null) {
+      Router.neglect(
+        context,
+        () => delegate.completeAuthentication(
+          resumeProtectedRoute: resumeProtectedRoute,
+        ),
+      );
+      return;
+    }
+    resetToAuthenticatedRoot(context);
+  }
+
   static void resetToPublicRoot(BuildContext context) {
     final delegate = _delegate(context);
     if (delegate != null) {

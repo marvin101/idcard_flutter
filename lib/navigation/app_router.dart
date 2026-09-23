@@ -59,6 +59,7 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
   final AppRouteWidgetBuilder _routeBuilder;
   final List<_AppRouteEntry> _entries = [];
   int _nextEntryId = 0;
+  AppRouteState? _pendingProtectedRoute;
   Future<bool> Function()? navigationGuard;
   static const _authenticatedShellPageKey = ValueKey<String>(
     'authenticated-shell-page',
@@ -89,12 +90,37 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
       notifyListeners();
       return;
     }
+    if (configuration.location != AppRoutes.signIn) {
+      _pendingProtectedRoute = null;
+    }
     _replaceWithLocation(configuration.location, configuration.arguments);
   }
 
   void go(String location, {Object? arguments}) {
     if (currentLocation == location) return;
+    if (location != AppRoutes.signIn) {
+      _pendingProtectedRoute = null;
+    }
     _replaceWithLocation(location, arguments);
+  }
+
+  void redirectToSignIn(String protectedLocation, {Object? arguments}) {
+    assert(AppRoutes.isProtected(protectedLocation));
+    _pendingProtectedRoute = AppRouteState(
+      protectedLocation,
+      arguments: arguments,
+    );
+    _replaceWithLocation(AppRoutes.signIn, null);
+  }
+
+  void completeAuthentication({required bool resumeProtectedRoute}) {
+    final pending = _pendingProtectedRoute;
+    _pendingProtectedRoute = null;
+    if (pending == null && AppRoutes.isProtected(currentLocation)) return;
+    final destination = resumeProtectedRoute && pending != null
+        ? pending
+        : const AppRouteState(AppRoutes.dashboard);
+    _replaceWithLocation(destination.location, destination.arguments);
   }
 
   Future<T?> pushWorkflow<T>(String location, {Object? arguments}) {
@@ -105,6 +131,9 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
   }
 
   Future<T?> pushPage<T>(String location, {Object? arguments}) {
+    if (location != AppRoutes.signIn) {
+      _pendingProtectedRoute = null;
+    }
     final completer = Completer<Object?>();
     _entries.add(_entry(location, arguments, completer));
     notifyListeners();

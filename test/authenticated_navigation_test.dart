@@ -555,6 +555,13 @@ void main() {
       expect(find.byType(StudentImportScreen), findsNothing);
       expect(find.byType(BulkPhotoImportScreen), findsNothing);
       expect(find.byType(LoginScreen), findsOneWidget);
+      final loginContext = tester.element(find.byType(LoginScreen));
+      expect(_reportedLocation(loginContext), AppRoutes.signIn);
+      expect(
+        (Router.of<Object>(loginContext).routerDelegate as AppRouterDelegate)
+            .currentLocation,
+        AppRoutes.signIn,
+      );
 
       await pumpApp(tester, initialRoute: route, role: 'teacher');
       expect(find.byType(StudentImportScreen), findsNothing);
@@ -797,6 +804,48 @@ void main() {
     );
   });
 
+  testWidgets('protected URLs redirect to sign in and retain destination', (
+    tester,
+  ) async {
+    for (final route in [
+      AppRoutes.dashboard,
+      AppRoutes.students,
+      AppRoutes.cards,
+      AppRoutes.design,
+    ]) {
+      await pumpApp(tester, initialRoute: route, authenticated: false);
+
+      final loginContext = tester.element(find.byType(LoginScreen));
+      final delegate =
+          Router.of<Object>(loginContext).routerDelegate as AppRouterDelegate;
+      expect(ModalRoute.of(loginContext)?.settings.name, AppRoutes.signIn);
+      expect(_reportedLocation(loginContext), AppRoutes.signIn);
+      expect(delegate.currentLocation, AppRoutes.signIn);
+    }
+  });
+
+  testWidgets('direct sign in continues to Dashboard', (tester) async {
+    await pumpApp(
+      tester,
+      initialRoute: AppRoutes.signIn,
+      authenticated: false,
+    );
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'admin');
+    await tester.enterText(find.byType(TextFormField).at(1), 'password');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard'), findsWidgets);
+    final context = tester.element(find.text('Dashboard').first);
+    expect(_reportedLocation(context), AppRoutes.dashboard);
+    expect(
+      (Router.of<Object>(context).routerDelegate as AppRouterDelegate)
+          .currentLocation,
+      AppRoutes.dashboard,
+    );
+  });
+
   testWidgets('protected login without a restored school goes to Dashboard', (
     tester,
   ) async {
@@ -827,6 +876,9 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, initialRoute: AppRoutes.cards, authenticated: false);
+
+    final loginContext = tester.element(find.byType(LoginScreen));
+    expect(_reportedLocation(loginContext), AppRoutes.signIn);
 
     await tester.enterText(find.byType(TextFormField).at(0), 'admin');
     await tester.enterText(find.byType(TextFormField).at(1), 'password');

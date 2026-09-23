@@ -181,7 +181,9 @@ class _AuthenticatedRoute extends StatelessWidget {
     if (authState.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (!authState.isAuthenticated) return const LoginScreen();
+    if (!authState.isAuthenticated) {
+      return _SignInRedirect(routeName: routeName, arguments: arguments);
+    }
     if (routeName == AppRoutes.dashboard) {
       return const AuthenticatedShell(child: DashboardScreen());
     }
@@ -579,7 +581,40 @@ class _AuthenticatedRootRedirectState
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      AppNavigation.resetToAuthenticatedRoot(context);
+      AppNavigation.completeAuthentication(
+        context,
+        resumeProtectedRoute:
+            context.read<AuthProvider>().selectedSchool != null,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: CircularProgressIndicator()));
+}
+
+class _SignInRedirect extends StatefulWidget {
+  const _SignInRedirect({required this.routeName, required this.arguments});
+
+  final String routeName;
+  final Object? arguments;
+
+  @override
+  State<_SignInRedirect> createState() => _SignInRedirectState();
+}
+
+class _SignInRedirectState extends State<_SignInRedirect> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      AppNavigation.redirectToSignIn(
+        context,
+        widget.routeName,
+        arguments: widget.arguments,
+      );
     });
   }
 
