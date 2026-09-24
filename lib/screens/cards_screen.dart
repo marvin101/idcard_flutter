@@ -176,9 +176,14 @@ class _CardsScreenState extends State<CardsScreen> {
         // A missing logo must not prevent card work.
       }
 
+      final templateElements = [
+        ...cardTemplate.document.elements,
+        ...?cardTemplate.backDocument?.elements,
+      ];
       final sectionGroups =
-          cardTemplate.document.elements.any(
-            (e) => e.data['field'] == 'section',
+          templateElements.any(
+            (element) =>
+                {'section', 'class_section'}.contains(element.data['field']),
           )
           ? await Future.wait(
               classes.map(

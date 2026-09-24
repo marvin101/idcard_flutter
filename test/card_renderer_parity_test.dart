@@ -103,6 +103,7 @@ CardTemplate fixture(bool portrait) {
           text('admission', 'admission_no', .54),
           text('blood', 'blood_group', .63),
           text('class', 'class', .72),
+          text('class-section', 'class_section', .75),
           text('section', 'section', .78),
           DesignElement(
             id: 'custom',
@@ -462,7 +463,7 @@ void main() {
         expect(
           find.descendant(
             of: element(designerScope, 'name'),
-            matching: find.text('Piyush Kumar Verma'),
+            matching: find.text('PIYUSH KUMAR VERMA'),
           ),
           findsOneWidget,
         );
@@ -487,12 +488,13 @@ void main() {
           'school': 'Parity School',
           'address': 'School address',
           'static': 'STUDENT CARD',
-          'name': 'Asha Singh',
+          'name': 'ASHA SINGH',
           'admission': 'ADM-2026',
           'blood': 'B+',
           'class': 'X',
+          'class-section': 'X A',
           'section': 'A',
-          'custom': 'Blue',
+          'custom': 'BLUE',
         }.entries) {
           expect(
             find.descendant(
@@ -621,7 +623,7 @@ void main() {
       final e = fixture(
         true,
       ).document.elements.firstWhere((e) => e.id == 'custom');
-      expect(bindings.text(e), 'Blue');
+      expect(bindings.text(e), 'BLUE');
       expect(
         bindings.text(
           e.copyWith(
