@@ -8,6 +8,7 @@ import '../models/api_personnel.dart';
 import '../models/card_template.dart';
 import '../models/design_bindings.dart';
 import '../models/design_render_scene.dart';
+import '../models/design_text_layout.dart';
 import '../models/school_profile.dart';
 import 'design_qr_code.dart';
 import 'design_barcode.dart';
@@ -393,10 +394,15 @@ class DesignDocumentView extends StatelessWidget {
       case DesignElementType.text:
       case DesignElementType.boundText:
       case DesignElementType.customFieldText:
+        final multiline = designTextIsMultiline(node);
+
         return Align(
-          alignment: switch (style.alignment) {
-            TextAlign.center => Alignment.center,
-            TextAlign.right => Alignment.centerRight,
+          alignment: switch ((style.alignment, multiline)) {
+            (TextAlign.center, true) => Alignment.topCenter,
+            (TextAlign.right, true) => Alignment.topRight,
+            (_, true) => Alignment.topLeft,
+            (TextAlign.center, false) => Alignment.center,
+            (TextAlign.right, false) => Alignment.centerRight,
             _ => Alignment.centerLeft,
           },
           child: Text(
