@@ -347,4 +347,100 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('Class + Section is available as a student identity field', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/student-fields')) {
+        return http.Response('[]', 200);
+      }
+
+      if (request.url.path.endsWith('/profile')) {
+        return http.Response('{}', 404);
+      }
+
+      return http.Response('{}', 404);
+    });
+
+    final api = ApiService(client: client, baseUrl: 'http://test');
+    addTearDown(api.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CardDesignerScreen(
+          schoolUuid: 'school',
+          api: api,
+          initialTemplate: CardTemplate.uploadedDesign,
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    // Open the properties inspector.
+    await tester.tap(find.byKey(const Key('toggle-properties')));
+    await tester.pump();
+
+    // Add a new identity-field element.
+    await tester.tap(find.byKey(const Key('add-student-field')));
+    await tester.pump();
+
+    final identityFieldControl = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+
+      return key is ValueKey<String> && key.value.startsWith('student-field-');
+    });
+
+    expect(identityFieldControl, findsOneWidget);
+
+    final dropdown = find.descendant(
+      of: identityFieldControl,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is DropdownButtonFormField<String>,
+      ),
+    );
+
+    expect(dropdown, findsOneWidget);
+
+    final dropdownButton = find.descendant(
+      of: dropdown,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is DropdownButton<String>,
+      ),
+    );
+
+    expect(dropdownButton, findsOneWidget);
+
+    final fieldDropdown = tester.widget<DropdownButton<String>>(
+      dropdownButton,
+    );
+
+    final classSectionItem = fieldDropdown.items!.singleWhere(
+      (item) => item.value == 'class_section',
+    );
+
+    expect(classSectionItem.child, isA<Text>());
+    expect((classSectionItem.child as Text).data, 'Class + Section');
+
+    // Select the combined binding through the same callback used by the UI.
+    fieldDropdown.onChanged?.call('class_section');
+    await tester.pump();
+
+    final canvas = tester.widget<DesignDocumentView>(
+      find.byKey(const Key('designer-canvas')),
+    );
+
+    expect(
+      canvas.document.elements.where(
+        (element) =>
+            element.type == DesignElementType.boundText &&
+            element.data['field'] == 'class_section',
+      ),
+      hasLength(1),
+    );
+  });
 }

@@ -137,6 +137,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       'session',
       'class',
       'section',
+      'class_section',
     };
 
     return Map.fromEntries(
@@ -5696,6 +5697,7 @@ const _systemFields = <String, String>{
   'session': 'Session',
   'class': 'Class',
   'section': 'Section',
+  'class_section': 'Class + Section',
   'school_name': 'School name',
   'school_address': 'School address',
   'school_code': 'School code',

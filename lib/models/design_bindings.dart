@@ -77,6 +77,10 @@ class DesignBindings {
       'session' => sessionName ?? '',
       'class' => className ?? '',
       'section' => sectionName ?? '',
+      'class_section' => [
+        className?.trim() ?? '',
+        sectionName?.trim() ?? '',
+      ].where((value) => value.isNotEmpty).join(' '),
       'school_name' => schoolProfile?.schoolName ?? schoolName ?? '',
       'school_address' => schoolProfile?.address ?? '',
       'school_code' => schoolProfile?.schoolCode ?? '',
@@ -122,6 +126,7 @@ class DesignBindings {
       'session',
       'class',
       'section',
+      'class_section',
     }.contains(element.data['field']);
   }
 
@@ -137,6 +142,7 @@ class DesignBindings {
       'session',
       'class',
       'section',
+      'class_section',
       'verification_url',
     }.contains(data['field']);
   }

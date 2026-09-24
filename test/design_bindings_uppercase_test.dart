@@ -51,6 +51,7 @@ void main() {
       'session': '2026-2027',
       'class': 'CLASS 8',
       'section': 'SECTION A',
+      'class_section': 'CLASS 8 SECTION A',
     };
 
     for (final entry in fields.entries) {
@@ -68,6 +69,40 @@ void main() {
         bindings.text(element),
         entry.value,
         reason: '${entry.key} should render in uppercase',
+      );
+    }
+  });
+
+  test('class and section are combined with exactly one space', () {
+    const element = DesignElement(
+      id: 'class-section',
+      type: DesignElementType.boundText,
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 5,
+      data: {'field': 'class_section'},
+    );
+
+    const cases = <({String className, String sectionName, String expected})>[
+      (className: 'VIII', sectionName: 'A', expected: 'VIII A'),
+      (className: 'IX', sectionName: 'B', expected: 'IX B'),
+      (className: 'XII', sectionName: 'A', expected: 'XII A'),
+    ];
+
+    for (final testCase in cases) {
+      final caseBindings = DesignBindings(
+        student: student,
+        className: testCase.className,
+        sectionName: testCase.sectionName,
+      );
+
+      expect(
+        caseBindings.text(element),
+        testCase.expected,
+        reason:
+            '${testCase.className} and ${testCase.sectionName} '
+            'should remain adjacent',
       );
     }
   });
