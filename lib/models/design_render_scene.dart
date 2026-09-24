@@ -39,6 +39,7 @@ class DesignRenderScene {
                ),
              ),
        );
+
   final DesignCanvas canvas;
   final Color background;
   final String? backgroundImage;
@@ -48,10 +49,12 @@ class DesignRenderScene {
 class DesignRenderElement {
   DesignRenderElement(this.element, this.text, this.imageUrl)
     : style = DesignRenderStyle(element);
+
   final DesignElement element;
   final String text;
   final String? imageUrl;
   final DesignRenderStyle style;
+
   double get radians => element.rotation * math.pi / 180;
 }
 
@@ -72,6 +75,9 @@ class DesignRenderStyle {
           : e.style['image_shape'] == 'rectangle'
           ? 'rectangle'
           : 'rounded',
+      imageBackground = e.type == DesignElementType.principalSignature
+          ? Colors.transparent
+          : defaultImageBackground,
       fontSize = _number(e.style['font_size'], 3, .1),
       weight =
           (((e.style['font_weight'] as num?)?.toInt() ?? 400).clamp(100, 900) ~/
@@ -89,16 +95,32 @@ class DesignRenderStyle {
         _ => TextAlign.left,
       },
       fit = e.style['fit'] == 'contain' ? BoxFit.contain : BoxFit.cover;
+
   static const fontFamily = 'CardNotoSans';
-  static const imageBackground = Color(0xffeef1f5);
-  final Color color, qrBackground, fill, border;
-  final double borderWidth, radius, fontSize, quietZone;
+  static const defaultImageBackground = Color(0xffeef1f5);
+
+  final Color color;
+  final Color qrBackground;
+  final Color fill;
+  final Color border;
+  final Color imageBackground;
+
+  final double borderWidth;
+  final double radius;
+  final double fontSize;
+  final double quietZone;
+
   final String imageShape;
   final String errorCorrection;
+
   final bool showText;
-  final int weight, maxLines;
+
+  final int weight;
+  final int maxLines;
+
   final TextAlign alignment;
   final BoxFit fit;
+
   TextStyle textStyle(double scale) => TextStyle(
     inherit: false,
     fontFamily: fontFamily,
@@ -109,6 +131,7 @@ class DesignRenderStyle {
     letterSpacing: 0,
     wordSpacing: 0,
   );
+
   static double _number(Object? value, double fallback, double minimum) =>
       value is num && value.isFinite
       ? math.max(minimum, value.toDouble())

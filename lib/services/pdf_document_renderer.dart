@@ -269,7 +269,7 @@ class PdfDocumentRenderer {
               pw.Positioned.fill(
                 child: pw.ClipOval(
                   child: pw.Container(
-                    color: color(DesignRenderStyle.imageBackground),
+                    color: color(style.imageBackground),
                     child: image == null
                         ? pw.Center(
                             child: pw.Text(
@@ -324,7 +324,7 @@ class PdfDocumentRenderer {
           verticalRadius: mm(imageRadius),
           child: _box(
             style,
-            DesignRenderStyle.imageBackground,
+            style.imageBackground,
             radius: imageRadius,
             child: image == null
                 ? pw.Center(

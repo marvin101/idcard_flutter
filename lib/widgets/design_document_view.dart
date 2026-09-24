@@ -340,7 +340,7 @@ class DesignDocumentView extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: style.imageShape == 'oval'
               ? ShapeDecoration(
-                  color: DesignRenderStyle.imageBackground,
+                  color: style.imageBackground,
                   shape: OvalBorder(
                     side: style.borderWidth > 0
                         ? BorderSide(
@@ -351,7 +351,7 @@ class DesignDocumentView extends StatelessWidget {
                   ),
                 )
               : BoxDecoration(
-                  color: DesignRenderStyle.imageBackground,
+                  color: style.imageBackground,
                   border: style.borderWidth > 0
                       ? Border.all(
                           color: style.border,
@@ -370,7 +370,6 @@ class DesignDocumentView extends StatelessWidget {
                   errorBuilder: (_, _, _) => fallback,
                 ),
         );
-
       case DesignElementType.qrCode:
         return DesignQrCode(
           data: node.text,
