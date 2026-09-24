@@ -374,6 +374,11 @@ class ApiStudentFormProvider extends ChangeNotifier {
     }
 
     final values = <String, Object?>{
+      'session_uuid': selectedSessionUuid,
+      'class_uuid': selectedClassUuid,
+      'section_uuid': selectedSectionUuid,
+      'admission_no': admissionNoController.text,
+      'full_name': fullNameController.text,
       'roll_no': rollNoController.text,
       'stream': streamController.text,
       'father_name': fatherNameController.text,
