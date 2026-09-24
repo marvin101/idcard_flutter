@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -136,7 +137,7 @@ void main() {
         expect(decoded.size, const Size(2200, 550));
         expect(preview, isNotNull);
         expect(preview!.width, photoCropPreviewMaxDimension);
-        expect(preview.height, 512);
+        expect(preview.height, 320);
       },
     );
   });
@@ -187,6 +188,41 @@ void main() {
     expect(find.byKey(const Key('save-photo-crop')), findsOneWidget);
     expect(find.text('Cancel'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows preparation feedback before camera decoding completes', (
+    tester,
+  ) async {
+    final provider = ApiStudentFormProvider(
+      api: _PhotoTestApi(),
+      schoolUuid: 'school-1',
+    );
+    final decoding = Completer<DecodedPhoto>();
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: PhotoSection(
+              photoPicker: (context, source) async => XFile.fromData(_jpeg()),
+              photoDecoder: (file) => decoding.future,
+              photoCropper: (context, photo) async => null,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('take-student-photo')));
+    await tester.pump();
+    expect(find.text('Preparing photo…'), findsOneWidget);
+
+    decoding.complete(decodeAndNormalizePhotoBytes(_jpeg()));
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pumpAndSettle();
+    expect(find.text('Preparing photo…'), findsNothing);
+    provider.dispose();
   });
 
   testWidgets('valid gallery and camera images reach the shared cropper', (
@@ -273,7 +309,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('take-student-photo')));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pumpAndSettle();
     expect(cropCalls, 0);
     expect(
       find.text(

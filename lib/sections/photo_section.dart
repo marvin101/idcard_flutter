@@ -11,12 +11,19 @@ import '../widgets/photo_source_picker.dart';
 typedef StudentPhotoPicker = Future<XFile?> Function(BuildContext, ImageSource);
 typedef StudentPhotoCropper =
     Future<XFile?> Function(BuildContext, DecodedPhoto);
+typedef StudentPhotoDecoder = Future<DecodedPhoto> Function(XFile);
 
 class PhotoSection extends StatelessWidget {
-  const PhotoSection({super.key, this.photoPicker, this.photoCropper});
+  const PhotoSection({
+    super.key,
+    this.photoPicker,
+    this.photoCropper,
+    this.photoDecoder,
+  });
 
   final StudentPhotoPicker? photoPicker;
   final StudentPhotoCropper? photoCropper;
+  final StudentPhotoDecoder? photoDecoder;
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +225,16 @@ class PhotoSection extends StatelessWidget {
 
     late final DecodedPhoto decoded;
     try {
-      decoded = await decodeAndNormalizePhoto(image);
+      final prepared = await showDialog<DecodedPhoto>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _PhotoPreparingDialog(
+          imageFile: image,
+          decoder: photoDecoder ?? decodeAndNormalizePhoto,
+        ),
+      );
+      if (prepared == null) throw const PhotoDecodeException();
+      decoded = prepared;
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -244,6 +260,53 @@ class PhotoSection extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (_) => PhotoCropDialog(photo: photo),
+    );
+  }
+}
+
+class _PhotoPreparingDialog extends StatefulWidget {
+  const _PhotoPreparingDialog({required this.imageFile, required this.decoder});
+
+  final XFile imageFile;
+  final StudentPhotoDecoder decoder;
+
+  @override
+  State<_PhotoPreparingDialog> createState() => _PhotoPreparingDialogState();
+}
+
+class _PhotoPreparingDialogState extends State<_PhotoPreparingDialog> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _prepare());
+  }
+
+  Future<void> _prepare() async {
+    // Let the progress UI reach the screen before CPU-heavy image decoding
+    // begins on Flutter Web's main thread.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    try {
+      final photo = await widget.decoder(widget.imageFile);
+      if (mounted) Navigator.of(context).pop(photo);
+    } catch (_) {
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const AlertDialog(
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox.square(
+            dimension: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          SizedBox(width: 16),
+          Flexible(child: Text('Preparing photo…')),
+        ],
+      ),
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../models/api_personnel.dart';
 import '../models/api_student.dart';
+import '../models/auth_models.dart';
 import '../models/card_template.dart';
 import '../models/design_barcode.dart';
 import '../models/design_geometry.dart';
@@ -32,6 +33,7 @@ class CardDesignerScreen extends StatefulWidget {
     required this.api,
     required this.initialTemplate,
     this.canManagePublicShare = false,
+    this.copyDestinations = const [],
   });
 
   // Logical pixels shared by the entry warning and editor layout.
@@ -47,6 +49,7 @@ class CardDesignerScreen extends StatefulWidget {
   final ApiService api;
   final CardTemplate initialTemplate;
   final bool canManagePublicShare;
+  final List<SchoolSummary> copyDestinations;
 
   @override
   State<CardDesignerScreen> createState() => _CardDesignerScreenState();
@@ -182,8 +185,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     mobile: '9693836200',
     aadhaar: '216232301889',
     address: 'Basai Toli, Sundi, Ranchi',
-    verificationUrl:
-        'https://campusid.co.in/verify/sample-verification-token',
+    verificationUrl: 'https://campusid.co.in/verify/sample-verification-token',
     isActive: true,
   );
 
@@ -1793,6 +1795,226 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     );
   }
 
+  Future<void> _copyDesignToSchool() async {
+    if (_dirty || _localDuplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Save the current design before copying it to another school.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (widget.copyDestinations.isEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No destination schools'),
+          content: const Text(
+            'You do not administer any other schools that can receive this design.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    SchoolSummary? selection;
+    final destination = await showDialog<SchoolSummary>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Copy design to another school'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Choose one destination school.'),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        for (final school in widget.copyDestinations)
+                          ListTile(
+                            key: ValueKey('copy-destination-${school.uuid}'),
+                            selected: selection?.uuid == school.uuid,
+                            leading: Icon(
+                              selection?.uuid == school.uuid
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                            ),
+                            onTap: () =>
+                                setDialogState(() => selection = school),
+                            title: Text(school.name),
+                            subtitle: Text(school.code),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('continue-copy-design'),
+              onPressed: selection == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, selection),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (destination == null || !mounted) return;
+
+    CardTemplate? existing;
+    try {
+      existing = await widget.api.getCardTemplate(destination.uuid);
+    } on ApiException catch (error) {
+      if (error.statusCode != 404) {
+        if (mounted) _showCopyFailure(error.message);
+        return;
+      }
+    }
+    if (!mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          existing == null ? 'Copy card design?' : 'Replace card design?',
+        ),
+        content: Text(
+          existing == null
+              ? 'Copy this card design to ${destination.name}?'
+              : '${destination.name} already has a card design. Copying this design will replace its existing design.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm-copy-design'),
+            style: existing == null
+                ? null
+                : FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                  ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(existing == null ? 'Copy' : 'Replace'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    _updateUi(() => _saving = true);
+    try {
+      await widget.api.copyCardTemplate(
+        sourceSchoolUuid: widget.schoolUuid,
+        targetSchoolUuid: destination.uuid,
+        expectedUpdatedAt: existing?.updatedAt,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Card design copied to ${destination.name}.')),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      if (error.details['code'] == 'unmapped_custom_fields') {
+        await _showUnmappedFields(error.details);
+      } else {
+        _showCopyFailure(error.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        _showCopyFailure(
+          'Unable to copy the card design. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) _updateUi(() => _saving = false);
+    }
+  }
+
+  void _showCopyFailure(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Unable to copy the card design: $message')),
+    );
+  }
+
+  Future<void> _showUnmappedFields(Map<String, dynamic> details) {
+    final rawFields = details['unresolved_fields'];
+    final fields = rawFields is List
+        ? rawFields.whereType<Map<String, dynamic>>().toList()
+        : const <Map<String, dynamic>>[];
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Fields requiring attention'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Some fields in this design do not exist in the destination school.',
+                ),
+                if (fields.isNotEmpty) const SizedBox(height: 12),
+                for (final field in fields)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.warning_amber_rounded),
+                    title: Text(
+                      (field['label'] as String?) ??
+                          (field['field_key'] as String?) ??
+                          (field['field_uuid'] as String?) ??
+                          'Unknown custom field',
+                    ),
+                    subtitle: Text(
+                      [
+                        if (field['entity_type'] is String)
+                          field['entity_type'],
+                        if (field['field_key'] is String) field['field_key'],
+                        if (field['reason'] is String) field['reason'],
+                      ].join(' • '),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _revertToSaved() async {
     if (!_dirty) {
       return;
@@ -2160,6 +2382,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                   case _TemplateAction.duplicate:
                     _duplicateDesign();
 
+                  case _TemplateAction.copyToSchool:
+                    _copyDesignToSchool();
+
                   case _TemplateAction.revert:
                     _revertToSaved();
 
@@ -2179,6 +2404,16 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.copy_outlined),
                     title: Text('Duplicate design'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _TemplateAction.copyToSchool,
+                  enabled: !_saving,
+                  child: const ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.copy_all_outlined),
+                    title: Text('Copy design to another school…'),
                   ),
                 ),
                 PopupMenuItem(
@@ -5624,6 +5859,6 @@ class _DesignerSnapshot {
   final bool localDuplicate;
 }
 
-enum _TemplateAction { duplicate, revert, reset, removeBack }
+enum _TemplateAction { duplicate, copyToSchool, revert, reset, removeBack }
 
 enum _LeaveAction { cancel, discard, save }

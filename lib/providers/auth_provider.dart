@@ -72,6 +72,19 @@ class AuthProvider extends ChangeNotifier {
   bool get canDeleteStudents => canManageUsers;
   bool get canDeletePersonnel => canManageUsers;
   bool get canDesignCards => canManageUsers;
+  List<SchoolSummary> get designableSchools {
+    if (isPlatformAdmin) {
+      return _schools.where((school) => school.isActive).toList();
+    }
+    final permitted = _accesses
+        .where((access) => access.isSchoolAdministrator)
+        .map((access) => access.schoolUuid)
+        .toSet();
+    return _schools
+        .where((school) => school.isActive && permitted.contains(school.uuid))
+        .toList();
+  }
+
   bool get canPrintCards => canManageCardData;
   LifecyclePermissions get _lifecyclePermissions => lifecyclePermissionsFor(
     isPlatformAdmin: isPlatformAdmin,

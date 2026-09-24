@@ -12,6 +12,8 @@ class _BootstrapApi extends ApiService {
     this.schoolsStarted,
     this.accessStarted,
     this.allowedSchoolUuids = const ['school-1', 'school-2'],
+    this.roles = const {},
+    this.platformAdmin = false,
   });
 
   final Completer<void>? schoolsGate;
@@ -19,6 +21,8 @@ class _BootstrapApi extends ApiService {
   final Completer<void>? schoolsStarted;
   final Completer<void>? accessStarted;
   final List<String> allowedSchoolUuids;
+  final Map<String, String> roles;
+  final bool platformAdmin;
 
   @override
   void setToken(String? token) {}
@@ -28,8 +32,8 @@ class _BootstrapApi extends ApiService {
     'uuid': 'user-1',
     'username': 'admin',
     'full_name': 'School Admin',
-    'platform_role': null,
-    'is_platform_admin': false,
+    'platform_role': platformAdmin ? 'platform_admin' : null,
+    'is_platform_admin': platformAdmin,
     'is_active': true,
   };
 
@@ -44,7 +48,9 @@ class _BootstrapApi extends ApiService {
   Future<List<dynamic>> getUserSchools(String userUuid) async {
     accessStarted?.complete();
     await accessGate?.future;
-    return allowedSchoolUuids.map(_access).toList();
+    return allowedSchoolUuids
+        .map((uuid) => _access(uuid, roles[uuid] ?? 'school_admin'))
+        .toList();
   }
 
   @override
@@ -58,10 +64,10 @@ Map<String, dynamic> _school(String uuid) => {
   'is_active': true,
 };
 
-Map<String, dynamic> _access(String uuid) => {
+Map<String, dynamic> _access(String uuid, [String role = 'school_admin']) => {
   'school_uuid': uuid,
   'school_name': 'School $uuid',
-  'role': 'school_admin',
+  'role': role,
 };
 
 void main() {
@@ -168,4 +174,37 @@ void main() {
       provider.dispose();
     },
   );
+
+  test(
+    'designable schools include only active school-admin memberships',
+    () async {
+      SharedPreferences.setMockInitialValues({'access_token': 'token'});
+      final provider = AuthProvider(
+        api: _BootstrapApi(
+          roles: const {
+            'school-1': 'school_admin',
+            'school-2': 'card_operator',
+          },
+        ),
+      );
+      await provider.initialize();
+
+      expect(provider.designableSchools.map((school) => school.uuid), [
+        'school-1',
+      ]);
+      provider.dispose();
+    },
+  );
+
+  test('platform administrators can design for every active school', () async {
+    SharedPreferences.setMockInitialValues({'access_token': 'token'});
+    final provider = AuthProvider(api: _BootstrapApi(platformAdmin: true));
+    await provider.initialize();
+
+    expect(provider.designableSchools.map((school) => school.uuid), [
+      'school-1',
+      'school-2',
+    ]);
+    provider.dispose();
+  });
 }

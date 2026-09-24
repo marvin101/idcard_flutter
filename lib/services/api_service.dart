@@ -98,11 +98,13 @@ class ApiException implements Exception {
     this.statusCode,
     this.message, [
     this.gridErrors = const [],
+    this.details = const {},
   ]);
 
   final int statusCode;
   final String message;
   final List<StudentGridCellError> gridErrors;
+  final Map<String, dynamic> details;
 
   @override
   String toString() => message;
@@ -197,7 +199,9 @@ class ApiService {
     String schoolUuid, {
     String? status,
   }) async {
-    final query = status == null ? '' : '?status_filter=${Uri.encodeQueryComponent(status)}';
+    final query = status == null
+        ? ''
+        : '?status_filter=${Uri.encodeQueryComponent(status)}';
     final response = await _client.get(
       _uri('/schools/$schoolUuid/public-form/submissions$query'),
       headers: _headers,
@@ -210,7 +214,9 @@ class ApiService {
     String submissionUuid,
   ) async {
     final response = await _client.post(
-      _uri('/schools/$schoolUuid/public-form/submissions/$submissionUuid/approve'),
+      _uri(
+        '/schools/$schoolUuid/public-form/submissions/$submissionUuid/approve',
+      ),
       headers: _headers,
     );
     return PublicFormSubmission.fromJson(_decodeMap(response));
@@ -222,7 +228,9 @@ class ApiService {
     String? note,
   }) async {
     final response = await _client.post(
-      _uri('/schools/$schoolUuid/public-form/submissions/$submissionUuid/reject'),
+      _uri(
+        '/schools/$schoolUuid/public-form/submissions/$submissionUuid/reject',
+      ),
       headers: _headers,
       body: jsonEncode({'note': note}),
     );
@@ -813,6 +821,23 @@ class ApiService {
       _uri('/schools/$schoolUuid/card-template'),
       headers: _headers,
       body: jsonEncode(template.toApi(expectedUpdatedAt: expectedUpdatedAt)),
+    );
+    return _decodeCardTemplate(response);
+  }
+
+  Future<CardTemplate> copyCardTemplate({
+    required String sourceSchoolUuid,
+    required String targetSchoolUuid,
+    DateTime? expectedUpdatedAt,
+  }) async {
+    final response = await _client.post(
+      _uri('/schools/$targetSchoolUuid/card-template/copy'),
+      headers: _headers,
+      body: jsonEncode({
+        'source_school_uuid': sourceSchoolUuid,
+        if (expectedUpdatedAt != null)
+          'expected_updated_at': expectedUpdatedAt.toUtc().toIso8601String(),
+      }),
     );
     return _decodeCardTemplate(response);
   }
@@ -2101,6 +2126,7 @@ class ApiService {
   ApiException _apiException(http.Response response) {
     String message = 'Request failed (${response.statusCode}).';
     List<StudentGridCellError> gridErrors = const [];
+    Map<String, dynamic> details = const {};
 
     try {
       final body = jsonDecode(response.body);
@@ -2118,6 +2144,15 @@ class ApiService {
         // Normal FastAPI HTTPException.
         if (detail is String && detail.trim().isNotEmpty) {
           message = detail;
+        }
+        // Structured domain error (for example, unresolved custom fields
+        // during a cross-school card-template copy).
+        else if (detail is Map<String, dynamic>) {
+          details = detail;
+          final detailMessage = detail['message'];
+          if (detailMessage is String && detailMessage.trim().isNotEmpty) {
+            message = detailMessage;
+          }
         }
         // FastAPI validation error.
         else if (detail is List) {
@@ -2150,7 +2185,7 @@ class ApiService {
       // Keep the generic message if the response isn't valid JSON.
     }
 
-    return ApiException(response.statusCode, message, gridErrors);
+    return ApiException(response.statusCode, message, gridErrors, details);
   }
 
   void dispose() => _client.close();

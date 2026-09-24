@@ -23,7 +23,7 @@ class DecodedPhoto {
   Size get size => Size(image.width.toDouble(), image.height.toDouble());
 }
 
-const int photoCropPreviewMaxDimension = 2048;
+const int photoCropPreviewMaxDimension = 1280;
 
 Uint8List _encodePreview(img.Image image) {
   final longestSide = math.max(image.width, image.height);
@@ -61,7 +61,10 @@ DecodedPhoto decodeAndNormalizePhotoBytes(Uint8List bytes) {
   }
 
   try {
-    final normalized = img.bakeOrientation(decoded);
+    final orientation = decoded.exif.imageIfd.orientation;
+    final normalized = orientation == null || orientation == 1
+        ? decoded
+        : img.bakeOrientation(decoded);
     return DecodedPhoto(
       image: normalized,
       // Full-resolution phone photos can exceed the mobile browser/GPU texture
@@ -86,7 +89,7 @@ class PhotoCropDialog extends StatefulWidget {
 class _PhotoCropDialogState extends State<PhotoCropDialog> {
   late img.Image _image;
   late Uint8List _previewBytes;
-  late Rect _crop;
+  late final ValueNotifier<Rect> _crop;
   PhotoCropMode _mode = PhotoCropMode.free;
   bool _saving = false;
   int _previewRevision = 0;
@@ -99,14 +102,20 @@ class _PhotoCropDialogState extends State<PhotoCropDialog> {
     super.initState();
     _image = widget.photo.image;
     _previewBytes = widget.photo.previewBytes;
-    _crop = PhotoCropGeometry.fullImage(_imageSize);
+    _crop = ValueNotifier(PhotoCropGeometry.fullImage(_imageSize));
+  }
+
+  @override
+  void dispose() {
+    _crop.dispose();
+    super.dispose();
   }
 
   void _setMode(PhotoCropMode mode) {
     setState(() {
       _mode = mode;
-      _crop = PhotoCropGeometry.applyMode(
-        crop: _crop,
+      _crop.value = PhotoCropGeometry.applyMode(
+        crop: _crop.value,
         imageSize: _imageSize,
         mode: mode,
       );
@@ -115,7 +124,7 @@ class _PhotoCropDialogState extends State<PhotoCropDialog> {
 
   void _rotate(bool clockwise) {
     final oldHeight = _image.height.toDouble();
-    final oldCrop = _crop;
+    final oldCrop = _crop.value;
     final rotatedCrop = clockwise
         ? Rect.fromLTWH(
             oldHeight - oldCrop.bottom,
@@ -133,7 +142,7 @@ class _PhotoCropDialogState extends State<PhotoCropDialog> {
     setState(() {
       _image = img.copyRotate(_image, angle: clockwise ? 90 : -90);
       _previewBytes = _encodePreview(_image);
-      _crop = PhotoCropGeometry.clamp(rotatedCrop, _imageSize);
+      _crop.value = PhotoCropGeometry.clamp(rotatedCrop, _imageSize);
       _previewRevision++;
     });
   }
@@ -143,7 +152,7 @@ class _PhotoCropDialogState extends State<PhotoCropDialog> {
     setState(() => _saving = true);
 
     try {
-      final bounds = PhotoCropGeometry.clamp(_crop, _imageSize);
+      final bounds = PhotoCropGeometry.clamp(_crop.value, _imageSize);
       final x = bounds.left.floor().clamp(0, _image.width - 1);
       final y = bounds.top.floor().clamp(0, _image.height - 1);
       final width = bounds.width.round().clamp(1, _image.width - x);
@@ -236,7 +245,6 @@ class _PhotoCropDialogState extends State<PhotoCropDialog> {
                   imageSize: _imageSize,
                   crop: _crop,
                   aspectRatio: _mode.ratioFor(_imageSize),
-                  onCropChanged: (crop) => setState(() => _crop = crop),
                 ),
               ),
               const SizedBox(height: 8),
@@ -316,14 +324,12 @@ class _ManualCropPreview extends StatelessWidget {
     required this.imageSize,
     required this.crop,
     required this.aspectRatio,
-    required this.onCropChanged,
   });
 
   final Uint8List bytes;
   final Size imageSize;
-  final Rect crop;
+  final ValueNotifier<Rect> crop;
   final double? aspectRatio;
-  final ValueChanged<Rect> onCropChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -337,13 +343,6 @@ class _ManualCropPreview extends StatelessWidget {
           imageSize.width * scale,
           imageSize.height * scale,
         );
-        final displayCrop = Rect.fromLTWH(
-          crop.left * scale,
-          crop.top * scale,
-          crop.width * scale,
-          crop.height * scale,
-        );
-
         return ColoredBox(
           color: Colors.black,
           child: InteractiveViewer(
@@ -359,40 +358,62 @@ class _ManualCropPreview extends StatelessWidget {
                   clipBehavior: Clip.hardEdge,
                   children: [
                     Positioned.fill(
-                      child: Image.memory(
-                        bytes,
-                        key: const Key('crop-preview-image'),
-                        fit: BoxFit.fill,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const ColoredBox(
-                              color: Color(0xFF2A2A2A),
-                              child: Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(20),
-                                  child: Text(
-                                    'This photo cannot be displayed. Please cancel and choose it again.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.white),
+                      child: RepaintBoundary(
+                        child: Image.memory(
+                          bytes,
+                          key: const Key('crop-preview-image'),
+                          fit: BoxFit.fill,
+                          filterQuality: FilterQuality.low,
+                          gaplessPlayback: true,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const ColoredBox(
+                                color: Color(0xFF2A2A2A),
+                                child: Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(20),
+                                    child: Text(
+                                      'This photo cannot be displayed. Please cancel and choose it again.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.white),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: CustomPaint(
-                          painter: _CropShadePainter(displayCrop),
                         ),
                       ),
                     ),
-                    _CropSelectionOverlay(
-                      rect: displayCrop,
-                      imageSize: imageSize,
-                      displayScale: scale,
-                      sourceCrop: crop,
-                      aspectRatio: aspectRatio,
-                      onChanged: onCropChanged,
+                    Positioned.fill(
+                      child: ValueListenableBuilder<Rect>(
+                        valueListenable: crop,
+                        builder: (context, sourceCrop, child) {
+                          final displayCrop = Rect.fromLTWH(
+                            sourceCrop.left * scale,
+                            sourceCrop.top * scale,
+                            sourceCrop.width * scale,
+                            sourceCrop.height * scale,
+                          );
+                          return Stack(
+                            clipBehavior: Clip.hardEdge,
+                            children: [
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: CustomPaint(
+                                    painter: _CropShadePainter(displayCrop),
+                                  ),
+                                ),
+                              ),
+                              _CropSelectionOverlay(
+                                rect: displayCrop,
+                                imageSize: imageSize,
+                                displayScale: scale,
+                                sourceCrop: sourceCrop,
+                                aspectRatio: aspectRatio,
+                                onChanged: (value) => crop.value = value,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),

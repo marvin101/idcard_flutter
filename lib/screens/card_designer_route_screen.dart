@@ -74,6 +74,9 @@ class _CardDesignerRouteScreenState extends State<CardDesignerRouteScreen> {
           api: auth.api,
           initialTemplate: snapshot.data!,
           canManagePublicShare: auth.canManageSchoolProfile,
+          copyDestinations: auth.designableSchools
+              .where((candidate) => candidate.uuid != school.uuid)
+              .toList(),
         );
       },
     );
