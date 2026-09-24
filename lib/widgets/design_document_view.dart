@@ -394,25 +394,24 @@ class DesignDocumentView extends StatelessWidget {
       case DesignElementType.text:
       case DesignElementType.boundText:
       case DesignElementType.customFieldText:
-        final multiline = designTextIsMultiline(node);
+        final topOffset = designTextTopOffset(node) * scale;
 
-        return Align(
-          alignment: switch ((style.alignment, multiline)) {
-            (TextAlign.center, true) => Alignment.topCenter,
-            (TextAlign.right, true) => Alignment.topRight,
-            (_, true) => Alignment.topLeft,
-            (TextAlign.center, false) => Alignment.center,
-            (TextAlign.right, false) => Alignment.centerRight,
-            _ => Alignment.centerLeft,
-          },
-          child: Text(
-            node.text,
-            textScaler: TextScaler.noScaling,
-            textDirection: TextDirection.ltr,
-            maxLines: style.maxLines,
-            overflow: TextOverflow.clip,
-            textAlign: style.alignment,
-            style: style.textStyle(scale),
+        return Padding(
+          padding: EdgeInsets.only(top: topOffset),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                node.text,
+                textScaler: TextScaler.noScaling,
+                textDirection: TextDirection.ltr,
+                maxLines: style.maxLines,
+                overflow: TextOverflow.clip,
+                textAlign: style.alignment,
+                style: style.textStyle(scale),
+              ),
+            ),
           ),
         );
     }

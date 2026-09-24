@@ -14,10 +14,6 @@ class DesignTextLine {
   final double baseline;
 }
 
-/// Creates the TextPainter used for both wrap detection and PDF text layout.
-///
-/// Keeping this in one place ensures that wrap detection uses exactly the same
-/// font, width, maximum-line, alignment, and scaling rules as PDF rendering.
 TextPainter _designTextPainter(DesignRenderElement node) {
   final e = node.element;
 
@@ -30,17 +26,33 @@ TextPainter _designTextPainter(DesignRenderElement node) {
   )..layout(maxWidth: e.width);
 }
 
-/// Returns true when the resolved element text occupies more than one rendered
-/// line inside the element's configured width.
+/// Returns the vertical offset at which text should begin inside its saved
+/// element box.
 ///
-/// This is intentionally based on the same TextPainter used by PDF layout so
-/// Flutter preview/designer and PDF rendering can make the same decision about
-/// vertical placement.
-bool designTextIsMultiline(DesignRenderElement node) {
+/// The important rule is that the first rendered line keeps the same vertical
+/// position whether the value occupies one line or several lines.
+///
+/// A designer may intentionally use a tall text element while placing a
+/// single-line value around its vertical centre. If that value later wraps,
+/// centring the entire multiline block moves the first line upward. Anchoring
+/// the multiline block to the top moves it even farther upward.
+///
+/// Instead, we centre one line inside the configured element and use that
+/// position as the permanent first-line anchor. Additional wrapped lines then
+/// continue downward from there.
+double designTextTopOffset(DesignRenderElement node) {
   final painter = _designTextPainter(node);
 
   try {
-    return painter.computeLineMetrics().length > 1;
+    final metrics = painter.computeLineMetrics();
+
+    if (metrics.isEmpty) {
+      return 0;
+    }
+
+    final firstLineHeight = metrics.first.height;
+
+    return math.max(0.0, (node.element.height - firstLineHeight) / 2);
   } finally {
     painter.dispose();
   }
@@ -53,21 +65,19 @@ List<DesignTextLine> layoutDesignText(DesignRenderElement node) {
   try {
     final metrics = painter.computeLineMetrics();
 
+    if (metrics.isEmpty) {
+      return const <DesignTextLine>[];
+    }
+
     final dx = switch (node.style.alignment) {
       TextAlign.center => (e.width - painter.width) / 2,
       TextAlign.right => e.width - painter.width,
       _ => 0.0,
     };
 
-    // A single-line element keeps the existing centred behaviour.
-    //
-    // Once the text wraps, however, its first line must remain anchored to the
-    // top of the element. Otherwise adding another line changes the vertical
-    // centre of the entire text block and makes dynamic values such as long
-    // addresses appear to jump inside their saved box.
-    final dy = metrics.length > 1
-        ? 0.0
-        : (e.height - math.min(e.height, painter.height)) / 2;
+    // Preserve the original single-line vertical position. If the value wraps,
+    // subsequent lines grow downward instead of re-centring the whole block.
+    final dy = math.max(0.0, (e.height - metrics.first.height) / 2);
 
     final lines = <DesignTextLine>[];
 
