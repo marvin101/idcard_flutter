@@ -94,6 +94,37 @@ class DesignBindings {
     };
   }
 
+  bool _shouldUppercaseStudentValue(DesignElement element, String value) {
+    if (student == null || value.isEmpty) return false;
+
+    if (element.type == DesignElementType.customFieldText) {
+      return true;
+    }
+
+    if (element.type != DesignElementType.boundText) {
+      return false;
+    }
+
+    return {
+      'full_name',
+      'admission_no',
+      'roll_no',
+      'stream',
+      'father_name',
+      'mother_name',
+      'dob',
+      'gender',
+      'blood_group',
+      'mobile',
+      'aadhaar',
+      'address',
+      'id_number',
+      'session',
+      'class',
+      'section',
+    }.contains(element.data['field']);
+  }
+
   bool _bindingApplies(Map<String, dynamic> data) {
     if (personnel == null) return true;
     return !{
@@ -157,6 +188,7 @@ class DesignBindings {
       return '${data['prefix'] ?? ''}$payload${data['suffix'] ?? ''}';
     }
     var value = rawValue(element);
+    final uppercaseStudentValue = _shouldUppercaseStudentValue(element, value);
     final isVerificationQr =
         element.type == DesignElementType.qrCode &&
         data['field'] == 'verification_url';
@@ -172,6 +204,9 @@ class DesignBindings {
           : element.type == DesignElementType.barcode
           ? data['fallback'] as String? ?? 'Barcode data'
           : data['fallback'] as String? ?? 'Identity field';
+    }
+    if (uppercaseStudentValue) {
+      value = value.toUpperCase();
     }
     return '${data['prefix'] ?? ''}$value${data['suffix'] ?? ''}';
   }
