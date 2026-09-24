@@ -124,6 +124,21 @@ void main() {
       expect(decoded.size, const Size(320, 180));
       expect(decoded.previewBytes, isNotEmpty);
     });
+
+    test(
+      'large camera images use a bounded preview without losing source size',
+      () {
+        final decoded = decodeAndNormalizePhotoBytes(
+          _jpeg(width: 2200, height: 550),
+        );
+        final preview = img.decodeJpg(decoded.previewBytes);
+
+        expect(decoded.size, const Size(2200, 550));
+        expect(preview, isNotNull);
+        expect(preview!.width, photoCropPreviewMaxDimension);
+        expect(preview.height, 512);
+      },
+    );
   });
 
   testWidgets('crop dialog starts in Free with the full image selected', (

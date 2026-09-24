@@ -23,6 +23,25 @@ class DecodedPhoto {
   Size get size => Size(image.width.toDouble(), image.height.toDouble());
 }
 
+const int photoCropPreviewMaxDimension = 2048;
+
+Uint8List _encodePreview(img.Image image) {
+  final longestSide = math.max(image.width, image.height);
+  final preview = longestSide <= photoCropPreviewMaxDimension
+      ? image
+      : img.copyResize(
+          image,
+          width: image.width >= image.height
+              ? photoCropPreviewMaxDimension
+              : null,
+          height: image.height > image.width
+              ? photoCropPreviewMaxDimension
+              : null,
+          interpolation: img.Interpolation.linear,
+        );
+  return Uint8List.fromList(img.encodeJpg(preview, quality: 92));
+}
+
 Future<DecodedPhoto> decodeAndNormalizePhoto(XFile file) async {
   final bytes = await file.readAsBytes();
   return decodeAndNormalizePhotoBytes(bytes);
@@ -41,11 +60,18 @@ DecodedPhoto decodeAndNormalizePhotoBytes(Uint8List bytes) {
     throw const PhotoDecodeException();
   }
 
-  final normalized = img.bakeOrientation(decoded);
-  return DecodedPhoto(
-    image: normalized,
-    previewBytes: Uint8List.fromList(img.encodeJpg(normalized, quality: 95)),
-  );
+  try {
+    final normalized = img.bakeOrientation(decoded);
+    return DecodedPhoto(
+      image: normalized,
+      // Full-resolution phone photos can exceed the mobile browser/GPU texture
+      // limit and silently paint black. Only the display copy is bounded; the
+      // source image below remains full resolution for the saved crop.
+      previewBytes: _encodePreview(normalized),
+    );
+  } catch (_) {
+    throw const PhotoDecodeException();
+  }
 }
 
 class PhotoCropDialog extends StatefulWidget {
@@ -106,7 +132,7 @@ class _PhotoCropDialogState extends State<PhotoCropDialog> {
 
     setState(() {
       _image = img.copyRotate(_image, angle: clockwise ? 90 : -90);
-      _previewBytes = Uint8List.fromList(img.encodeJpg(_image, quality: 95));
+      _previewBytes = _encodePreview(_image);
       _crop = PhotoCropGeometry.clamp(rotatedCrop, _imageSize);
       _previewRevision++;
     });
