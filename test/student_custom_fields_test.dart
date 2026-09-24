@@ -10,6 +10,7 @@ import 'package:idcard_flutter/models/student_field.dart';
 import 'package:idcard_flutter/providers/api_student_form_provider.dart';
 import 'package:idcard_flutter/screens/student_fields_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
+import 'package:idcard_flutter/sections/builtin_student_fields_section.dart';
 import 'package:idcard_flutter/sections/custom_student_fields_section.dart';
 import 'package:provider/provider.dart';
 
@@ -288,6 +289,78 @@ void main() {
     expect(provider.error, isNull);
     expect(provider.customFieldControllers['field-1']?.text, 'Blue');
     expect(provider.serializedCustomFields.single.value, 'Blue');
+    provider.dispose();
+    api.dispose();
+  });
+
+  testWidgets('selected protected fields pass provider validation', (
+    tester,
+  ) async {
+    final api = ApiService(
+      baseUrl: 'https://example.test',
+      client: MockClient((request) async {
+        switch (request.url.path) {
+          case '/schools/school-1/academic-sessions':
+            return http.Response(
+              jsonEncode([
+                {
+                  'uuid': 'session-1',
+                  'name': '2026',
+                  'is_current': true,
+                  'is_active': true,
+                },
+              ]),
+              200,
+            );
+          case '/schools/school-1/classes':
+            return http.Response(
+              jsonEncode([
+                {'uuid': 'class-1', 'name': '10', 'is_active': true},
+              ]),
+              200,
+            );
+          case '/schools/school-1/classes/class-1/sections':
+            return http.Response(
+              jsonEncode([
+                {'uuid': 'section-1', 'name': 'A', 'is_active': true},
+              ]),
+              200,
+            );
+          case '/schools/school-1/student-fields':
+            return http.Response('[]', 200);
+          case '/schools/school-1/student-field-config':
+            return _builtinConfigResponse();
+          default:
+            fail('Unexpected request: ${request.url}');
+        }
+      }),
+    );
+    final provider = ApiStudentFormProvider(api: api, schoolUuid: 'school-1');
+    await _waitUntilLoaded(provider);
+    await provider.setClass('class-1');
+    provider.setSection('section-1');
+    provider.admissionNoController.text = 'A-1';
+    provider.fullNameController.text = 'Student One';
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Form(
+              key: provider.formKey,
+              child: const SingleChildScrollView(
+                child: BuiltinStudentFieldsSection(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(provider.validate(), isTrue);
+    expect(provider.error, isNull);
+
     provider.dispose();
     api.dispose();
   });
