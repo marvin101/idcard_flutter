@@ -100,7 +100,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Inactive school'), findsOneWidget);
-      await tester.tap(find.text('Activate'));
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activate school'));
       await tester.pumpAndSettle();
       expect(activations, 0);
       await tester.tap(find.text('Confirm'));
@@ -124,6 +126,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('admin-platform_role')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Platform administrator').last);
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('admin-username')),
         'worker',
@@ -136,13 +142,6 @@ void main() {
         find.byKey(const ValueKey('admin-password')),
         'password123',
       );
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('admin-platform_role')),
-      );
-      await tester.tap(find.byKey(const ValueKey('admin-platform_role')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Platform administrator').last);
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       expect(find.text('New worker'), findsOneWidget);
@@ -244,6 +243,209 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     auth.dispose();
   });
+
+  testWidgets(
+    'account directory shows roles status schools and edits multi-school access',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final schools = [
+        {
+          'uuid': 'a',
+          'school_name': 'Anita Girls High School',
+          'school_code': 'AGHS',
+          'is_active': true,
+        },
+        {
+          'uuid': 'b',
+          'school_name': 'Anita Intermediate College',
+          'school_code': 'AIC',
+          'is_active': true,
+        },
+        {
+          'uuid': 'c',
+          'school_name': 'Campus Junior School',
+          'school_code': 'CJS',
+          'is_active': true,
+        },
+      ];
+      final accounts = [
+        {
+          'uuid': 'operator',
+          'username': 'rc1-operator',
+          'full_name': 'RC1 Operator',
+          'is_active': true,
+          'is_platform_admin': false,
+          'platform_role': null,
+        },
+        {
+          'uuid': 'other-admin',
+          'username': 'platform-admin',
+          'full_name': 'Platform Administrator',
+          'is_active': false,
+          'is_platform_admin': true,
+          'platform_role': 'platform_admin',
+        },
+      ];
+      final memberships = <String, String>{
+        'a': 'card_operator',
+        'b': 'card_operator',
+      };
+      final created = <String>[];
+      final removed = <String>[];
+      final api = ApiService(
+        baseUrl: 'https://example.test',
+        client: MockClient((request) async {
+          if (request.url.path == '/auth/login') {
+            return http.Response('{"access_token":"token"}', 200);
+          }
+          if (request.url.path == '/users/me') {
+            return http.Response(
+              '{"uuid":"me","username":"me","full_name":"Me","is_platform_admin":true,"platform_role":"platform_admin","is_active":true}',
+              200,
+            );
+          }
+          if (request.url.path == '/schools') {
+            return http.Response(jsonEncode(schools), 200);
+          }
+          if (request.url.path == '/users' && request.method == 'GET') {
+            return http.Response(jsonEncode(accounts), 200);
+          }
+          if (request.url.path == '/users/operator/schools' &&
+              request.method == 'GET') {
+            return http.Response(
+              jsonEncode([
+                for (final entry in memberships.entries)
+                  {
+                    'user_uuid': 'operator',
+                    'school_uuid': entry.key,
+                    'school_name': schools.firstWhere(
+                      (school) => school['uuid'] == entry.key,
+                    )['school_name'],
+                    'role': entry.value,
+                  },
+              ]),
+              200,
+            );
+          }
+          if (request.url.path == '/users/operator/account') {
+            return http.Response(jsonEncode(accounts.first), 200);
+          }
+          final accessMatch = RegExp(
+            r'^/users/operator/schools/([^/]+)$',
+          ).firstMatch(request.url.path);
+          if (accessMatch != null) {
+            final school = accessMatch.group(1)!;
+            if (request.method == 'DELETE') {
+              memberships.remove(school);
+              removed.add(school);
+              return http.Response('', 204);
+            }
+            final role =
+                (jsonDecode(request.body) as Map<String, dynamic>)['role']
+                    as String;
+            memberships[school] = role;
+            created.add(school);
+            return http.Response(
+              jsonEncode({
+                'user_uuid': 'operator',
+                'school_uuid': school,
+                'role': role,
+              }),
+              request.method == 'POST' ? 201 : 200,
+            );
+          }
+          throw StateError('Unexpected ${request.method} ${request.url}');
+        }),
+      );
+      final auth = AuthProvider(api: api);
+      await auth.login('admin', 'password');
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: auth,
+          child: MaterialApp(home: PlatformAdministrationScreen(api: api)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Accounts'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Card Operator'), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('Anita Girls High School'), findsOneWidget);
+      expect(find.text('Anita Intermediate College'), findsOneWidget);
+      expect(find.text('Platform Admin'), findsOneWidget);
+      expect(find.text('Inactive'), findsOneWidget);
+      expect(find.text('Access: All schools'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('account-search')),
+        'rc1',
+      );
+      await tester.pump();
+      expect(find.text('RC1 Operator'), findsOneWidget);
+      expect(find.text('Platform Administrator'), findsNothing);
+      await tester.enterText(find.byKey(const ValueKey('account-search')), '');
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('admin-role-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Card Operator').last);
+      await tester.pumpAndSettle();
+      expect(find.text('RC1 Operator'), findsOneWidget);
+      expect(find.text('Platform Administrator'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('admin-role-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All roles').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('admin-school-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Anita Intermediate College').last);
+      await tester.pumpAndSettle();
+      expect(find.text('RC1 Operator'), findsOneWidget);
+      expect(find.text('Platform Administrator'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('admin-school-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All schools').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('admin-status-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Inactive').last);
+      await tester.pumpAndSettle();
+      expect(find.text('RC1 Operator'), findsNothing);
+      expect(find.text('Platform Administrator'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('admin-status-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All statuses').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Edit').first);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('assignment-a')), findsOneWidget);
+      expect(find.byKey(const ValueKey('assignment-b')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('remove-school-b')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('admin-add-school')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Campus Junior School').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('assignment-c')), findsOneWidget);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(removed, ['b']);
+      expect(created, ['c']);
+      expect(find.text('Campus Junior School'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      auth.dispose();
+    },
+  );
 
   testWidgets('student list requests bounded pages and searches on server', (
     tester,
