@@ -14,7 +14,10 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
   const BuiltinStudentFieldsSection({super.key});
 
   static const double _mobileBreakpoint = 700;
-  static const double _classSectionRowBreakpoint = 330;
+
+  /// At roughly a 360 px viewport there is enough usable width for Class and
+  /// Section to share a row. Narrower phones fall back to stacked controls.
+  static const double _classSectionRowBreakpoint = 300;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +51,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < _mobileBreakpoint;
+
         final theme = Theme.of(context);
 
         return Card(
@@ -77,16 +81,19 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                 ),
+
                 SizedBox(height: compact ? 4 : 6),
+
                 Text(
                   'Academic and personal details',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+
                 SizedBox(height: compact ? 18 : 24),
+
                 _buildFields(
-                  context,
                   provider,
                   fields,
                   compact: compact,
@@ -101,7 +108,6 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
   }
 
   Widget _buildFields(
-    BuildContext context,
     ApiStudentFormProvider provider,
     List<BuiltinStudentField> fields, {
     required bool compact,
@@ -150,12 +156,14 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
     required double availableWidth,
   }) {
     final children = <Widget>[];
+
     var index = 0;
 
     while (index < fields.length) {
       final current = fields[index];
 
       final hasNext = index + 1 < fields.length;
+
       final next = hasNext ? fields[index + 1] : null;
 
       final canPairClassAndSection =
@@ -178,11 +186,12 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         index += 2;
       } else {
         children.add(_field(provider, current));
+
         index++;
       }
 
       if (index < fields.length) {
-        children.add(const SizedBox(height: 14));
+        children.add(const SizedBox(height: 12));
       }
     }
 
@@ -222,7 +231,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
           label: field.label,
           value: provider.selectedClassUuid,
           requiredField: field.required,
-          hintText: 'Select ${field.label}',
+          hintText: 'Select class',
           items: provider.classes
               .map(
                 (SchoolClass item) => DropdownMenuItem<String>(
@@ -245,10 +254,10 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
           enabled:
               provider.selectedClassUuid != null && !provider.loadingSections,
           hintText: provider.selectedClassUuid == null
-              ? 'Choose class first'
+              ? 'Class first'
               : provider.loadingSections
               ? 'Loading...'
-              : 'Select ${field.label}',
+              : 'Select section',
           items: provider.sections
               .map(
                 (SchoolSection item) => DropdownMenuItem<String>(
@@ -316,7 +325,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
           label: field.label,
           value: provider.selectedGender,
           requiredField: field.required,
-          hintText: 'Select ${field.label}',
+          hintText: 'Select gender',
           items: const [
             DropdownMenuItem<String>(value: 'Male', child: Text('Male')),
             DropdownMenuItem<String>(value: 'Female', child: Text('Female')),
@@ -331,7 +340,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
           label: field.label,
           value: provider.selectedBloodGroup,
           requiredField: field.required,
-          hintText: 'Select ${field.label}',
+          hintText: 'Select blood group',
           items: const ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
               .map(
                 (value) =>
@@ -446,12 +455,18 @@ class _StudentTextInput extends StatelessWidget {
   final String label;
   final String hintText;
   final bool requiredField;
+
   final String? Function(String?)? validator;
+
   final TextCapitalization textCapitalization;
+
   final bool autoCapitalizeWords;
+
   final TextInputType keyboardType;
+
   final int maxLines;
   final int? maxLength;
+
   final List<TextInputFormatter>? inputFormatters;
 
   String _capitalizeWords(String text) {
@@ -477,7 +492,9 @@ class _StudentTextInput extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _FieldLabel(label: label, requiredField: requiredField),
+
           const SizedBox(height: 6),
+
           TextFormField(
             controller: controller,
             keyboardType: keyboardType,
@@ -537,6 +554,7 @@ class _StudentTextInput extends StatelessWidget {
               }
 
               final selection = controller.selection;
+
               final capitalized = _capitalizeWords(value);
 
               if (capitalized == value) {
@@ -575,12 +593,18 @@ class _StudentDropdown<T> extends StatelessWidget {
   });
 
   final String label;
+
   final T? value;
+
   final List<DropdownMenuItem<T>> items;
+
   final ValueChanged<T?>? onChanged;
+
   final String? Function(T?)? validator;
+
   final bool requiredField;
   final bool enabled;
+
   final String? hintText;
 
   @override
@@ -595,7 +619,9 @@ class _StudentDropdown<T> extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _FieldLabel(label: label, requiredField: requiredField),
+
           const SizedBox(height: 6),
+
           DropdownButtonFormField<T>(
             initialValue: value,
             items: items,
@@ -687,8 +713,10 @@ class _FieldLabel extends StatelessWidget {
             ),
           ),
         ),
+
         if (requiredField) ...[
           const SizedBox(width: 3),
+
           Semantics(
             label: 'required',
             child: ExcludeSemantics(
