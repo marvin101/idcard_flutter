@@ -3,49 +3,75 @@ import 'package:flutter/material.dart';
 import '../widgets/authenticated_app_bar.dart';
 
 class MainLayout extends StatelessWidget {
+  const MainLayout({
+    super.key,
+    required this.title,
+    required this.child,
+    this.compactMobile = false,
+    this.mobileBreakpoint = 700,
+  });
+
   final String title;
   final Widget child;
 
-  const MainLayout({super.key, required this.title, required this.child});
+  /// Enables the compact phone layout for screens that explicitly opt in.
+  ///
+  /// Desktop/tablet behavior remains unchanged.
+  final bool compactMobile;
+
+  final double mobileBreakpoint;
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    final useCompactMobileLayout =
+        compactMobile && screenWidth < mobileBreakpoint;
+
     return Scaffold(
       backgroundColor: const Color(0xfff5f6fa),
-      appBar: AuthenticatedAppBar(title: Text(title)),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(25),
 
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: AuthenticatedAppBar(
+        title: Text(title),
+        compact: useCompactMobileLayout,
+      ),
 
-          children: [
-            Center(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: useCompactMobileLayout
+                ? EdgeInsets.zero
+                : const EdgeInsets.all(25),
+            child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1100),
                 child: Container(
                   width: double.infinity,
 
-                  padding: const EdgeInsets.all(25),
+                  padding: useCompactMobileLayout
+                      ? EdgeInsets.zero
+                      : const EdgeInsets.all(25),
 
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 10,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
+                  decoration: useCompactMobileLayout
+                      ? null
+                      : BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
 
                   child: child,
                 ),
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

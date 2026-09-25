@@ -16,14 +16,21 @@ class AuthenticatedAppBar extends StatelessWidget
     required this.title,
     this.actions = const [],
     this.leading,
+    this.compact = false,
   });
 
   final Widget title;
   final List<Widget> actions;
   final Widget? leading;
 
+  /// Compact mode is intended for phone-sized workflow screens.
+  ///
+  /// It removes the persistent desktop navigation strip and exposes the same
+  /// destinations from a menu in the toolbar instead.
+  final bool compact;
+
   @override
-  Size get preferredSize => const Size.fromHeight(110);
+  Size get preferredSize => Size.fromHeight(compact ? 58 : 110);
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +38,7 @@ class AuthenticatedAppBar extends StatelessWidget
       context.read<AuthProvider>();
     } on ProviderNotFoundException {
       return AppBar(
+        toolbarHeight: 58,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         title: title,
@@ -41,10 +49,12 @@ class AuthenticatedAppBar extends StatelessWidget
 
     final routeName = ModalRoute.of(context)?.settings.name;
 
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+
     final navigation =
         persistentAuthenticatedNavigationOf(context) ??
         const AuthenticatedNavigationStrip();
-    final user = context.watch<AuthProvider>().user;
 
     return AppBar(
       toolbarHeight: 58,
@@ -61,22 +71,41 @@ class AuthenticatedAppBar extends StatelessWidget
               : null),
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
+      titleSpacing: compact ? 8 : null,
       title: Row(
         children: [
           CampusHomeLink(
             child: Image.asset(
               'assets/images/campusid_logo.png',
-              width: 34,
-              height: 34,
+              width: compact ? 30 : 34,
+              height: compact ? 30 : 34,
               fit: BoxFit.contain,
             ),
           ),
-          const SizedBox(width: 12),
-          Flexible(child: title),
+          SizedBox(width: compact ? 9 : 12),
+          Flexible(
+            child: DefaultTextStyle(
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: compact ? 18 : 20,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              child: title,
+            ),
+          ),
         ],
       ),
       actions: [
         ...actions,
+
+        if (compact)
+          _CompactNavigationMenu(
+            authState: _NavigationAuthState.from(auth),
+            currentRoute: routeName,
+          ),
+
         PopupMenuButton<_AccountMenuAction>(
           key: const Key('account-avatar-menu'),
           tooltip: 'Account',
@@ -87,11 +116,13 @@ class AuthenticatedAppBar extends StatelessWidget
                   context,
                   AppRoutes.accountProfile,
                 );
+
               case _AccountMenuAction.security:
                 AppNavigation.navigateToModule(
                   context,
                   AppRoutes.accountSecurity,
                 );
+
               case _AccountMenuAction.logout:
                 await _signOut(context);
             }
@@ -123,57 +154,166 @@ class AuthenticatedAppBar extends StatelessWidget
               ),
             ),
           ],
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.accentSoft,
-              foregroundColor: AppColors.primary,
-              backgroundImage: user?.profilePhotoUrl == null
-                  ? null
-                  : NetworkImage(user!.profilePhotoUrl!),
-              child: user?.profilePhotoUrl == null
-                  ? Text(
-                      user?.initials ?? '?',
-                      key: const Key('account-avatar-initials'),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    )
-                  : null,
+          child: Semantics(
+            button: true,
+            label: 'Account menu',
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 8),
+              child: CircleAvatar(
+                radius: compact ? 17 : 18,
+                backgroundColor: AppColors.accentSoft,
+                foregroundColor: AppColors.primary,
+                backgroundImage: user?.profilePhotoUrl == null
+                    ? null
+                    : NetworkImage(user!.profilePhotoUrl!),
+                child: user?.profilePhotoUrl == null
+                    ? Text(
+                        user?.initials ?? '?',
+                        key: const Key('account-avatar-initials'),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      )
+                    : null,
+              ),
             ),
           ),
         ),
-        IconButton(
-          key: const Key('authenticated-sign-out'),
-          tooltip: 'Sign out',
-          onPressed: () => _signOut(context),
-          icon: const Icon(Icons.logout_rounded),
-        ),
-        const SizedBox(width: 4),
+
+        // On phones Sign out remains available from the account menu.
+        // Removing the duplicate icon leaves enough room for the title and
+        // navigation menu without compromising touch-target size.
+        if (!compact)
+          IconButton(
+            key: const Key('authenticated-sign-out'),
+            tooltip: 'Sign out',
+            onPressed: () => _signOut(context),
+            icon: const Icon(Icons.logout_rounded),
+          ),
+
+        SizedBox(width: compact ? 2 : 4),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(52),
-        child: Container(
-          height: 52,
-          width: double.infinity,
-          color: AppColors.navigation,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: navigation,
-        ),
-      ),
+      bottom: compact
+          ? null
+          : PreferredSize(
+              preferredSize: const Size.fromHeight(52),
+              child: Container(
+                height: 52,
+                width: double.infinity,
+                color: AppColors.navigation,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                child: navigation,
+              ),
+            ),
     );
   }
 
   Future<void> _signOut(BuildContext context) async {
     final guard = AppNavigationGuard.maybeOf(context);
-    if (guard != null && !await guard.onNavigateAway()) return;
-    if (!context.mounted) return;
+
+    if (guard != null && !await guard.onNavigateAway()) {
+      return;
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+
     await context.read<AuthProvider>().logout();
-    if (!context.mounted) return;
+
+    if (!context.mounted) {
+      return;
+    }
+
     AppNavigation.resetToPublicRoot(context);
   }
 }
 
 enum _AccountMenuAction { profile, security, logout }
+
+class _CompactNavigationMenu extends StatelessWidget {
+  const _CompactNavigationMenu({
+    required this.authState,
+    required this.currentRoute,
+  });
+
+  final _NavigationAuthState authState;
+  final String? currentRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      ..._navigationItems(authState),
+      ..._moreNavigationItems(authState),
+    ];
+
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return PopupMenuButton<_NavigationItem>(
+      key: const Key('mobile-navigation-menu'),
+      tooltip: 'Navigation menu',
+      offset: const Offset(0, 48),
+      color: AppColors.surface,
+      onSelected: (item) {
+        if (_isRouteActive(item.route, currentRoute)) {
+          return;
+        }
+
+        if (AppNavigation.isPrimaryModule(item.route)) {
+          AppNavigation.navigateToModule(context, item.route);
+        } else {
+          AppNavigation.navigateToWorkflow<void>(context, item.route);
+        }
+      },
+      itemBuilder: (context) => [
+        for (final item in items)
+          PopupMenuItem<_NavigationItem>(
+            key: Key('mobile-nav-${item.route}'),
+            value: item,
+            child: Row(
+              children: [
+                Icon(
+                  item.icon,
+                  size: 20,
+                  color: _isRouteActive(item.route, currentRoute)
+                      ? AppColors.accent
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: _isRouteActive(item.route, currentRoute)
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: _isRouteActive(item.route, currentRoute)
+                          ? AppColors.accent
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (_isRouteActive(item.route, currentRoute))
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12),
+                    child: Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: AppColors.accent,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+      icon: const Icon(Icons.menu_rounded, size: 24),
+    );
+  }
+}
 
 class AuthenticatedNavigationStrip extends StatefulWidget {
   const AuthenticatedNavigationStrip({super.key});
@@ -233,7 +373,6 @@ class _AuthenticatedNavigationStripState
     final routeName = ModalRoute.of(context)?.settings.name;
 
     final items = _navigationItems(authState);
-
     final moreItems = _moreNavigationItems(authState);
 
     final itemSignature = [
@@ -255,9 +394,6 @@ class _AuthenticatedNavigationStripState
         if (_lastViewportWidth != constraints.maxWidth) {
           _lastViewportWidth = constraints.maxWidth;
 
-          // A resize can move the active item outside
-          // the visible viewport. Allow it to be
-          // revealed again.
           _lastRevealedRoute = null;
 
           _scheduleRefresh(revealActive: true);
