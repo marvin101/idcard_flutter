@@ -8,6 +8,17 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 ## [Unreleased]
 
+### Changed
+
+- Completed Designer v2 around a single stable element catalog for all text,
+  media, shape, QR, and barcode tools. Toolbar creation, pointer resizing,
+  numeric sizing, and canvas alignment now share the same millimetre geometry
+  rules, including square and minimum-size guarantees for QR/Data Matrix and
+  minimum printable dimensions for one-dimensional barcodes.
+- Added a complete versioned design fixture that exercises every element type
+  through document round-trip, binding resolution, Flutter layout, and the
+  normalized vector-PDF adapter to guard renderer parity.
+
 ## [0.10.0] - 2026-09-14
 
 ### Added

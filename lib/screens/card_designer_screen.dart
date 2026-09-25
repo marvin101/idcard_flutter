@@ -10,6 +10,7 @@ import '../models/api_student.dart';
 import '../models/auth_models.dart';
 import '../models/card_template.dart';
 import '../models/design_barcode.dart';
+import '../models/design_element_library.dart';
 import '../models/design_geometry.dart';
 import '../models/school_profile.dart';
 import '../models/student_field.dart';
@@ -1031,6 +1032,20 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
 
+    if (!DesignElementLibrary.fitsCanvas(type, _document.canvas)) {
+      final item = DesignElementLibrary.definition(type);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${item.label} requires at least '
+            '${item.minimumWidth.toStringAsFixed(0)} × '
+            '${item.minimumHeight.toStringAsFixed(0)} mm.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final id =
         '${type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
 
@@ -1039,129 +1054,14 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       (value, element) => math.max(value, element.zIndex + 1),
     );
 
-    final isImage =
-        type == DesignElementType.studentPhoto ||
-        type == DesignElementType.schoolLogo ||
-        type == DesignElementType.principalSignature;
-
-    final isQr = type == DesignElementType.qrCode;
-
-    final isBarcode = type == DesignElementType.barcode;
-
-    final defaultWidth =
-        isImage ||
-            isQr ||
-            type == DesignElementType.circle ||
-            type == DesignElementType.bloodDrop
-        ? 20.0
-        : isBarcode
-        ? 35.0
-        : 30.0;
-
-    final defaultHeight =
-        isQr ||
-            type == DesignElementType.circle ||
-            type == DesignElementType.bloodDrop
-        ? 20.0
-        : isImage
-        ? 22.0
-        : isBarcode
-        ? 15.0
-        : type == DesignElementType.line
-        ? 1.0
-        : {
-            DesignElementType.roundedRectangle,
-            DesignElementType.ellipse,
-            DesignElementType.triangle,
-          }.contains(type)
-        ? 16.0
-        : 6.0;
-
-    final element = DesignElement(
+    final element = DesignElementLibrary.create(
       id: id,
       type: type,
-      x: (_document.canvas.width - defaultWidth) / 2,
-      y: (_document.canvas.height - defaultHeight) / 2,
-      width: defaultWidth,
-      height: defaultHeight,
       zIndex: z,
-      style: switch (type) {
-        DesignElementType.rectangle ||
-        DesignElementType.roundedRectangle ||
-        DesignElementType.ellipse ||
-        DesignElementType.circle ||
-        DesignElementType.triangle ||
-        DesignElementType.bloodDrop => {
-          'fill_color': type == DesignElementType.bloodDrop
-              ? '#C62828'
-              : '#E8EEF8',
-          'border_color': type == DesignElementType.bloodDrop
-              ? '#C62828'
-              : '#242C61',
-          'border_width': 0.5,
-          'corner_radius': type == DesignElementType.roundedRectangle
-              ? 3.0
-              : 0.0,
-        },
-        DesignElementType.line => {'color': '#242C61', 'border_width': 0.5},
-        DesignElementType.studentPhoto ||
-        DesignElementType.schoolLogo ||
-        DesignElementType.principalSignature => {
-          'fit': type == DesignElementType.studentPhoto ? 'cover' : 'contain',
-          'border_color': '#242C61',
-          'border_width': 0.5,
-          'corner_radius': 1.0,
-        },
-        DesignElementType.qrCode => {
-          'color': '#000000',
-          'background_color': '#FFFFFF',
-          'quiet_zone': 1.0,
-          'error_correction': 'medium',
-        },
-        DesignElementType.barcode => {
-          'color': '#000000',
-          'background_color': '#FFFFFF',
-          'quiet_zone': 1.0,
-          'show_text': true,
-          'font_size': 2.5,
-        },
-        _ => {
-          'font_size': 3.5,
-          'font_weight': 400,
-          'alignment': 'left',
-          'color': '#111111',
-        },
-      },
-      data: switch (type) {
-        DesignElementType.text => {'text': 'New text'},
-        DesignElementType.boundText => {
-          'field': 'full_name',
-          'fallback': '$_previewIdentityType name',
-        },
-        DesignElementType.customFieldText => {
-          'field_uuid': customField!.uuid,
-          'label': customField.label,
-          'fallback': customField.label,
-        },
-        DesignElementType.qrCode =>
-          _previewIdentityType == 'student'
-              ? {'field': 'verification_url'}
-              : {'field': 'employee_no', 'fallback': 'Employee number'},
-        DesignElementType.bloodDrop => {
-          'field': 'blood_group',
-          'fallback': 'BG',
-        },
-        DesignElementType.barcode => {
-          'field': _previewIdentityType == 'student'
-              ? 'admission_no'
-              : 'employee_no',
-          'fallback': _previewIdentityType == 'student'
-              ? 'Admission number'
-              : 'Employee number',
-          'symbology': 'code128',
-        },
-        _ => const {},
-      },
+      canvas: _document.canvas,
+      identityType: _previewIdentityType,
+      customFieldUuid: customField?.uuid,
+      customFieldLabel: customField?.label,
     );
 
     _commit(
@@ -1222,55 +1122,13 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
   void _resize(String id, String handle, double dx, double dy) {
     if (!dx.isFinite || !dy.isFinite) return;
     _updateElement(id, (element) {
-      if (element.locked) return element;
-      final left = handle.contains('left');
-      final right = handle.contains('right');
-      final top = handle.contains('top');
-      final bottom = handle.contains('bottom');
-      final originalRight = element.x + element.width;
-      final originalBottom = element.y + element.height;
-      var x = element.x;
-      var y = element.y;
-      var width = element.width;
-      var height = element.height;
-      if (left) {
-        x += dx;
-        width -= dx;
-      }
-      if (right) width += dx;
-      if (top) {
-        y += dy;
-        height -= dy;
-      }
-      if (bottom) height += dy;
-      final keepRatio = {
-        DesignElementType.studentPhoto,
-        DesignElementType.schoolLogo,
-        DesignElementType.principalSignature,
-        DesignElementType.qrCode,
-        DesignElementType.circle,
-      }.contains(element.type);
-      if (keepRatio) {
-        final ratio = element.type == DesignElementType.circle
-            ? 1.0
-            : element.width / element.height;
-        if (dx.abs() >= dy.abs()) {
-          height = width / ratio;
-        } else {
-          width = height * ratio;
-        }
-        if (left) x = originalRight - width;
-        if (top) y = originalBottom - height;
-      }
-      width = width.clamp(2.0, _document.canvas.width);
-      height = height.clamp(1.0, _document.canvas.height);
-      if (left) x = originalRight - width;
-      if (top) y = originalBottom - height;
-      x = x.clamp(0.0, _document.canvas.width - width);
-      y = y.clamp(0.0, _document.canvas.height - height);
-      width = math.min(width, _document.canvas.width - x);
-      height = math.min(height, _document.canvas.height - y);
-      final next = element.copyWith(x: x, y: y, width: width, height: height);
+      final next = resizeElementFromHandle(
+        element,
+        _document.canvas,
+        handle,
+        dx,
+        dy,
+      );
       _updateGuides(next);
       return next;
     }, gestureUpdate: true);
@@ -1372,22 +1230,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
 
-    _replace(
-      element.copyWith(
-        x: switch (where) {
-          'left' => 0,
-          'hcenter' => (_document.canvas.width - element.width) / 2,
-          'right' => _document.canvas.width - element.width,
-          _ => element.x,
-        },
-        y: switch (where) {
-          'top' => 0,
-          'vcenter' => (_document.canvas.height - element.height) / 2,
-          'bottom' => _document.canvas.height - element.height,
-          _ => element.y,
-        },
-      ),
-    );
+    final alignment = switch (where) {
+      'left' => CanvasElementAlignment.left,
+      'hcenter' => CanvasElementAlignment.horizontalCenter,
+      'right' => CanvasElementAlignment.right,
+      'top' => CanvasElementAlignment.top,
+      'vcenter' => CanvasElementAlignment.verticalCenter,
+      _ => CanvasElementAlignment.bottom,
+    };
+    _replace(alignElementToCanvas(element, _document.canvas, alignment));
   }
 
   void _updateGuides(DesignElement next) {
@@ -4221,14 +4072,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                           'Width',
                           e.width,
                           (value) => update(
-                            (element) => element.copyWith(
-                              width: value.clamp(
-                                2.0,
-                                math.max(
-                                  2.0,
-                                  _document.canvas.width - element.x,
-                                ),
-                              ),
+                            (element) => setElementSize(
+                              element,
+                              _document.canvas,
+                              width: value,
                             ),
                           ),
                         ),
@@ -4236,14 +4083,10 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                           'Height',
                           e.height,
                           (value) => update(
-                            (element) => element.copyWith(
-                              height: value.clamp(
-                                1.0,
-                                math.max(
-                                  1.0,
-                                  _document.canvas.height - element.y,
-                                ),
-                              ),
+                            (element) => setElementSize(
+                              element,
+                              _document.canvas,
+                              height: value,
                             ),
                           ),
                         ),

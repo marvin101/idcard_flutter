@@ -90,6 +90,10 @@ New QR elements default to **Verification link (recommended)**. This source enco
 - Schema version 2 documents with portrait, landscape, CR80, and custom canvas sizes.
 - Canvas resize/orientation strategies: **Keep positions**, **Scale proportionally**, and **Fit to canvas**. Keep positions may intentionally leave elements extending beyond the canvas.
 - Element geometry editing with raw-pointer drag/resize input and zoom-correct movement.
+- Stable element-library defaults and shared physical constraints across toolbar
+  creation, handle resizing, and exact numeric width/height entry. QR and Data
+  Matrix elements remain square and scannable; 1D barcodes retain their minimum
+  printable size.
 - Undo/redo with each drag or resize stored as one gesture-level history entry.
 - Smart alignment guides, numeric keyboard/wheel stepping, and shortcuts for save, undo/redo, duplicate, delete, deselect, and precise nudging.
 - Colour palette fields with recent colours, plus a responsive warning before editing on small screens.
@@ -105,6 +109,11 @@ Missing schema versions and explicit v1 documents remain readable through determ
 ### PDF fidelity
 
 Flutter preview and PDF export share `DesignRenderScene`, including text bindings, stacking, visibility, image source/fit, colours and opacity, borders, corner radius, and portrait/landscape/custom page geometry. Card text uses the bundled `CardNotoSans` family at all nine weights (100–900); the PDF path also shares Flutter-measured wrapping, alignment, line positions, and clipping to improve text-layout fidelity. Image contain/cover behavior and centered cropping are normalized across renderers.
+
+`test/fixtures/designer_v2_complete.json` is the canonical renderer-regression
+fixture. It contains every stable Designer element type and is exercised through
+document serialization, the shared render scene, Flutter geometry, and the PDF
+adapter.
 
 Devanagari PDF export is currently rejected with a descriptive error because the PDF renderer cannot provide reliable Indic shaping. The design and student data are not modified. See [PDF renderer parity](docs/pdf_renderer_parity.md) for the detailed rendering boundary.
 
