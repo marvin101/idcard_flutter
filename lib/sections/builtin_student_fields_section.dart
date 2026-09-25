@@ -497,7 +497,7 @@ class _StudentTextInput extends StatelessWidget {
 
           TextFormField(
             controller: controller,
-            keyboardType: keyboardType,
+            keyboardType: maxLines > 1 ? TextInputType.multiline : keyboardType,
             textCapitalization: textCapitalization,
             textInputAction: maxLines > 1
                 ? TextInputAction.newline

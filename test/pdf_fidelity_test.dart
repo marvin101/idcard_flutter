@@ -195,9 +195,9 @@ void main() {
       DesignRenderElement node(String id) =>
           scene.elements.firstWhere((n) => n.element.id == id);
       expect(node('school').text, school.schoolName);
-      expect(node('name').text, student.fullName);
+      expect(node('name').text, student.fullName.toUpperCase());
       expect(node('address').text, school.address);
-      expect(node('custom').text, 'Blue');
+      expect(node('custom').text, 'BLUE');
       expect(node('academic').text, 'XII');
       expect(node('unicode').text, 'Café • “ID”');
       expect(node('photo').imageUrl, 'https://school.test/photo.png');

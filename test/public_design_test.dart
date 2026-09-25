@@ -146,7 +146,7 @@ void main() {
       expect(find.byType(AuthenticatedShell), findsNothing);
       expect(find.text('Campus School'), findsOneWidget);
       expect(find.byKey(const Key('public-design-name')), findsOneWidget);
-      expect(find.text('Sample Student'), findsOneWidget);
+      expect(find.text('SAMPLE STUDENT'), findsOneWidget);
       expect(find.text('Read-only preview'), findsNothing);
       expect(find.byKey(const Key('design-document-surface')), findsOneWidget);
     },
