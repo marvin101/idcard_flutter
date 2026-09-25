@@ -991,6 +991,17 @@ class ApiService {
     return ApiPersonnelPage.fromJson(_decodeMap(response));
   }
 
+  Future<ApiPersonnel> getPersonnelById({
+    required String schoolUuid,
+    required String personnelUuid,
+  }) async {
+    final response = await _client.get(
+      _uri('/schools/$schoolUuid/personnel/$personnelUuid'),
+      headers: _headers,
+    );
+    return ApiPersonnel.fromJson(_decodeMap(response));
+  }
+
   Future<List<StudentFieldDefinition>> getPersonnelFields({
     required String schoolUuid,
     required PersonnelType personnelType,

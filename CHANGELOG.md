@@ -8,6 +8,12 @@ Versions before 0.7.0 below are a reconstructed milestone history from repositor
 
 ## [Unreleased]
 
+### Added
+
+- Print Baskets now survive navigation and browser/app restarts. Saved entries
+  contain UUIDs only, stay isolated by school and Student/Teacher/Staff type,
+  refresh from the API when restored, and discard records that no longer exist.
+
 ### Changed
 
 - Completed Designer v2 around a single stable element catalog for all text,

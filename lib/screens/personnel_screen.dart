@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
@@ -10,6 +13,7 @@ import '../models/school_profile.dart';
 import '../navigation/app_navigation.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
+import '../services/print_basket_store.dart';
 import '../theme/app_colors.dart';
 import '../widgets/authenticated_app_bar.dart';
 import '../widgets/student_lifecycle_badge.dart';
@@ -43,6 +47,8 @@ class PersonnelScreen extends StatefulWidget {
 }
 
 class _PersonnelScreenState extends State<PersonnelScreen> {
+  static const _printBasketStore = PrintBasketStore();
+
   final _search = TextEditingController();
 
   final Set<String> _selected = {};
@@ -60,6 +66,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
   void initState() {
     super.initState();
     _load();
+    unawaited(_restorePrintBasket());
   }
 
   @override
@@ -71,6 +78,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
       _selected.clear();
       _printBasket.clear();
       _load();
+      unawaited(_restorePrintBasket());
     }
   }
 
@@ -417,6 +425,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
 
       _selected.clear();
     });
+    unawaited(_persistPrintBasket());
   }
 
   Future<void> _showPrintBasket() async {
@@ -452,6 +461,8 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                                 _printBasket.remove(record.uuid);
                               });
 
+                              unawaited(_persistPrintBasket());
+
                               setDialogState(() {});
                             },
                           ),
@@ -460,6 +471,17 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                     ),
             ),
             actions: [
+              TextButton(
+                key: const Key('personnel-clear-print-basket'),
+                onPressed: records.isEmpty
+                    ? null
+                    : () {
+                        setState(_printBasket.clear);
+                        unawaited(_persistPrintBasket());
+                        setDialogState(() {});
+                      },
+                child: const Text('Clear'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Close'),
@@ -481,6 +503,75 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
       ),
     );
   }
+
+  Future<void> _restorePrintBasket() async {
+    final schoolUuid = widget.schoolUuid;
+    final personnelType = widget.personnelType;
+    final uuids = await _printBasketStore.load(
+      schoolUuid: schoolUuid,
+      identityType: personnelType.apiValue,
+    );
+    if (uuids.isEmpty) return;
+
+    final restored = <String, ApiPersonnel>{};
+    const requestBatchSize = 20;
+    for (var start = 0; start < uuids.length; start += requestBatchSize) {
+      final end = math.min(start + requestBatchSize, uuids.length);
+      late final List<ApiPersonnel?> batch;
+      try {
+        batch = await Future.wait(
+          uuids
+              .sublist(start, end)
+              .map(
+                (uuid) => _refreshBasketPersonnel(
+                  schoolUuid: schoolUuid,
+                  personnelUuid: uuid,
+                ),
+              ),
+        );
+      } catch (_) {
+        // Preserve the saved UUIDs when the API is temporarily unavailable.
+        return;
+      }
+      for (final record in batch.whereType<ApiPersonnel>()) {
+        if (record.personnelType == personnelType) {
+          restored[record.uuid] = record;
+        }
+      }
+    }
+    if (!mounted ||
+        widget.schoolUuid != schoolUuid ||
+        widget.personnelType != personnelType) {
+      return;
+    }
+    setState(() {
+      _printBasket
+        ..clear()
+        ..addAll(restored);
+    });
+    await _persistPrintBasket();
+  }
+
+  Future<ApiPersonnel?> _refreshBasketPersonnel({
+    required String schoolUuid,
+    required String personnelUuid,
+  }) async {
+    try {
+      return await widget.api.getPersonnelById(
+        schoolUuid: schoolUuid,
+        personnelUuid: personnelUuid,
+      );
+    } on ApiException catch (error) {
+      if (error.statusCode != 404) rethrow;
+      return null;
+    }
+  }
+
+  Future<void> _persistPrintBasket() => _printBasketStore.save(
+    schoolUuid: widget.schoolUuid,
+    identityType: widget.personnelType.apiValue,
+    recordUuids: _printBasket.keys,
+  );
 
   Future<void> _lifecycle(Future<ApiPersonnel> Function() action) async {
     try {

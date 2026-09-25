@@ -15,6 +15,7 @@ import 'package:idcard_flutter/screens/personnel_form_screen.dart';
 import 'package:idcard_flutter/screens/personnel_grid_screen.dart';
 import 'package:idcard_flutter/screens/personnel_screen.dart';
 import 'package:idcard_flutter/services/api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, dynamic> _gridJson() => {
   'rows': [
@@ -57,6 +58,10 @@ Map<String, dynamic> _gridJson() => {
 };
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   test('personnel grid models preserve timestamps, fields and patches', () {
     final page = PersonnelGridPage.fromJson(_gridJson());
     expect(page.rows.single.personnelType, PersonnelType.teacher);
@@ -360,6 +365,12 @@ void main() {
     await tester.pump();
     expect(find.text('Print Basket (1)'), findsOneWidget);
 
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(screen(PersonnelType.teacher));
+    await tester.pumpAndSettle();
+    expect(find.text('Print Basket (1)'), findsOneWidget);
+
     await tester.pumpWidget(screen(PersonnelType.staff));
     await tester.pumpAndSettle();
     expect(find.text('Print Basket (0)'), findsOneWidget);
@@ -432,6 +443,22 @@ class _GridApi extends ApiService {
 }
 
 class _PersonnelListApi extends ApiService {
+  ApiPersonnel _record(PersonnelType personnelType) {
+    final type = personnelType.apiValue;
+    final now = DateTime.utc(2026, 9, 14).toIso8601String();
+    return ApiPersonnel.fromJson({
+      'uuid': '$type-person-1',
+      'personnel_type': type,
+      'employee_no': type == 'teacher' ? 'T-1' : 'S-1',
+      'full_name': type == 'teacher' ? 'Asha Singh' : 'Mira Das',
+      'verification_status': 'verified',
+      'lifecycle_status': 'ready_for_print',
+      'is_active': true,
+      'created_at': now,
+      'updated_at': now,
+    });
+  }
+
   @override
   Future<ApiPersonnelPage> getPersonnel({
     required String schoolUuid,
@@ -442,28 +469,24 @@ class _PersonnelListApi extends ApiService {
     String? verificationStatus,
     bool? printed,
   }) async {
-    final type = personnelType.apiValue;
-    final now = DateTime.utc(2026, 9, 14).toIso8601String();
-    return ApiPersonnelPage.fromJson({
-      'items': [
-        {
-          'uuid': '$type-person-1',
-          'personnel_type': type,
-          'employee_no': type == 'teacher' ? 'T-1' : 'S-1',
-          'full_name': type == 'teacher' ? 'Asha Singh' : 'Mira Das',
-          'verification_status': 'verified',
-          'lifecycle_status': 'ready_for_print',
-          'is_active': true,
-          'created_at': now,
-          'updated_at': now,
-        },
-      ],
-      'total': 1,
-      'offset': 0,
-      'limit': 500,
-      'has_more': false,
-    });
+    return ApiPersonnelPage(
+      items: [_record(personnelType)],
+      total: 1,
+      offset: 0,
+      limit: 500,
+      hasMore: false,
+    );
   }
+
+  @override
+  Future<ApiPersonnel> getPersonnelById({
+    required String schoolUuid,
+    required String personnelUuid,
+  }) async => _record(
+    personnelUuid.startsWith('teacher-')
+        ? PersonnelType.teacher
+        : PersonnelType.staff,
+  );
 }
 
 class _PersonnelFormApi extends ApiService {

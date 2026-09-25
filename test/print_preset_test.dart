@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:idcard_flutter/models/print_sheet.dart';
 import 'package:idcard_flutter/services/pdf_service.dart';
+import 'package:idcard_flutter/services/print_basket_store.dart';
 import 'package:idcard_flutter/services/print_preset_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -119,6 +120,63 @@ void main() {
       expect(await store.load('school-a'), isEmpty);
     },
   );
+
+  test('print baskets persist UUIDs by school and identity type', () async {
+    const store = PrintBasketStore();
+    await store.save(
+      schoolUuid: 'school-a',
+      identityType: 'student',
+      recordUuids: const ['student-2', 'student-1', 'student-2', ''],
+    );
+    await store.save(
+      schoolUuid: 'school-a',
+      identityType: 'teacher',
+      recordUuids: const ['teacher-1'],
+    );
+
+    expect(await store.load(schoolUuid: 'school-a', identityType: 'student'), [
+      'student-2',
+      'student-1',
+    ]);
+    expect(await store.load(schoolUuid: 'school-a', identityType: 'teacher'), [
+      'teacher-1',
+    ]);
+    expect(
+      await store.load(schoolUuid: 'school-b', identityType: 'student'),
+      isEmpty,
+    );
+
+    await store.save(
+      schoolUuid: 'school-a',
+      identityType: 'student',
+      recordUuids: const [],
+    );
+    expect(
+      await store.load(schoolUuid: 'school-a', identityType: 'student'),
+      isEmpty,
+    );
+  });
+
+  test('print basket writes keep the latest rapid update', () async {
+    const store = PrintBasketStore();
+    final first = store.save(
+      schoolUuid: 'school-a',
+      identityType: 'student',
+      recordUuids: const ['student-1'],
+    );
+    final second = store.save(
+      schoolUuid: 'school-a',
+      identityType: 'student',
+      recordUuids: const ['student-2'],
+    );
+
+    await Future.wait([first, second]);
+
+    expect(
+      await store.load(schoolUuid: 'school-a', identityType: 'student'),
+      ['student-2'],
+    );
+  });
 
   test('duplex calibration PDF contains front and back pages', () async {
     final bytes = await PdfService.generatePrintCalibrationSheet(

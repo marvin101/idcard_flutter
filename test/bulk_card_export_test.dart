@@ -887,6 +887,28 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CardsScreen(
+            schoolUuid: 'school',
+            schoolName: 'Bulk School',
+            api: api,
+            canEdit: true,
+            canDesign: false,
+            canPrint: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('print-basket-action')))
+            .tooltip,
+        'Print Basket (1)',
+      );
+
       await tester.tap(find.byKey(const Key('print-basket-action')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('clear-print-basket')));

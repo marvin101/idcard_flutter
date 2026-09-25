@@ -23,6 +23,7 @@ import 'package:printing/printing.dart';
 
 import '../services/pdf_service.dart';
 import '../services/print_preset_store.dart';
+import '../services/print_basket_store.dart';
 import 'bulk_pdf_filter_dialog.dart';
 
 typedef BulkPdfAction =
@@ -66,6 +67,7 @@ class CardsScreen extends StatefulWidget {
 }
 
 class _CardsScreenState extends State<CardsScreen> {
+  static const _printBasketStore = PrintBasketStore();
   // Backend allows a maximum of 200.
   // 100 is a good balance between network requests and memory usage.
   static const int _pageSize = 10;
@@ -122,6 +124,17 @@ class _CardsScreenState extends State<CardsScreen> {
     _scrollController.addListener(_onScroll);
 
     _loadFilterData();
+    unawaited(_restorePrintBasket());
+  }
+
+  @override
+  void didUpdateWidget(CardsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.schoolUuid != widget.schoolUuid) {
+      _selectedStudentUuids.clear();
+      _printBasketStudents.clear();
+      unawaited(_restorePrintBasket());
+    }
   }
 
   @override
@@ -999,6 +1012,17 @@ class _CardsScreenState extends State<CardsScreen> {
       );
       refreshed.addAll(batch.whereType<ApiStudent>());
     }
+    final refreshedByUuid = {
+      for (final student in refreshed) student.uuid: student,
+    };
+    if (mounted) {
+      setState(() {
+        _printBasketStudents
+          ..clear()
+          ..addAll(refreshedByUuid);
+      });
+    }
+    await _persistPrintBasket();
     return _LoadedBulkStudents(
       students: refreshed,
       expectedTotal: uuids.length,
@@ -1015,6 +1039,7 @@ class _CardsScreenState extends State<CardsScreen> {
       }
       _selectedStudentUuids.clear();
     });
+    unawaited(_persistPrintBasket());
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -1059,6 +1084,7 @@ class _CardsScreenState extends State<CardsScreen> {
                               setState(
                                 () => _printBasketStudents.remove(student.uuid),
                               );
+                              unawaited(_persistPrintBasket());
                               setDialogState(() {});
                             },
                             icon: const Icon(Icons.remove_circle_outline),
@@ -1074,6 +1100,7 @@ class _CardsScreenState extends State<CardsScreen> {
                     ? null
                     : () {
                         setState(_printBasketStudents.clear);
+                        unawaited(_persistPrintBasket());
                         setDialogState(() {});
                       },
                 child: const Text('Clear'),
@@ -1113,6 +1140,57 @@ class _CardsScreenState extends State<CardsScreen> {
       return null;
     }
   }
+
+  Future<void> _restorePrintBasket() async {
+    final schoolUuid = widget.schoolUuid;
+    final uuids = await _printBasketStore.load(
+      schoolUuid: schoolUuid,
+      identityType: 'student',
+    );
+    if (uuids.isEmpty) return;
+
+    final restored = <String, ApiStudent>{};
+    const requestBatchSize = 20;
+    for (var start = 0; start < uuids.length; start += requestBatchSize) {
+      final end = math.min(start + requestBatchSize, uuids.length);
+      late final List<ApiStudent?> batch;
+      try {
+        batch = await Future.wait(
+          uuids.sublist(start, end).map((uuid) async {
+            try {
+              return await widget.api.getStudent(
+                schoolUuid: schoolUuid,
+                studentUuid: uuid,
+              );
+            } on ApiException catch (error) {
+              if (error.statusCode != 404) rethrow;
+              return null;
+            }
+          }),
+        );
+      } catch (_) {
+        // Keep the saved UUIDs when a transient refresh fails. The basket can
+        // be restored on the next visit without persisting stale snapshots.
+        return;
+      }
+      for (final student in batch.whereType<ApiStudent>()) {
+        restored[student.uuid] = student;
+      }
+    }
+    if (!mounted || widget.schoolUuid != schoolUuid) return;
+    setState(() {
+      _printBasketStudents
+        ..clear()
+        ..addAll(restored);
+    });
+    await _persistPrintBasket();
+  }
+
+  Future<void> _persistPrintBasket() => _printBasketStore.save(
+    schoolUuid: widget.schoolUuid,
+    identityType: 'student',
+    recordUuids: _printBasketStudents.keys,
+  );
 
   Future<bool?> _confirmBulkExport({
     required BulkPdfFilter filter,
