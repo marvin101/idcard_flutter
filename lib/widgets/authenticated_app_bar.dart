@@ -22,15 +22,18 @@ class AuthenticatedAppBar extends StatelessWidget
   final Widget title;
   final List<Widget> actions;
   final Widget? leading;
-
-  /// Compact mode is intended for phone-sized workflow screens.
-  ///
-  /// It removes the persistent desktop navigation strip and exposes the same
-  /// destinations from a menu in the toolbar instead.
   final bool compact;
 
+  static const double _desktopToolbarHeight = 58;
+  static const double _desktopNavigationHeight = 52;
+  static const double _compactToolbarHeight = 54;
+
   @override
-  Size get preferredSize => Size.fromHeight(compact ? 58 : 110);
+  Size get preferredSize => Size.fromHeight(
+    compact
+        ? _compactToolbarHeight
+        : _desktopToolbarHeight + _desktopNavigationHeight,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +41,7 @@ class AuthenticatedAppBar extends StatelessWidget
       context.read<AuthProvider>();
     } on ProviderNotFoundException {
       return AppBar(
-        toolbarHeight: 58,
+        toolbarHeight: compact ? _compactToolbarHeight : _desktopToolbarHeight,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         title: title,
@@ -57,9 +60,10 @@ class AuthenticatedAppBar extends StatelessWidget
         const AuthenticatedNavigationStrip();
 
     return AppBar(
-      toolbarHeight: 58,
+      toolbarHeight: compact ? _compactToolbarHeight : _desktopToolbarHeight,
       surfaceTintColor: Colors.transparent,
       automaticallyImplyLeading: false,
+      leadingWidth: compact ? 46 : null,
       leading:
           leading ??
           (AppNavigation.showsLeadingBack(routeName)
@@ -71,18 +75,18 @@ class AuthenticatedAppBar extends StatelessWidget
               : null),
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
-      titleSpacing: compact ? 8 : null,
+      titleSpacing: compact ? 4 : null,
       title: Row(
         children: [
           CampusHomeLink(
             child: Image.asset(
               'assets/images/campusid_logo.png',
-              width: compact ? 30 : 34,
-              height: compact ? 30 : 34,
+              width: compact ? 28 : 34,
+              height: compact ? 28 : 34,
               fit: BoxFit.contain,
             ),
           ),
-          SizedBox(width: compact ? 9 : 12),
+          SizedBox(width: compact ? 8 : 12),
           Flexible(
             child: DefaultTextStyle(
               style: TextStyle(
@@ -160,7 +164,7 @@ class AuthenticatedAppBar extends StatelessWidget
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 8),
               child: CircleAvatar(
-                radius: compact ? 17 : 18,
+                radius: compact ? 16 : 18,
                 backgroundColor: AppColors.accentSoft,
                 foregroundColor: AppColors.primary,
                 backgroundImage: user?.profilePhotoUrl == null
@@ -170,7 +174,10 @@ class AuthenticatedAppBar extends StatelessWidget
                     ? Text(
                         user?.initials ?? '?',
                         key: const Key('account-avatar-initials'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: compact ? 13 : null,
+                          fontWeight: FontWeight.w700,
+                        ),
                       )
                     : null,
               ),
@@ -178,9 +185,6 @@ class AuthenticatedAppBar extends StatelessWidget
           ),
         ),
 
-        // On phones Sign out remains available from the account menu.
-        // Removing the duplicate icon leaves enough room for the title and
-        // navigation menu without compromising touch-target size.
         if (!compact)
           IconButton(
             key: const Key('authenticated-sign-out'),
@@ -194,9 +198,9 @@ class AuthenticatedAppBar extends StatelessWidget
       bottom: compact
           ? null
           : PreferredSize(
-              preferredSize: const Size.fromHeight(52),
+              preferredSize: const Size.fromHeight(_desktopNavigationHeight),
               child: Container(
-                height: 52,
+                height: _desktopNavigationHeight,
                 width: double.infinity,
                 color: AppColors.navigation,
                 padding: const EdgeInsets.symmetric(
@@ -255,7 +259,7 @@ class _CompactNavigationMenu extends StatelessWidget {
     return PopupMenuButton<_NavigationItem>(
       key: const Key('mobile-navigation-menu'),
       tooltip: 'Navigation menu',
-      offset: const Offset(0, 48),
+      offset: const Offset(0, 44),
       color: AppColors.surface,
       onSelected: (item) {
         if (_isRouteActive(item.route, currentRoute)) {
@@ -326,13 +330,10 @@ class AuthenticatedNavigationStrip extends StatefulWidget {
 class _AuthenticatedNavigationStripState
     extends State<AuthenticatedNavigationStrip> {
   static const _motionDuration = Duration(milliseconds: 480);
-
   static const _motionCurve = Curves.easeInOutCubic;
-
   static const _navigationBackground = AppColors.navigation;
 
   final ScrollController _scrollController = ScrollController();
-
   final GlobalKey _activeItemKey = GlobalKey();
 
   String? _lastRevealedRoute;
