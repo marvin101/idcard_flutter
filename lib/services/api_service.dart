@@ -817,6 +817,7 @@ class ApiService {
       'POST',
       _uri('/schools/$schoolUuid/card-template/background-image'),
     );
+    request.headers.addAll(_headers);
     request.files.add(
       http.MultipartFile.fromBytes(
         'background',
