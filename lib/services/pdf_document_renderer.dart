@@ -292,6 +292,8 @@ class PdfDocumentRenderer {
                 child: pw.ClipOval(
                   child: pw.Container(
                     color: color(style.imageBackground),
+                    padding: pw.EdgeInsets.all(mm(style.borderWidth)),
+                    alignment: pw.Alignment.center,
                     child: image == null
                         ? pw.Center(
                             child: pw.Text(
@@ -311,8 +313,6 @@ class PdfDocumentRenderer {
                           )
                         : pw.Image(
                             image,
-                            width: mm(imageContentWidth),
-                            height: mm(imageContentHeight),
                             fit: style.fit == BoxFit.contain
                                 ? pw.BoxFit.contain
                                 : pw.BoxFit.cover,

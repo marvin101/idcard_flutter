@@ -270,6 +270,127 @@ void main() {
   );
 
   test(
+    'oval PDF images keep the element clip for asymmetric contain and cover',
+    () async {
+      img.Image boundaryImage(int width, int height) {
+        final image = img.Image(width: width, height: height);
+        img.fill(image, color: img.ColorRgb8(245, 245, 245));
+        for (var x = 0; x < width; x++) {
+          image.setPixelRgb(x, 0, 220, 20, 60);
+          image.setPixelRgb(x, height - 1, 20, 180, 80);
+        }
+        for (var y = 0; y < height; y++) {
+          image.setPixelRgb(0, y, 20, 80, 220);
+          image.setPixelRgb(width - 1, y, 245, 180, 20);
+        }
+        return image;
+      }
+
+      final logo = pw.MemoryImage(img.encodePng(boundaryImage(96, 32)));
+      final photo = pw.MemoryImage(img.encodePng(boundaryImage(32, 96)));
+      const elementSize = 20.0;
+      const borderWidth = 1.0;
+      final document = DesignDocument(
+        canvas: const DesignCanvas(width: 45, height: 25),
+        elements: const [
+          DesignElement(
+            id: 'oval-logo',
+            type: DesignElementType.schoolLogo,
+            x: 1,
+            y: 1,
+            width: elementSize,
+            height: elementSize,
+            style: {
+              'fit': 'contain',
+              'image_shape': 'oval',
+              'border_width': borderWidth,
+            },
+          ),
+          DesignElement(
+            id: 'oval-photo',
+            type: DesignElementType.studentPhoto,
+            x: 23,
+            y: 1,
+            width: elementSize,
+            height: elementSize,
+            style: {
+              'fit': 'cover',
+              'image_shape': 'oval',
+              'border_width': borderWidth,
+            },
+          ),
+        ],
+      );
+      final scene = DesignRenderScene(
+        document: document,
+        bindings: bindings,
+        photoUrl: 'photo.png',
+        logoUrl: 'logo.png',
+      );
+      final renderer = PdfDocumentRenderer(const {}, {
+        'logo.png': logo,
+        'photo.png': photo,
+      });
+      final context = pw.Context(document: pw.Document().document);
+      final constraints = pw.BoxConstraints.tight(
+        PdfPoint(
+          PdfDocumentRenderer.mm(elementSize),
+          PdfDocumentRenderer.mm(elementSize),
+        ),
+      );
+
+      for (final node in scene.elements) {
+        final stack = renderer.element(node) as pw.Stack;
+        final clip =
+            (stack.children.first as pw.Positioned).child as pw.ClipOval;
+        final container = clip.child as pw.Container;
+        final image = container.child as pw.Image;
+        clip.layout(context, constraints);
+
+        expect(
+          clip.box!.width,
+          closeTo(constraints.biggest.x, 1e-9),
+          reason:
+              '${node.element.id} must clip against the full saved element, '
+              'not the fitted image dimensions',
+        );
+        expect(
+          clip.box!.height,
+          closeTo(constraints.biggest.y, 1e-9),
+          reason:
+              '${node.element.id} must clip against the full saved element, '
+              'not the fitted image dimensions',
+        );
+        final padding = container.padding! as pw.EdgeInsets;
+        expect(padding.left, PdfDocumentRenderer.mm(borderWidth));
+        expect(padding.top, PdfDocumentRenderer.mm(borderWidth));
+        expect(padding.right, PdfDocumentRenderer.mm(borderWidth));
+        expect(padding.bottom, PdfDocumentRenderer.mm(borderWidth));
+        expect(container.alignment, pw.Alignment.center);
+        expect(
+          image.fit,
+          node.element.type == DesignElementType.schoolLogo
+              ? pw.BoxFit.contain
+              : pw.BoxFit.cover,
+        );
+      }
+
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(
+            PdfDocumentRenderer.mm(document.canvas.width),
+            PdfDocumentRenderer.mm(document.canvas.height),
+          ),
+          margin: pw.EdgeInsets.zero,
+          build: (_) => renderer.build(scene),
+        ),
+      );
+      expect(await pdf.save(), isNotEmpty);
+    },
+  );
+
+  test(
     'unsupported Devanagari fails explicitly instead of exporting unshaped names',
     () async {
       expect(
