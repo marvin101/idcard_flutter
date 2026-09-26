@@ -67,7 +67,7 @@ class CardsScreen extends StatefulWidget {
 }
 
 class _CardsScreenState extends State<CardsScreen> {
-  static const _printBasketStore = PrintBasketStore();
+  final _printBasketStore = PrintBasketStore();
   // Backend allows a maximum of 200.
   // 100 is a good balance between network requests and memory usage.
   static const int _pageSize = 10;
@@ -1455,9 +1455,7 @@ class _CardsScreenState extends State<CardsScreen> {
                     const SizedBox(height: 14),
                     _buildResultsHeader(),
                     const SizedBox(height: 10),
-                    Expanded(
-                      child: _buildContent(),
-                    ),
+                    Expanded(child: _buildContent()),
                   ],
                 ),
               ),
@@ -1479,9 +1477,9 @@ class _CardsScreenState extends State<CardsScreen> {
             Text(
               'ID cards',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1522,9 +1520,7 @@ class _CardsScreenState extends State<CardsScreen> {
                 icon: _exportingBulk
                     ? const SizedBox.square(
                         dimension: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.picture_as_pdf_outlined),
                 label: const Text('Bulk PDF'),
@@ -1575,9 +1571,7 @@ class _CardsScreenState extends State<CardsScreen> {
             SizedBox(width: 12),
             Text(
               'Loading card filters...',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -1617,15 +1611,10 @@ class _CardsScreenState extends State<CardsScreen> {
             label: 'Academic Session',
             value: _selectedSessionUuid,
             items: [
-              const DropdownMenuItem(
-                value: null,
-                child: Text('All Sessions'),
-              ),
+              const DropdownMenuItem(value: null, child: Text('All Sessions')),
               ..._sessions.map(
-                (item) => DropdownMenuItem(
-                  value: item.uuid,
-                  child: Text(item.name),
-                ),
+                (item) =>
+                    DropdownMenuItem(value: item.uuid, child: Text(item.name)),
               ),
             ],
             onChanged: _selectSession,
@@ -1635,15 +1624,10 @@ class _CardsScreenState extends State<CardsScreen> {
             label: 'Class',
             value: _selectedClassUuid,
             items: [
-              const DropdownMenuItem(
-                value: null,
-                child: Text('All Classes'),
-              ),
+              const DropdownMenuItem(value: null, child: Text('All Classes')),
               ..._classes.map(
-                (item) => DropdownMenuItem(
-                  value: item.uuid,
-                  child: Text(item.name),
-                ),
+                (item) =>
+                    DropdownMenuItem(value: item.uuid, child: Text(item.name)),
               ),
             ],
             onChanged: _selectClass,
@@ -1653,15 +1637,10 @@ class _CardsScreenState extends State<CardsScreen> {
             label: 'Section',
             value: _selectedSectionUuid,
             items: [
-              const DropdownMenuItem(
-                value: null,
-                child: Text('All Sections'),
-              ),
+              const DropdownMenuItem(value: null, child: Text('All Sections')),
               ..._sections.map(
-                (item) => DropdownMenuItem(
-                  value: item.uuid,
-                  child: Text(item.name),
-                ),
+                (item) =>
+                    DropdownMenuItem(value: item.uuid, child: Text(item.name)),
               ),
             ],
             onChanged: _selectSection,
@@ -1672,22 +1651,13 @@ class _CardsScreenState extends State<CardsScreen> {
             label: 'Verification',
             value: _verificationStatus,
             items: const [
-              DropdownMenuItem(
-                value: null,
-                child: Text('All Statuses'),
-              ),
-              DropdownMenuItem(
-                value: 'pending',
-                child: Text('Pending'),
-              ),
+              DropdownMenuItem(value: null, child: Text('All Statuses')),
+              DropdownMenuItem(value: 'pending', child: Text('Pending')),
               DropdownMenuItem(
                 value: 'needs_correction',
                 child: Text('Needs Correction'),
               ),
-              DropdownMenuItem(
-                value: 'verified',
-                child: Text('Verified'),
-              ),
+              DropdownMenuItem(value: 'verified', child: Text('Verified')),
             ],
             onChanged: (value) {
               setState(() {
@@ -1701,18 +1671,9 @@ class _CardsScreenState extends State<CardsScreen> {
             label: 'Printed',
             value: _printed,
             items: const [
-              DropdownMenuItem(
-                value: null,
-                child: Text('All Records'),
-              ),
-              DropdownMenuItem(
-                value: false,
-                child: Text('Not Printed'),
-              ),
-              DropdownMenuItem(
-                value: true,
-                child: Text('Printed'),
-              ),
+              DropdownMenuItem(value: null, child: Text('All Records')),
+              DropdownMenuItem(value: false, child: Text('Not Printed')),
+              DropdownMenuItem(value: true, child: Text('Printed')),
             ],
             onChanged: (value) {
               setState(() {
@@ -1758,10 +1719,7 @@ class _CardsScreenState extends State<CardsScreen> {
             children: [
               Row(
                 children: [
-                  Expanded(
-                    flex: 2,
-                    child: search,
-                  ),
+                  Expanded(flex: 2, child: search),
                   const SizedBox(width: 10),
                   Expanded(child: session),
                   const SizedBox(width: 10),
@@ -1774,19 +1732,13 @@ class _CardsScreenState extends State<CardsScreen> {
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
-                children: [
-                  verification,
-                  printed,
-                ],
+                children: [verification, printed],
               ),
               if (_sectionError != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   _sectionError!,
-                  style: const TextStyle(
-                    color: AppColors.danger,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: AppColors.danger, fontSize: 12),
                 ),
               ],
             ],
@@ -1799,25 +1751,16 @@ class _CardsScreenState extends State<CardsScreen> {
   Widget _buildLifecycleNotice() {
     return Container(
       key: const Key('pdf-lifecycle-explanation'),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 12,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.infoSoft,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.info.withValues(alpha: 0.18),
-        ),
+        border: Border.all(color: AppColors.info.withValues(alpha: 0.18)),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline_rounded,
-            size: 20,
-            color: AppColors.info,
-          ),
+          Icon(Icons.info_outline_rounded, size: 20, color: AppColors.info),
           SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -1838,10 +1781,7 @@ class _CardsScreenState extends State<CardsScreen> {
   Widget _buildBulkExportStatus() {
     return Container(
       key: const Key('bulk-export-status'),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
@@ -1851,9 +1791,7 @@ class _CardsScreenState extends State<CardsScreen> {
         children: [
           const SizedBox.square(
             dimension: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1871,17 +1809,13 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
-  Widget _buildSelectionBar(
-    StudentLifecycleSelection selection,
-  ) {
+  Widget _buildSelectionBar(StudentLifecycleSelection selection) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.accentSoft,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.accent.withValues(alpha: 0.20),
-        ),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.20)),
       ),
       child: Wrap(
         spacing: 10,
@@ -1906,10 +1840,7 @@ class _CardsScreenState extends State<CardsScreen> {
           if (widget.canPrint)
             OutlinedButton.icon(
               onPressed: _addSelectionToPrintBasket,
-              icon: const Icon(
-                Icons.add_shopping_cart_outlined,
-                size: 18,
-              ),
+              icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
               label: const Text('Add to Print Basket'),
             ),
           if (widget.canMarkPrinted)
@@ -1931,8 +1862,7 @@ class _CardsScreenState extends State<CardsScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-          if (widget.canMarkPrinted &&
-              selection.printIneligibleCount > 0)
+          if (widget.canMarkPrinted && selection.printIneligibleCount > 0)
             Text(
               '${selection.printIneligibleCount} selected record(s) are '
               'not verified.',
@@ -1990,10 +1920,7 @@ class _CardsScreenState extends State<CardsScreen> {
         if (_hasMore && !_loadingStudents)
           const Text(
             'Scroll to load more',
-            style: TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
           ),
       ],
     );
@@ -2014,20 +1941,14 @@ class _CardsScreenState extends State<CardsScreen> {
         decoration: InputDecoration(
           labelText: label,
           filled: true,
-          fillColor: enabled
-              ? AppColors.surface
-              : AppColors.surfaceMuted,
+          fillColor: enabled ? AppColors.surface : AppColors.surfaceMuted,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-              color: AppColors.border,
-            ),
+            borderSide: const BorderSide(color: AppColors.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-              color: AppColors.border,
-            ),
+            borderSide: const BorderSide(color: AppColors.border),
           ),
         ),
         items: items,
@@ -2062,8 +1983,7 @@ class _CardsScreenState extends State<CardsScreen> {
         iconColor: AppColors.accent,
         iconBackground: AppColors.accentSoft,
         title: 'No cards found',
-        message:
-            'No students match the current search and filter selection.',
+        message: 'No students match the current search and filter selection.',
       );
     }
 
@@ -2088,7 +2008,7 @@ class _CardsScreenState extends State<CardsScreen> {
             crossAxisCount: columns,
             mainAxisExtent:
                 tileWidth * canvas.height / canvas.width +
-                    IdCardPreview.actionsHeight,
+                IdCardPreview.actionsHeight,
             crossAxisSpacing: spacing,
             mainAxisSpacing: spacing,
           ),
@@ -2098,9 +2018,7 @@ class _CardsScreenState extends State<CardsScreen> {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               );
             }
@@ -2142,18 +2060,16 @@ class _CardsScreenState extends State<CardsScreen> {
                         sectionName: _sectionName(student),
                         logoUrl: _schoolLogoUrl,
                         schoolProfile: _schoolProfile,
-                        onEdit:
-                            widget.canEdit ? () => _editStudent(student) : null,
+                        onEdit: widget.canEdit
+                            ? () => _editStudent(student)
+                            : null,
                         onPrint: widget.canPrint
-                            ? () => _printStudentCard(
-                                  student,
-                                  session?.name,
-                                )
+                            ? () => _printStudentCard(student, session?.name)
                             : null,
                         onMarkPrinted:
                             widget.canMarkPrinted && student.isVerified
-                                ? () => _markPrinted(student)
-                                : null,
+                            ? () => _markPrinted(student)
+                            : null,
                       ),
                     ),
                     Positioned(
@@ -2166,7 +2082,8 @@ class _CardsScreenState extends State<CardsScreen> {
                         ),
                         child: Checkbox(
                           value: _selectedStudentUuids.contains(student.uuid),
-                          onChanged: widget.canPrint ||
+                          onChanged:
+                              widget.canPrint ||
                                   widget.canVerify ||
                                   widget.canMarkPrinted
                               ? (value) {
@@ -2174,7 +2091,9 @@ class _CardsScreenState extends State<CardsScreen> {
                                     if (value == true) {
                                       _selectedStudentUuids.add(student.uuid);
                                     } else {
-                                      _selectedStudentUuids.remove(student.uuid);
+                                      _selectedStudentUuids.remove(
+                                        student.uuid,
+                                      );
                                     }
                                   });
                                 }
@@ -2207,9 +2126,7 @@ class _CardsLoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 420,
-        ),
+        constraints: const BoxConstraints(maxWidth: 420),
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -2221,16 +2138,12 @@ class _CardsLoadingState extends StatelessWidget {
           children: [
             SizedBox.square(
               dimension: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2.5),
             ),
             SizedBox(height: 14),
             Text(
               'Loading card previews...',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -2260,13 +2173,8 @@ class _CardsStateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 520,
-        ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 28,
-          vertical: 34,
-        ),
+        constraints: const BoxConstraints(maxWidth: 520),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 34),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
@@ -2282,11 +2190,7 @@ class _CardsStateCard extends StatelessWidget {
                 color: iconBackground,
                 borderRadius: BorderRadius.circular(17),
               ),
-              child: Icon(
-                icon,
-                color: iconColor,
-                size: 29,
-              ),
+              child: Icon(icon, color: iconColor, size: 29),
             ),
             const SizedBox(height: 16),
             Text(
@@ -2308,10 +2212,7 @@ class _CardsStateCard extends StatelessWidget {
                 height: 1.4,
               ),
             ),
-            if (action != null) ...[
-              const SizedBox(height: 18),
-              action!,
-            ],
+            if (action != null) ...[const SizedBox(height: 18), action!],
           ],
         ),
       ),

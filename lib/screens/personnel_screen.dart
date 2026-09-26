@@ -47,7 +47,7 @@ class PersonnelScreen extends StatefulWidget {
 }
 
 class _PersonnelScreenState extends State<PersonnelScreen> {
-  static const _printBasketStore = PrintBasketStore();
+  final _printBasketStore = PrintBasketStore();
 
   final _search = TextEditingController();
 

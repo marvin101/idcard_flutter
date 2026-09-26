@@ -234,10 +234,21 @@ void main() {
           final backgrounds = stack.children
               .whereType<pw.Positioned>()
               .map((p) => p.child)
-              .whereType<pw.Image>()
+              .whereType<pw.ClipRect>()
+              .where((clip) => clip.child is pw.Opacity)
+              .map((clip) => clip.child! as pw.Opacity)
+              .where((opacity) => opacity.child is pw.Transform)
+              .map((opacity) => opacity.child! as pw.Transform)
+              .where((translate) => translate.child is pw.Transform)
+              .map((translate) => translate.child! as pw.Transform)
+              .where((scale) => scale.child is pw.Image)
+              .map((scale) => scale.child! as pw.Image)
               .toList();
+
           expect(backgrounds.length, available ? 1 : 0);
-          if (available) expect(backgrounds.single.fit, pw.BoxFit.cover);
+          if (available) {
+            expect(backgrounds.single.fit, pw.BoxFit.cover);
+          }
           final pdf = pw.Document(compress: false);
           pdf.addPage(
             pw.Page(

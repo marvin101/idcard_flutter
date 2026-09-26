@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PrintBasketStore {
-  const PrintBasketStore();
+  PrintBasketStore();
 
-  static Future<void> _writeQueue = Future<void>.value();
+  Future<void> _writeQueue = Future<void>.value();
 
   String _key({required String schoolUuid, required String identityType}) =>
       'campusid.print-basket.v1.$schoolUuid.$identityType';

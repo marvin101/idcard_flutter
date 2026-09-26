@@ -95,7 +95,7 @@ void main() {
   test(
     'preset store is school scoped and updates names case-insensitively',
     () async {
-      const store = PrintPresetStore();
+      final store = PrintPresetStore();
       final first = await store.save(
         schoolUuid: 'school-a',
         name: 'Office printer',
@@ -122,7 +122,7 @@ void main() {
   );
 
   test('print baskets persist UUIDs by school and identity type', () async {
-    const store = PrintBasketStore();
+    final store = PrintBasketStore();
     await store.save(
       schoolUuid: 'school-a',
       identityType: 'student',
@@ -158,7 +158,7 @@ void main() {
   });
 
   test('print basket writes keep the latest rapid update', () async {
-    const store = PrintBasketStore();
+    final store = PrintBasketStore();
     final first = store.save(
       schoolUuid: 'school-a',
       identityType: 'student',
@@ -172,10 +172,9 @@ void main() {
 
     await Future.wait([first, second]);
 
-    expect(
-      await store.load(schoolUuid: 'school-a', identityType: 'student'),
-      ['student-2'],
-    );
+    expect(await store.load(schoolUuid: 'school-a', identityType: 'student'), [
+      'student-2',
+    ]);
   });
 
   test('duplex calibration PDF contains front and back pages', () async {
