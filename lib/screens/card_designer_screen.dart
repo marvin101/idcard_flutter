@@ -5246,8 +5246,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             ),
             Row(children: [
               Expanded(child: DesignerNumericField(
-                key: const Key('canvas-background-x'),
-                label: 'Move X (mm)',
+                fieldKey: const Key('canvas-background-x'),
+                ownerId: null,
+                decoration: _propertyDecoration('Move X (mm)'),
                 value: _document.canvas.backgroundOffsetX,
                 onChanged: (value) => _commit(_document.copyWith(
                   canvas: _document.canvas.copyWith(backgroundOffsetX: value),
@@ -5255,8 +5256,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
               )),
               const SizedBox(width: 10),
               Expanded(child: DesignerNumericField(
-                key: const Key('canvas-background-y'),
-                label: 'Move Y (mm)',
+                fieldKey: const Key('canvas-background-y'),
+                ownerId: null,
+                decoration: _propertyDecoration('Move Y (mm)'),
                 value: _document.canvas.backgroundOffsetY,
                 onChanged: (value) => _commit(_document.copyWith(
                   canvas: _document.canvas.copyWith(backgroundOffsetY: value),
