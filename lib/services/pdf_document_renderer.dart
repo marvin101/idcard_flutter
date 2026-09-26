@@ -55,7 +55,21 @@ class PdfDocumentRenderer {
             if (images[scene.backgroundImage]
                 case final pw.MemoryImage background)
               pw.Positioned.fill(
-                child: pw.Image(background, fit: pw.BoxFit.cover),
+                child: pw.ClipRect(
+                  child: pw.Opacity(
+                    opacity: scene.backgroundOpacity,
+                    child: pw.Transform.translate(
+                      offset: PdfPoint(
+                        mm(scene.backgroundOffsetX),
+                        -mm(scene.backgroundOffsetY),
+                      ),
+                      child: pw.Transform.scale(
+                        scale: scene.backgroundScale,
+                        child: pw.Image(background, fit: pw.BoxFit.cover),
+                      ),
+                    ),
+                  ),
+                ),
               ),
 
             for (final node in scene.elements)
