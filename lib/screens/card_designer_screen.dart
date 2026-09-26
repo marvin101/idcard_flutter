@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/api_personnel.dart';
 import '../models/api_student.dart';
@@ -1019,6 +1020,35 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       ),
       gestureUpdate: gestureUpdate,
     );
+  }
+
+  Future<void> _pickBackgroundImage() async {
+    final image = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (image == null || !mounted) return;
+    _updateUi(() => _saving = true);
+    try {
+      final url = await widget.api.uploadCardBackground(
+        schoolUuid: widget.schoolUuid,
+        background: image,
+      );
+      if (!mounted) return;
+      _commit(_document.copyWith(
+        canvas: _document.canvas.copyWith(
+          backgroundImage: url,
+          backgroundOpacity: 1,
+          backgroundScale: 1,
+          backgroundOffsetX: 0,
+          backgroundOffsetY: 0,
+        ),
+      ));
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) _updateUi(() => _saving = false);
+    }
   }
 
   void _add(DesignElementType type, {StudentFieldDefinition? customField}) {
@@ -5177,6 +5207,86 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             );
           }
         },
+      ),
+    ),
+
+    _propertyControl(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OutlinedButton.icon(
+            key: const Key('canvas-background-image'),
+            onPressed: _saving ? null : _pickBackgroundImage,
+            icon: const Icon(Icons.image_outlined),
+            label: Text(
+              _document.canvas.backgroundImage == null
+                  ? 'Add background image'
+                  : 'Replace background image',
+            ),
+          ),
+          if (_document.canvas.backgroundImage != null) ...[
+            const SizedBox(height: 10),
+            Text('Background opacity ${(100 * _document.canvas.backgroundOpacity).round()}%'),
+            Slider(
+              key: const Key('canvas-background-opacity'),
+              value: _document.canvas.backgroundOpacity,
+              min: 0, max: 1, divisions: 20,
+              onChanged: (value) => _commit(_document.copyWith(
+                canvas: _document.canvas.copyWith(backgroundOpacity: value),
+              )),
+            ),
+            Text('Background zoom ${_document.canvas.backgroundScale.toStringAsFixed(2)}×'),
+            Slider(
+              key: const Key('canvas-background-zoom'),
+              value: _document.canvas.backgroundScale,
+              min: 1, max: 5, divisions: 80,
+              onChanged: (value) => _commit(_document.copyWith(
+                canvas: _document.canvas.copyWith(backgroundScale: value),
+              )),
+            ),
+            Row(children: [
+              Expanded(child: DesignerNumericField(
+                key: const Key('canvas-background-x'),
+                label: 'Move X (mm)',
+                value: _document.canvas.backgroundOffsetX,
+                onChanged: (value) => _commit(_document.copyWith(
+                  canvas: _document.canvas.copyWith(backgroundOffsetX: value),
+                )),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: DesignerNumericField(
+                key: const Key('canvas-background-y'),
+                label: 'Move Y (mm)',
+                value: _document.canvas.backgroundOffsetY,
+                onChanged: (value) => _commit(_document.copyWith(
+                  canvas: _document.canvas.copyWith(backgroundOffsetY: value),
+                )),
+              )),
+            ]),
+            Row(children: [
+              TextButton(
+                onPressed: () => _commit(_document.copyWith(
+                  canvas: _document.canvas.copyWith(
+                    backgroundOpacity: 1, backgroundScale: 1,
+                    backgroundOffsetX: 0, backgroundOffsetY: 0,
+                  ),
+                )),
+                child: const Text('Reset crop'),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => _commit(_document.copyWith(
+                  canvas: _document.canvas.copyWith(
+                    removeBackgroundImage: true,
+                    backgroundOpacity: 1, backgroundScale: 1,
+                    backgroundOffsetX: 0, backgroundOffsetY: 0,
+                  ),
+                )),
+                child: const Text('Remove'),
+              ),
+            ]),
+          ],
+        ],
       ),
     ),
 
