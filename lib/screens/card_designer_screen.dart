@@ -5265,28 +5265,32 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 )),
               )),
             ]),
-            Row(children: [
-              TextButton(
-                onPressed: () => _commit(_document.copyWith(
-                  canvas: _document.canvas.copyWith(
-                    backgroundOpacity: 1, backgroundScale: 1,
-                    backgroundOffsetX: 0, backgroundOffsetY: 0,
-                  ),
-                )),
-                child: const Text('Reset crop'),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => _commit(_document.copyWith(
-                  canvas: _document.canvas.copyWith(
-                    removeBackgroundImage: true,
-                    backgroundOpacity: 1, backgroundScale: 1,
-                    backgroundOffsetX: 0, backgroundOffsetY: 0,
-                  ),
-                )),
-                child: const Text('Remove'),
-              ),
-            ]),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                TextButton(
+                  onPressed: () => _commit(_document.copyWith(
+                    canvas: _document.canvas.copyWith(
+                      backgroundOpacity: 1, backgroundScale: 1,
+                      backgroundOffsetX: 0, backgroundOffsetY: 0,
+                    ),
+                  )),
+                  child: const Text('Reset crop'),
+                ),
+                TextButton(
+                  onPressed: () => _commit(_document.copyWith(
+                    canvas: _document.canvas.copyWith(
+                      removeBackgroundImage: true,
+                      backgroundOpacity: 1, backgroundScale: 1,
+                      backgroundOffsetX: 0, backgroundOffsetY: 0,
+                    ),
+                  )),
+                  child: const Text('Remove'),
+                ),
+              ],
+            ),
           ],
         ],
       ),
