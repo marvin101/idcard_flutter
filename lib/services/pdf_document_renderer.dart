@@ -276,6 +276,14 @@ class PdfDocumentRenderer {
       case DesignElementType.schoolLogo:
       case DesignElementType.principalSignature:
         final image = images[node.imageUrl];
+        final imageContentWidth = math.max(
+          0.0,
+          node.element.width - (style.borderWidth * 2),
+        );
+        final imageContentHeight = math.max(
+          0.0,
+          node.element.height - (style.borderWidth * 2),
+        );
 
         if (style.imageShape == 'oval') {
           return pw.Stack(
@@ -358,6 +366,8 @@ class PdfDocumentRenderer {
                   )
                 : pw.Image(
                     image,
+                    width: mm(imageContentWidth),
+                    height: mm(imageContentHeight),
                     fit: style.fit == BoxFit.contain
                         ? pw.BoxFit.contain
                         : pw.BoxFit.cover,
