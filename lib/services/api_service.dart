@@ -804,6 +804,33 @@ class ApiService {
     ).map((item) => AcademicSession.fromJson(item)).toList();
   }
 
+  Future<String> uploadCardBackground({
+    required String schoolUuid,
+    required XFile background,
+  }) async {
+    final sourceFilename = background.name.trim();
+    final contentType = background.mimeType ?? 'image/jpeg';
+    if (!{'image/jpeg', 'image/png', 'image/webp'}.contains(contentType)) {
+      throw const ApiException(0, 'Choose a JPEG, PNG or WebP card background.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/schools/$schoolUuid/card-template/background-image'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'background',
+        await background.readAsBytes(),
+        filename: sourceFilename.isEmpty ? 'card_background.jpg' : sourceFilename,
+        contentType: MediaType.parse(contentType),
+      ),
+    );
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final decoded = _decodeMap(response);
+    return decoded['background_image'] as String;
+  }
+
   Future<CardTemplate> getCardTemplate(String schoolUuid) async {
     final response = await _client.get(
       _uri('/schools/$schoolUuid/card-template'),
