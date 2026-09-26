@@ -63,10 +63,15 @@ class DesignCanvas {
     this.orientation = 'landscape',
     this.backgroundColor = '#FFFFFF',
     this.backgroundImage,
+    this.backgroundOpacity = 1,
+    this.backgroundScale = 1,
+    this.backgroundOffsetX = 0,
+    this.backgroundOffsetY = 0,
   });
   final double width, height;
   final String orientation, backgroundColor;
   final String? backgroundImage;
+  final double backgroundOpacity, backgroundScale, backgroundOffsetX, backgroundOffsetY;
   factory DesignCanvas.fromJson(Map<String, dynamic> json) {
     final width = _requiredNumber(json, 'width', 'canvas.width');
     final height = _requiredNumber(json, 'height', 'canvas.height');
@@ -89,6 +94,10 @@ class DesignCanvas {
       orientation: width >= height ? 'landscape' : 'portrait',
       backgroundColor: _safeHex(backgroundColor, '#FFFFFF'),
       backgroundImage: backgroundImage as String?,
+      backgroundOpacity: ((json['background_opacity'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0),
+      backgroundScale: ((json['background_scale'] as num?)?.toDouble() ?? 1).clamp(1.0, 5.0),
+      backgroundOffsetX: (json['background_offset_x'] as num?)?.toDouble() ?? 0,
+      backgroundOffsetY: (json['background_offset_y'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -97,6 +106,11 @@ class DesignCanvas {
     double? height,
     String? backgroundColor,
     String? backgroundImage,
+    bool removeBackgroundImage = false,
+    double? backgroundOpacity,
+    double? backgroundScale,
+    double? backgroundOffsetX,
+    double? backgroundOffsetY,
   }) {
     final nextWidth = width ?? this.width;
     final nextHeight = height ?? this.height;
@@ -105,7 +119,11 @@ class DesignCanvas {
       height: nextHeight,
       orientation: nextWidth >= nextHeight ? 'landscape' : 'portrait',
       backgroundColor: backgroundColor ?? this.backgroundColor,
-      backgroundImage: backgroundImage ?? this.backgroundImage,
+      backgroundImage: removeBackgroundImage ? null : (backgroundImage ?? this.backgroundImage),
+      backgroundOpacity: backgroundOpacity ?? this.backgroundOpacity,
+      backgroundScale: backgroundScale ?? this.backgroundScale,
+      backgroundOffsetX: backgroundOffsetX ?? this.backgroundOffsetX,
+      backgroundOffsetY: backgroundOffsetY ?? this.backgroundOffsetY,
     );
   }
 
@@ -115,6 +133,10 @@ class DesignCanvas {
     'orientation': orientation,
     'background_color': backgroundColor,
     'background_image': backgroundImage,
+    'background_opacity': backgroundOpacity,
+    'background_scale': backgroundScale,
+    'background_offset_x': backgroundOffsetX,
+    'background_offset_y': backgroundOffsetY,
   };
 }
 
