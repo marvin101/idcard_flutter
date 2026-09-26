@@ -165,7 +165,7 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
     return Navigator(
       key: navigatorKey,
       pages: AppRoutes.isProtected(current.location)
-          ? [_authenticatedPageFor(current)]
+          ? [for (final entry in _entries) _authenticatedPageFor(entry)]
           : [for (final entry in _entries) _pageFor(entry)],
       onDidRemovePage: (page) {
         if (page.key == _authenticatedShellPageKey) return;
@@ -187,7 +187,7 @@ class AppRouterDelegate extends RouterDelegate<AppRouteState>
     }
 
     return MaterialPage<dynamic>(
-      key: _authenticatedShellPageKey,
+      key: _entries.length == 1 ? _authenticatedShellPageKey : entry.key,
       name: entry.location,
       arguments: entry.arguments,
       onPopInvoked: onPopInvoked,

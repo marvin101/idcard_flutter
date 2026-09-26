@@ -13,6 +13,7 @@ import '../models/card_template.dart';
 import '../models/design_barcode.dart';
 import '../models/design_element_library.dart';
 import '../models/design_geometry.dart';
+import '../models/designer_selection.dart';
 import '../models/school_profile.dart';
 import '../models/student_field.dart';
 import '../navigation/app_navigation.dart';
@@ -98,6 +99,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   String? _gestureId;
   String? _selectedId;
+  final Set<String> _selectedIds = <String>{};
   String? _logoUrl;
 
   Offset _gestureRemainder = Offset.zero;
@@ -371,12 +373,21 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _commitTemplate(_template.copyWith(name: _name.text));
   }
 
-  void _select(String? id) {
+  Set<String> get _effectiveSelectedIds => _selectedId == null
+      ? const <String>{}
+      : {
+          ..._selectedIds.where(
+            (id) => _document.elements.any((element) => element.id == id),
+          ),
+          _selectedId!,
+        };
+
+  void _select(String? id, [bool additive = false]) {
     if (_inlineEditingId != null && _inlineEditingId != id) {
       _commitInlineTextEdit();
     }
 
-    if (_selectedId == id) {
+    if (_selectedId == id && (!additive || _selectedIds.length <= 1)) {
       if (_inlineEditingId == null) {
         _canvasFocus.requestFocus();
       }
@@ -386,11 +397,26 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _endGesture();
 
     _updateUi(() {
-      _selectedId = id;
+      if (id == null) {
+        _selectedId = null;
+        _selectedIds.clear();
+      } else if (additive) {
+        if (!_selectedIds.add(id)) {
+          _selectedIds.remove(id);
+          _selectedId = _selectedIds.isEmpty ? null : _selectedIds.last;
+        } else {
+          _selectedId = id;
+        }
+      } else if (!_selectedIds.contains(id) || _selectedIds.length <= 1) {
+        _selectedIds
+          ..clear()
+          ..add(id);
+        _selectedId = id;
+      }
 
       _history[_historyIndex] = _DesignerSnapshot(
         _template,
-        id,
+        _selectedId,
         _localDuplicate,
       );
     });
@@ -811,10 +837,14 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
       if (selectedId != null) {
         _selectedId = selectedId;
+        _selectedIds
+          ..clear()
+          ..add(selectedId);
       }
 
       if (_selected == null) {
         _selectedId = null;
+        _selectedIds.clear();
       }
 
       if (_gestureStart == null) {
@@ -876,6 +906,11 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       }
 
       _selectedId = _history[index].selectedId;
+      _selectedIds
+        ..clear()
+        ..addAll(
+          _selectedId == null ? const <String>[] : <String>[_selectedId!],
+        );
 
       _localDuplicate = _history[index].localDuplicate;
 
@@ -1032,20 +1067,22 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         background: image,
       );
       if (!mounted) return;
-      _commit(_document.copyWith(
-        canvas: _document.canvas.copyWith(
-          backgroundImage: url,
-          backgroundOpacity: 1,
-          backgroundScale: 1,
-          backgroundOffsetX: 0,
-          backgroundOffsetY: 0,
+      _commit(
+        _document.copyWith(
+          canvas: _document.canvas.copyWith(
+            backgroundImage: url,
+            backgroundOpacity: 1,
+            backgroundScale: 1,
+            backgroundOffsetX: 0,
+            backgroundOffsetY: 0,
+          ),
         ),
-      ));
+      );
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } finally {
       if (mounted) _updateUi(() => _saving = false);
     }
@@ -1105,6 +1142,26 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
 
+    final selected = _effectiveSelectedIds.contains(id)
+        ? _effectiveSelectedIds
+        : <String>{id};
+    if (selected.length > 1 ||
+        _document.elements.any((item) => item.anchorParentId != null)) {
+      _commit(
+        _document.copyWith(
+          elements: translateDesignSelection(
+            _document.elements,
+            selected,
+            _document.canvas,
+            dx,
+            dy,
+          ),
+        ),
+        gestureUpdate: true,
+      );
+      return;
+    }
+
     _updateElement(id, (element) {
       if (element.locked) {
         return element;
@@ -1151,6 +1208,22 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   void _resize(String id, String handle, double dx, double dy) {
     if (!dx.isFinite || !dy.isFinite) return;
+    final selected = _effectiveSelectedIds;
+    if (selected.length > 1) {
+      _commit(
+        _document.copyWith(
+          elements: resizeDesignSelection(
+            _document.elements,
+            selected,
+            _document.canvas,
+            dx,
+            dy,
+          ),
+        ),
+        gestureUpdate: true,
+      );
+      return;
+    }
     _updateElement(id, (element) {
       final next = resizeElementFromHandle(
         element,
@@ -1171,13 +1244,20 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
 
+    final removedIds = _effectiveSelectedIds;
     _commit(
       _document.copyWith(
         elements: _document.elements
-            .where((element) => element.id != selected.id)
+            .where((element) => !removedIds.contains(element.id))
+            .map(
+              (element) => removedIds.contains(element.anchorParentId)
+                  ? element.copyWith(clearAnchor: true)
+                  : element,
+            )
             .toList(),
       ),
     );
+    _selectedIds.clear();
   }
 
   void _duplicate() {
@@ -1187,7 +1267,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
 
-    if (_document.elements.length >= DesignDocument.maxElements) {
+    final selectedIds = _effectiveSelectedIds;
+    final selectedItems = _document.elements
+        .where((element) => selectedIds.contains(element.id))
+        .toList();
+    if (_document.elements.length + selectedItems.length >
+        DesignDocument.maxElements) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('A design can contain at most 250 elements.'),
@@ -1197,11 +1282,48 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
 
+    if (selectedItems.length > 1) {
+      final stamp = DateTime.now().microsecondsSinceEpoch;
+      final idMap = <String, String>{
+        for (final item in selectedItems)
+          item.id: '${item.type.wire}-$stamp-${_idCounter++}',
+      };
+      final bounds = designSelectionBounds(selectedItems, selectedIds)!;
+      final dx = math.min(2.0, _document.canvas.width - bounds.right);
+      final dy = math.min(2.0, _document.canvas.height - bounds.bottom);
+      final firstZ = _topZ();
+      final copies = <DesignElement>[
+        for (var index = 0; index < selectedItems.length; index++)
+          selectedItems[index].copyWith(
+            id: idMap[selectedItems[index].id],
+            anchorParentId: idMap[selectedItems[index].anchorParentId],
+            clearAnchor:
+                selectedItems[index].anchorParentId != null &&
+                !idMap.containsKey(selectedItems[index].anchorParentId),
+            x: selectedItems[index].x + dx,
+            y: selectedItems[index].y + dy,
+            zIndex: firstZ + index,
+          ),
+      ];
+      _commit(
+        _document.copyWith(elements: [..._document.elements, ...copies]),
+        selectedId: copies.last.id,
+      );
+      _updateUi(() {
+        _selectedIds
+          ..clear()
+          ..addAll(copies.map((item) => item.id));
+        _selectedId = copies.last.id;
+      });
+      return;
+    }
+
     final id =
         '${selected.type.wire}-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
 
     final copy = selected.copyWith(
       id: id,
+      clearAnchor: true,
       x: math.min(selected.x + 2, _document.canvas.width - selected.width),
       y: math.min(selected.y + 2, _document.canvas.height - selected.height),
       zIndex: _topZ(),
@@ -3225,6 +3347,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                     schoolProfile: _schoolProfile,
                                     assetBaseUrl: widget.api.baseUrl,
                                     selectedId: _selectedId,
+                                    selectedIds: _effectiveSelectedIds,
                                     interactive: true,
 
                                     inlineEditingId: _inlineEditingId,
@@ -4130,6 +4253,36 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                           ),
                         ),
                       ],
+                    ),
+                    _dropdownProperty<String>(
+                      key: ValueKey('anchor-parent-${e.id}'),
+                      label: 'Anchor to',
+                      value: e.anchorParentId ?? '',
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('No anchor'),
+                        ),
+                        for (final candidate in _document.elements)
+                          if (candidate.id != e.id &&
+                              canAnchorElement(
+                                _document.elements,
+                                e.id,
+                                candidate.id,
+                              ))
+                            DropdownMenuItem<String>(
+                              value: candidate.id,
+                              child: Text(
+                                _elementLabel(candidate),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                      ],
+                      onChanged: (value) => update(
+                        (element) => value == null || value.isEmpty
+                            ? element.copyWith(clearAnchor: true)
+                            : element.copyWith(anchorParentId: value),
+                      ),
                     ),
                     if (e.type == DesignElementType.text ||
                         e.type == DesignElementType.boundText)
@@ -5226,67 +5379,101 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           ),
           if (_document.canvas.backgroundImage != null) ...[
             const SizedBox(height: 10),
-            Text('Background opacity ${(100 * _document.canvas.backgroundOpacity).round()}%'),
+            Text(
+              'Background opacity ${(100 * _document.canvas.backgroundOpacity).round()}%',
+            ),
             Slider(
               key: const Key('canvas-background-opacity'),
               value: _document.canvas.backgroundOpacity,
-              min: 0, max: 1, divisions: 20,
-              onChanged: (value) => _commit(_document.copyWith(
-                canvas: _document.canvas.copyWith(backgroundOpacity: value),
-              )),
+              min: 0,
+              max: 1,
+              divisions: 20,
+              onChanged: (value) => _commit(
+                _document.copyWith(
+                  canvas: _document.canvas.copyWith(backgroundOpacity: value),
+                ),
+              ),
             ),
-            Text('Background zoom ${_document.canvas.backgroundScale.toStringAsFixed(2)}×'),
+            Text(
+              'Background zoom ${_document.canvas.backgroundScale.toStringAsFixed(2)}×',
+            ),
             Slider(
               key: const Key('canvas-background-zoom'),
               value: _document.canvas.backgroundScale,
-              min: 1, max: 5, divisions: 80,
-              onChanged: (value) => _commit(_document.copyWith(
-                canvas: _document.canvas.copyWith(backgroundScale: value),
-              )),
+              min: 1,
+              max: 5,
+              divisions: 80,
+              onChanged: (value) => _commit(
+                _document.copyWith(
+                  canvas: _document.canvas.copyWith(backgroundScale: value),
+                ),
+              ),
             ),
-            Row(children: [
-              Expanded(child: DesignerNumericField(
-                fieldKey: const Key('canvas-background-x'),
-                ownerId: null,
-                decoration: _propertyDecoration('Move X (mm)'),
-                value: _document.canvas.backgroundOffsetX,
-                onChanged: (value) => _commit(_document.copyWith(
-                  canvas: _document.canvas.copyWith(backgroundOffsetX: value),
-                )),
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: DesignerNumericField(
-                fieldKey: const Key('canvas-background-y'),
-                ownerId: null,
-                decoration: _propertyDecoration('Move Y (mm)'),
-                value: _document.canvas.backgroundOffsetY,
-                onChanged: (value) => _commit(_document.copyWith(
-                  canvas: _document.canvas.copyWith(backgroundOffsetY: value),
-                )),
-              )),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: DesignerNumericField(
+                    fieldKey: const Key('canvas-background-x'),
+                    ownerId: null,
+                    decoration: _propertyDecoration('Move X (mm)'),
+                    value: _document.canvas.backgroundOffsetX,
+                    onChanged: (value) => _commit(
+                      _document.copyWith(
+                        canvas: _document.canvas.copyWith(
+                          backgroundOffsetX: value,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DesignerNumericField(
+                    fieldKey: const Key('canvas-background-y'),
+                    ownerId: null,
+                    decoration: _propertyDecoration('Move Y (mm)'),
+                    value: _document.canvas.backgroundOffsetY,
+                    onChanged: (value) => _commit(
+                      _document.copyWith(
+                        canvas: _document.canvas.copyWith(
+                          backgroundOffsetY: value,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
             Wrap(
               alignment: WrapAlignment.spaceBetween,
               spacing: 8,
               runSpacing: 4,
               children: [
                 TextButton(
-                  onPressed: () => _commit(_document.copyWith(
-                    canvas: _document.canvas.copyWith(
-                      backgroundOpacity: 1, backgroundScale: 1,
-                      backgroundOffsetX: 0, backgroundOffsetY: 0,
+                  onPressed: () => _commit(
+                    _document.copyWith(
+                      canvas: _document.canvas.copyWith(
+                        backgroundOpacity: 1,
+                        backgroundScale: 1,
+                        backgroundOffsetX: 0,
+                        backgroundOffsetY: 0,
+                      ),
                     ),
-                  )),
+                  ),
                   child: const Text('Reset crop'),
                 ),
                 TextButton(
-                  onPressed: () => _commit(_document.copyWith(
-                    canvas: _document.canvas.copyWith(
-                      removeBackgroundImage: true,
-                      backgroundOpacity: 1, backgroundScale: 1,
-                      backgroundOffsetX: 0, backgroundOffsetY: 0,
+                  onPressed: () => _commit(
+                    _document.copyWith(
+                      canvas: _document.canvas.copyWith(
+                        removeBackgroundImage: true,
+                        backgroundOpacity: 1,
+                        backgroundScale: 1,
+                        backgroundOffsetX: 0,
+                        backgroundOffsetY: 0,
+                      ),
                     ),
-                  )),
+                  ),
                   child: const Text('Remove'),
                 ),
               ],

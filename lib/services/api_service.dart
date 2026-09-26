@@ -811,7 +811,10 @@ class ApiService {
     final sourceFilename = background.name.trim();
     final contentType = background.mimeType ?? 'image/jpeg';
     if (!{'image/jpeg', 'image/png', 'image/webp'}.contains(contentType)) {
-      throw const ApiException(0, 'Choose a JPEG, PNG or WebP card background.');
+      throw const ApiException(
+        0,
+        'Choose a JPEG, PNG or WebP card background.',
+      );
     }
     final request = http.MultipartRequest(
       'POST',
@@ -822,7 +825,9 @@ class ApiService {
       http.MultipartFile.fromBytes(
         'background',
         await background.readAsBytes(),
-        filename: sourceFilename.isEmpty ? 'card_background.jpg' : sourceFilename,
+        filename: sourceFilename.isEmpty
+            ? 'card_background.jpg'
+            : sourceFilename,
         contentType: MediaType.parse(contentType),
       ),
     );
@@ -924,6 +929,20 @@ class ApiService {
       body: jsonEncode({'name': name}),
     );
     return _decodeMap(response);
+  }
+
+  Future<List<SchoolClass>> reorderClasses({
+    required String schoolUuid,
+    required List<String> classUuids,
+  }) async {
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/classes/order'),
+      headers: _headers,
+      body: jsonEncode({'class_uuids': classUuids}),
+    );
+    return _decodeList(
+      response,
+    ).map((item) => SchoolClass.fromJson(item)).toList();
   }
 
   Future<void> deleteClass({

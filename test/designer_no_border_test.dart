@@ -104,7 +104,7 @@ void main() {
         t.widget<DesignDocumentView>(find.byKey(const Key('designer-canvas')));
     DesignElement element(int i) => view().document.elements[i];
     for (var i = 0; i < types.length; i++) {
-      view().onSelect!('border-$i');
+      view().onSelect!('border-$i', false);
       await t.pump();
       t
           .widget<IconButton>(

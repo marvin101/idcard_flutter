@@ -8,6 +8,7 @@ import '../models/api_personnel.dart';
 import '../models/card_template.dart';
 import '../models/design_bindings.dart';
 import '../models/design_render_scene.dart';
+import '../models/designer_selection.dart';
 import '../models/design_text_layout.dart';
 import '../models/school_profile.dart';
 import 'design_qr_code.dart';
@@ -28,6 +29,7 @@ class DesignDocumentView extends StatelessWidget {
     this.schoolProfile,
     this.assetBaseUrl,
     this.selectedId,
+    this.selectedIds = const {},
     this.interactive = false,
     this.onSelect,
     this.onMove,
@@ -57,6 +59,7 @@ class DesignDocumentView extends StatelessWidget {
   final String? photoUrl;
   final String? logoUrl;
   final String? selectedId;
+  final Set<String> selectedIds;
   final String? inlineEditingId;
   final TextEditingController? inlineTextController;
   final FocusNode? inlineTextFocusNode;
@@ -70,7 +73,7 @@ class DesignDocumentView extends StatelessWidget {
   final bool Function(String)? isGestureActive;
   final bool interactive;
 
-  final ValueChanged<String?>? onSelect;
+  final void Function(String? id, bool additive)? onSelect;
   final void Function(String id, double dx, double dy)? onMove;
   final void Function(String id, double dw, double dh)? onResize;
   final void Function(String id, String handle, double dx, double dy)?
@@ -136,7 +139,7 @@ class DesignDocumentView extends StatelessWidget {
                 child: Listener(
                   behavior: HitTestBehavior.opaque,
                   onPointerDown: interactive
-                      ? (_) => onSelect?.call(null)
+                      ? (_) => onSelect?.call(null, false)
                       : null,
                 ),
               ),
@@ -180,7 +183,10 @@ class DesignDocumentView extends StatelessWidget {
                     height: node.element.height * scale,
                     child: _InteractiveElement(
                       element: node.element,
-                      selected: selectedId == node.element.id,
+                      selected:
+                          selectedIds.contains(node.element.id) ||
+                          selectedId == node.element.id,
+                      showHandles: selectedIds.length <= 1,
                       editing: inlineEditingId == node.element.id,
                       interactive: interactive,
                       scaleX: scale,
@@ -202,6 +208,23 @@ class DesignDocumentView extends StatelessWidget {
                             ? _inlineEditor(node, scale)
                             : _render(node, scale),
                       ),
+                    ),
+                  ),
+              if (interactive && selectedIds.length > 1)
+                if (designSelectionBounds(document.elements, selectedIds)
+                    case final bounds?)
+                  Positioned(
+                    left: bounds.left * scale,
+                    top: bounds.top * scale,
+                    width: bounds.width * scale,
+                    height: bounds.height * scale,
+                    child: _GroupSelectionOverlay(
+                      primaryId: selectedId ?? selectedIds.first,
+                      scale: scale,
+                      onGestureStart: onGestureStart,
+                      onGestureEnd: onGestureEnd,
+                      onMove: onMove,
+                      onResize: onResize,
                     ),
                   ),
             ],
@@ -516,6 +539,7 @@ class _InteractiveElement extends StatefulWidget {
   const _InteractiveElement({
     required this.element,
     required this.selected,
+    required this.showHandles,
     required this.interactive,
     required this.scaleX,
     required this.scaleY,
@@ -534,6 +558,7 @@ class _InteractiveElement extends StatefulWidget {
 
   final DesignElement element;
   final bool selected;
+  final bool showHandles;
   final bool interactive;
 
   final double scaleX;
@@ -541,7 +566,7 @@ class _InteractiveElement extends StatefulWidget {
   final BuildContext canvasContext;
   final Widget child;
 
-  final ValueChanged<String?>? onSelect;
+  final void Function(String? id, bool additive)? onSelect;
   final ValueChanged<String>? onGestureStart;
   final ValueChanged<String>? onDoubleTap;
   final VoidCallback? onGestureEnd;
@@ -593,7 +618,7 @@ class _InteractiveElementState extends State<_InteractiveElement> {
     _lastClickPosition = null;
 
     if (isDoubleClick) {
-      widget.onSelect?.call(widget.element.id);
+      widget.onSelect?.call(widget.element.id, false);
       widget.onDoubleTap?.call(widget.element.id);
       return;
     }
@@ -647,7 +672,13 @@ class _InteractiveElementState extends State<_InteractiveElement> {
       }
     }
 
-    widget.onSelect?.call(widget.element.id);
+    final keyboard = HardwareKeyboard.instance;
+    widget.onSelect?.call(
+      widget.element.id,
+      keyboard.isControlPressed ||
+          keyboard.isMetaPressed ||
+          keyboard.isShiftPressed,
+    );
 
     if (widget.element.locked) {
       return;
@@ -757,6 +788,7 @@ class _InteractiveElementState extends State<_InteractiveElement> {
                 ),
               ),
               if (widget.selected &&
+                  widget.showHandles &&
                   widget.interactive &&
                   !widget.element.locked &&
                   !widget.editing)
@@ -820,4 +852,84 @@ class _InteractiveElementState extends State<_InteractiveElement> {
       ),
     );
   }
+}
+
+class _GroupSelectionOverlay extends StatefulWidget {
+  const _GroupSelectionOverlay({
+    required this.primaryId,
+    required this.scale,
+    this.onGestureStart,
+    this.onGestureEnd,
+    this.onMove,
+    this.onResize,
+  });
+  final String primaryId;
+  final double scale;
+  final ValueChanged<String>? onGestureStart;
+  final VoidCallback? onGestureEnd;
+  final void Function(String, double, double)? onMove;
+  final void Function(String, double, double)? onResize;
+
+  @override
+  State<_GroupSelectionOverlay> createState() => _GroupSelectionOverlayState();
+}
+
+class _GroupSelectionOverlayState extends State<_GroupSelectionOverlay> {
+  int? _pointer;
+  bool _resizing = false;
+
+  void _down(PointerDownEvent event) {
+    if (event.buttons != 1 || _pointer != null) return;
+    _pointer = event.pointer;
+    _resizing =
+        event.localPosition.dx >= context.size!.width - 18 &&
+        event.localPosition.dy >= context.size!.height - 18;
+    widget.onGestureStart?.call(widget.primaryId);
+  }
+
+  void _move(PointerMoveEvent event) {
+    if (event.pointer != _pointer) return;
+    final dx = event.delta.dx / widget.scale;
+    final dy = event.delta.dy / widget.scale;
+    if (_resizing) {
+      widget.onResize?.call(widget.primaryId, dx, dy);
+    } else {
+      widget.onMove?.call(widget.primaryId, dx, dy);
+    }
+  }
+
+  void _end(PointerEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    _resizing = false;
+    widget.onGestureEnd?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: _down,
+    onPointerMove: _move,
+    onPointerUp: _end,
+    onPointerCancel: _end,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.blue, width: 2),
+      ),
+      child: Align(
+        alignment: Alignment.bottomRight,
+        child: Container(
+          key: const Key('group-resize-handle'),
+          width: 14,
+          height: 14,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border.fromBorderSide(
+              BorderSide(color: Colors.blue, width: 2),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

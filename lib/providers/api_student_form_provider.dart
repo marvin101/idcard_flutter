@@ -14,6 +14,12 @@ class ApiStudentFormProvider extends ChangeNotifier {
     required this.schoolUuid,
     this.student,
   }) {
+    admissionNoController.addListener(
+      () => _clearChangedConflict('admission_no', admissionNoController.text),
+    );
+    rollNoController.addListener(
+      () => _clearChangedConflict('roll_no', rollNoController.text),
+    );
     _loadAcademicData();
   }
 
@@ -142,6 +148,20 @@ class ApiStudentFormProvider extends ChangeNotifier {
 
   String? _error;
   String? get error => _error;
+  final Map<String, String> _conflictErrors = {};
+  final Map<String, String> _conflictingValues = {};
+
+  String? conflictError(String field) => _conflictErrors[field];
+
+  void _clearChangedConflict(String field, String value) {
+    if (_conflictingValues[field] == value.trim()) return;
+    if (_conflictErrors.remove(field) != null) {
+      _conflictingValues.remove(field);
+      _error = null;
+      formKey.currentState?.validate();
+      notifyListeners();
+    }
+  }
 
   // ----------------------------------------------------------
   // Initial lookup loading
@@ -516,6 +536,20 @@ class ApiStudentFormProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _error = e.message;
+      if (e.statusCode == 409 && e.details['type'] == 'duplicate_student') {
+        final fields =
+            (e.details['fields'] as List?)?.whereType<String>() ??
+            const <String>[];
+        for (final field in fields) {
+          _conflictErrors[field] = e.message;
+          _conflictingValues[field] = switch (field) {
+            'admission_no' => admissionNoController.text.trim(),
+            'roll_no' => rollNoController.text.trim(),
+            _ => '',
+          };
+        }
+        formKey.currentState?.validate();
+      }
       return false;
     } catch (e) {
       _error = e.toString();

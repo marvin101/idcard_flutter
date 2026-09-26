@@ -268,6 +268,32 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
     }
   }
 
+  Future<void> _reorderClasses(int oldIndex, int newIndex) async {
+    if (!widget.canManage || _busyId != null) return;
+    final previous = List<SchoolClass>.from(_classes);
+    final reordered = List<SchoolClass>.from(_classes);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+    setState(() {
+      _classes = reordered;
+      _busyId = 'class-order';
+    });
+    try {
+      final saved = await widget.api.reorderClasses(
+        schoolUuid: widget.schoolUuid,
+        classUuids: reordered.map((item) => item.uuid).toList(),
+      );
+      if (mounted) setState(() => _classes = saved);
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() => _classes = previous);
+        _showMessage(error.message, error: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
   Future<void> _addSection() async {
     final schoolClass = _selectedClass;
 
@@ -654,24 +680,47 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
     return _Panel(
       icon: Icons.account_tree_outlined,
       title: 'Classes',
-      subtitle: 'Select a class to manage its sections.',
+      subtitle: widget.canManage
+          ? 'Select a class, or drag it to change the order used throughout CampusID.'
+          : 'Select a class to manage its sections.',
       count: _classes.length,
-      child: Column(
-        children: _classes.map((schoolClass) {
+      child: ReorderableListView(
+        shrinkWrap: true,
+        buildDefaultDragHandles: false,
+        physics: const NeverScrollableScrollPhysics(),
+        onReorderItem: _reorderClasses,
+        children: _classes.asMap().entries.map((entry) {
+          final index = entry.key;
+          final schoolClass = entry.value;
           final selected = _selectedClass?.uuid == schoolClass.uuid;
 
           final busy = _busyId == schoolClass.uuid;
 
           return Padding(
+            key: ValueKey('class-order-${schoolClass.uuid}'),
             padding: const EdgeInsets.only(bottom: 10),
-            child: _ClassTile(
-              schoolClass: schoolClass,
-              selected: selected,
-              busy: busy,
-              canManage: widget.canManage,
-              onTap: () => _selectClass(schoolClass),
-              onEdit: () => _editClass(schoolClass),
-              onDelete: () => _deleteClass(schoolClass),
+            child: Row(
+              children: [
+                if (widget.canManage)
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(Icons.drag_handle_rounded),
+                    ),
+                  ),
+                Expanded(
+                  child: _ClassTile(
+                    schoolClass: schoolClass,
+                    selected: selected,
+                    busy: busy,
+                    canManage: widget.canManage,
+                    onTap: () => _selectClass(schoolClass),
+                    onEdit: () => _editClass(schoolClass),
+                    onDelete: () => _deleteClass(schoolClass),
+                  ),
+                ),
+              ],
             ),
           );
         }).toList(),

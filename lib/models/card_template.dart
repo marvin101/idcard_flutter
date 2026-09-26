@@ -71,7 +71,10 @@ class DesignCanvas {
   final double width, height;
   final String orientation, backgroundColor;
   final String? backgroundImage;
-  final double backgroundOpacity, backgroundScale, backgroundOffsetX, backgroundOffsetY;
+  final double backgroundOpacity,
+      backgroundScale,
+      backgroundOffsetX,
+      backgroundOffsetY;
   factory DesignCanvas.fromJson(Map<String, dynamic> json) {
     final width = _requiredNumber(json, 'width', 'canvas.width');
     final height = _requiredNumber(json, 'height', 'canvas.height');
@@ -94,8 +97,16 @@ class DesignCanvas {
       orientation: width >= height ? 'landscape' : 'portrait',
       backgroundColor: _safeHex(backgroundColor, '#FFFFFF'),
       backgroundImage: backgroundImage as String?,
-      backgroundOpacity: (((json['background_opacity'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0)).toDouble(),
-      backgroundScale: (((json['background_scale'] as num?)?.toDouble() ?? 1).clamp(1.0, 5.0)).toDouble(),
+      backgroundOpacity:
+          (((json['background_opacity'] as num?)?.toDouble() ?? 1).clamp(
+            0.0,
+            1.0,
+          )).toDouble(),
+      backgroundScale:
+          (((json['background_scale'] as num?)?.toDouble() ?? 1).clamp(
+            1.0,
+            5.0,
+          )).toDouble(),
       backgroundOffsetX: (json['background_offset_x'] as num?)?.toDouble() ?? 0,
       backgroundOffsetY: (json['background_offset_y'] as num?)?.toDouble() ?? 0,
     );
@@ -119,7 +130,9 @@ class DesignCanvas {
       height: nextHeight,
       orientation: nextWidth >= nextHeight ? 'landscape' : 'portrait',
       backgroundColor: backgroundColor ?? this.backgroundColor,
-      backgroundImage: removeBackgroundImage ? null : (backgroundImage ?? this.backgroundImage),
+      backgroundImage: removeBackgroundImage
+          ? null
+          : (backgroundImage ?? this.backgroundImage),
       backgroundOpacity: backgroundOpacity ?? this.backgroundOpacity,
       backgroundScale: backgroundScale ?? this.backgroundScale,
       backgroundOffsetX: backgroundOffsetX ?? this.backgroundOffsetX,
@@ -153,6 +166,7 @@ class DesignElement {
     this.zIndex = 0,
     this.locked = false,
     this.visible = true,
+    this.anchorParentId,
     this.style = const {},
     this.data = const {},
   });
@@ -161,6 +175,7 @@ class DesignElement {
   final double x, y, width, height, rotation;
   final int zIndex;
   final bool locked, visible;
+  final String? anchorParentId;
   final Map<String, dynamic> style, data;
   factory DesignElement.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
@@ -200,6 +215,7 @@ class DesignElement {
       zIndex: zIndex.toInt(),
       locked: locked,
       visible: visible,
+      anchorParentId: json['anchor_parent_id'] as String?,
       style: Map<String, dynamic>.from(style),
       data: Map<String, dynamic>.from(data),
     );
@@ -215,6 +231,8 @@ class DesignElement {
     int? zIndex,
     bool? locked,
     bool? visible,
+    String? anchorParentId,
+    bool clearAnchor = false,
     Map<String, dynamic>? style,
     Map<String, dynamic>? data,
   }) => DesignElement(
@@ -228,6 +246,7 @@ class DesignElement {
     zIndex: zIndex ?? this.zIndex,
     locked: locked ?? this.locked,
     visible: visible ?? this.visible,
+    anchorParentId: clearAnchor ? null : anchorParentId ?? this.anchorParentId,
     style: style ?? this.style,
     data: data ?? this.data,
   );
@@ -242,6 +261,7 @@ class DesignElement {
     'z_index': zIndex,
     'locked': locked,
     'visible': visible,
+    if (anchorParentId != null) 'anchor_parent_id': anchorParentId,
     'style': style,
     'data': data,
   };
@@ -409,21 +429,36 @@ class CardTemplate {
     final deepCopied = deepCopy();
     final copied = deepCopied.document;
     final copiedBack = deepCopied.backDocument;
+    List<DesignElement> duplicateElements(
+      List<DesignElement> elements,
+      int offset,
+    ) {
+      final ids = <String, String>{
+        for (var i = 0; i < elements.length; i++)
+          elements[i].id: elementId(elements[i], offset + i),
+      };
+      return [
+        for (final item in elements)
+          item.copyWith(
+            id: ids[item.id],
+            anchorParentId: ids[item.anchorParentId],
+            clearAnchor:
+                item.anchorParentId != null &&
+                !ids.containsKey(item.anchorParentId),
+          ),
+      ];
+    }
+
     return CardTemplate(
       name: '$name copy',
       document: copied.copyWith(
-        elements: [
-          for (var i = 0; i < copied.elements.length; i++)
-            copied.elements[i].copyWith(id: elementId(copied.elements[i], i)),
-        ],
+        elements: duplicateElements(copied.elements, 0),
       ),
       backDocument: copiedBack?.copyWith(
-        elements: [
-          for (var i = 0; i < copiedBack.elements.length; i++)
-            copiedBack.elements[i].copyWith(
-              id: elementId(copiedBack.elements[i], copied.elements.length + i),
-            ),
-        ],
+        elements: duplicateElements(
+          copiedBack.elements,
+          copied.elements.length,
+        ),
       ),
     );
   }

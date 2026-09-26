@@ -1991,9 +1991,12 @@ class _CardsScreenState extends State<CardsScreen> {
       builder: (context, constraints) {
         const spacing = 16.0;
 
+        // Never create a second column until two minimum-width cards actually
+        // fit. `ceil` made narrow mobile viewports split into tiny columns and
+        // could collapse the document renderer below a usable size.
         final columns = math.max(
           1,
-          (constraints.maxWidth / (250 + spacing)).ceil(),
+          ((constraints.maxWidth + spacing) / (250 + spacing)).floor(),
         );
 
         final tileWidth =
@@ -2051,6 +2054,7 @@ class _CardsScreenState extends State<CardsScreen> {
                   children: [
                     Positioned.fill(
                       child: IdCardPreview(
+                        key: Key('mobile-card-preview-${student.uuid}'),
                         student: student,
                         schoolName: widget.schoolName,
                         api: widget.api,

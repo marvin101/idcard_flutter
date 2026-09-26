@@ -150,7 +150,7 @@ void main() {
     String value(String name) =>
         tester.widget<TextFormField>(field(name)).controller!.text;
     Future<void> select(String id) async {
-      view().onSelect!(id);
+      view().onSelect!(id, false);
       await tester.pump();
     }
 

@@ -330,4 +330,48 @@ void main() {
     expect(find.text('FRONT SIDE'), findsNothing);
     expect(find.text('BACK SIDE'), findsOneWidget);
   });
+
+  testWidgets('card preview remains visible at a 390px mobile viewport', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(
+      () => TestWidgetsFlutterBinding.instance.platformDispatcher
+          .clearAllTestValues(),
+    );
+    final api = ApiService(baseUrl: 'http://test');
+    addTearDown(api.dispose);
+    const student = ApiStudent(
+      uuid: 'mobile-student',
+      sessionUuid: 'session',
+      classUuid: 'class',
+      sectionUuid: 'section',
+      admissionNo: 'A-1',
+      fullName: 'Mobile Student',
+      isActive: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            child: IdCardPreview(
+              student: student,
+              schoolName: 'School',
+              api: api,
+              template: CardTemplate.uploadedDesign,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('design-document-surface')), findsOneWidget);
+    final size = tester.getSize(
+      find.byKey(const Key('design-document-surface')),
+    );
+    expect(size.width, greaterThan(0));
+    expect(size.height, greaterThan(0));
+    expect(tester.takeException(), isNull);
+  });
 }

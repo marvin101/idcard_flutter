@@ -46,10 +46,17 @@ http.Response _builtinConfigResponse() {
   );
 }
 
-ApiService _buildApi() {
+ApiService _buildApi({
+  Future<http.Response> Function(http.Request request)? onStudentCreate,
+}) {
   return ApiService(
     baseUrl: 'https://example.test',
     client: MockClient((request) async {
+      if (request.method == 'POST' &&
+          request.url.path == '/schools/school-1/students' &&
+          onStudentCreate != null) {
+        return onStudentCreate(request);
+      }
       switch (request.url.path) {
         case '/schools/school-1/academic-sessions':
           return http.Response(
@@ -143,6 +150,64 @@ Future<void> _pumpStudentFields(
 void main() {
   tearDown(() {
     TestWidgetsFlutterBinding.instance.platformDispatcher.clearAllTestValues();
+  });
+
+  testWidgets('duplicate conflict stays inline until the field changes', (
+    tester,
+  ) async {
+    var attempts = 0;
+    final api = _buildApi(
+      onStudentCreate: (request) async {
+        attempts++;
+        if (attempts == 1) {
+          return http.Response(
+            jsonEncode({
+              'detail': {
+                'type': 'duplicate_student',
+                'fields': ['admission_no'],
+                'message': 'Admission number already exists in this school',
+              },
+            }),
+            409,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'uuid': 'student-1',
+            'session_uuid': 'session-1',
+            'class_uuid': 'class-1',
+            'section_uuid': 'section-1',
+            'admission_no': 'A-2',
+            'full_name': 'Student Name',
+            'is_active': true,
+          }),
+          201,
+        );
+      },
+    );
+    addTearDown(api.dispose);
+    final provider = ApiStudentFormProvider(api: api, schoolUuid: 'school-1');
+    addTearDown(provider.dispose);
+    await _waitUntilLoaded(provider);
+    await provider.setClass('class-1');
+    provider.setSection('section-1');
+    provider.admissionNoController.text = 'A-1';
+    provider.fullNameController.text = 'Student Name';
+    await _pumpStudentFields(tester, provider, width: 390);
+
+    expect(await provider.saveStudent(), isFalse);
+    expect(provider.admissionNoController.text, 'A-1');
+    expect(provider.fullNameController.text, 'Student Name');
+    expect(provider.conflictError('admission_no'), contains('already exists'));
+    expect(attempts, 1);
+
+    expect(await provider.saveStudent(), isFalse);
+    expect(attempts, 1, reason: 'unchanged known conflict must not resubmit');
+    provider.admissionNoController.text = 'A-2';
+    await tester.pump();
+    expect(provider.conflictError('admission_no'), isNull);
+    expect(await provider.saveStudent(), isTrue);
+    expect(attempts, 2);
   });
 
   testWidgets('360px mobile layout keeps Class and Section on the same row', (

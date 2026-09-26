@@ -150,7 +150,7 @@ abstract final class AppNavigation {
     final delegate = _delegate(context);
     if (delegate != null) {
       if (delegate.currentLocation == routeName) return;
-      Router.neglect(
+      Router.navigate(
         context,
         () => delegate.go(routeName, arguments: arguments),
       );
@@ -265,10 +265,7 @@ abstract final class AppNavigation {
     if (delegate != null) {
       Router.neglect(
         context,
-        () => delegate.redirectToSignIn(
-          protectedRoute,
-          arguments: arguments,
-        ),
+        () => delegate.redirectToSignIn(protectedRoute, arguments: arguments),
       );
       return;
     }

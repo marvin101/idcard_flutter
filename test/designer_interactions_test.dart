@@ -113,7 +113,7 @@ bool enabled(WidgetTester t, String tooltip) =>
         .onPressed !=
     null;
 Future<void> select(WidgetTester t, [String id = 'a']) async {
-  view(t).onSelect!(id);
+  view(t).onSelect!(id, false);
   await t.pump();
 }
 
@@ -887,4 +887,29 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
+
+  testWidgets('modifier selection toggles items and moves the group once', (
+    t,
+  ) async {
+    await mount(t, openPanels: false);
+    view(t).onSelect!('a', false);
+    await t.pump();
+    view(t).onSelect!('b', true);
+    await t.pump();
+
+    expect(view(t).selectedIds, {'a', 'b'});
+    expect(find.byKey(const Key('group-resize-handle')), findsOneWidget);
+    final beforeA = live(t, 'a');
+    final beforeB = live(t, 'b');
+    view(t).onMove!('b', 5, 6);
+    await t.pump();
+    expect(live(t, 'a').x - beforeA.x, 5);
+    expect(live(t, 'b').x - beforeB.x, 5);
+    expect(live(t, 'b').y - live(t, 'a').y, beforeB.y - beforeA.y);
+
+    view(t).onSelect!('b', true);
+    await t.pump();
+    expect(view(t).selectedIds, {'a'});
+    expect(find.byKey(const Key('group-resize-handle')), findsNothing);
+  });
 }

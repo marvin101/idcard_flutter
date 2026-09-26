@@ -276,7 +276,8 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         return _text(
           field,
           provider.admissionNoController,
-          validator: required,
+          validator: (value) =>
+              provider.conflictError('admission_no') ?? required(value),
         );
 
       case 'full_name':
@@ -289,7 +290,12 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         );
 
       case 'roll_no':
-        return _text(field, provider.rollNoController, validator: required);
+        return _text(
+          field,
+          provider.rollNoController,
+          validator: (value) =>
+              provider.conflictError('roll_no') ?? required(value),
+        );
 
       case 'stream':
         return _text(field, provider.streamController, validator: required);
