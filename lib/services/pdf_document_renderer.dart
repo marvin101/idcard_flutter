@@ -61,7 +61,7 @@ class PdfDocumentRenderer {
                     child: pw.Transform.translate(
                       offset: PdfPoint(
                         mm(scene.backgroundOffsetX),
-                        -mm(scene.backgroundOffsetY),
+                        mm(scene.backgroundOffsetY),
                       ),
                       child: pw.Transform.scale(
                         scale: scene.backgroundScale,
