@@ -64,7 +64,8 @@ class PdfDocumentRenderer {
                         mm(scene.backgroundOffsetY),
                       ),
                       child: pw.Transform.scale(
-                        scale: scene.backgroundScale,
+                        scene.backgroundScale,
+                        scene.backgroundScale,
                         child: pw.Image(background, fit: pw.BoxFit.cover),
                       ),
                     ),
