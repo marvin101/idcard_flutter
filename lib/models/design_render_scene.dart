@@ -17,6 +17,10 @@ class DesignRenderScene {
          document.canvas.backgroundImage,
          assetBaseUrl,
        ),
+       backgroundOpacity = document.canvas.backgroundOpacity,
+       backgroundScale = document.canvas.backgroundScale,
+       backgroundOffsetX = document.canvas.backgroundOffsetX,
+       backgroundOffsetY = document.canvas.backgroundOffsetY,
        elements = List.unmodifiable(
          (document.elements.where((e) => e.visible).toList()
                ..sort((a, b) => a.zIndex.compareTo(b.zIndex)))
@@ -43,6 +47,10 @@ class DesignRenderScene {
   final DesignCanvas canvas;
   final Color background;
   final String? backgroundImage;
+  final double backgroundOpacity;
+  final double backgroundScale;
+  final double backgroundOffsetX;
+  final double backgroundOffsetY;
   final List<DesignRenderElement> elements;
 }
 
