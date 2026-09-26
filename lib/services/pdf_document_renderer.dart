@@ -311,6 +311,8 @@ class PdfDocumentRenderer {
                           )
                         : pw.Image(
                             image,
+                            width: mm(imageContentWidth),
+                            height: mm(imageContentHeight),
                             fit: style.fit == BoxFit.contain
                                 ? pw.BoxFit.contain
                                 : pw.BoxFit.cover,
