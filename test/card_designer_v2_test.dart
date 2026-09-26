@@ -443,4 +443,29 @@ void main() {
       hasLength(1),
     );
   });
+
+  test('canvas background transform properties round-trip', () {
+    final document = DesignDocument.fromJson({
+      'schema_version': 2,
+      'canvas': {
+        'width': 85.6,
+        'height': 53.98,
+        'orientation': 'landscape',
+        'background_color': '#FFFFFF',
+        'background_image': 'https://example.test/background.png',
+        'background_opacity': 0.4,
+        'background_scale': 2.25,
+        'background_offset_x': 3.5,
+        'background_offset_y': -2.0,
+      },
+      'elements': <dynamic>[],
+      'settings': <String, dynamic>{},
+    });
+    expect(document.canvas.backgroundOpacity, 0.4);
+    expect(document.canvas.backgroundScale, 2.25);
+    expect(document.canvas.backgroundOffsetX, 3.5);
+    expect(document.canvas.backgroundOffsetY, -2.0);
+    expect(document.toJson()['canvas'], containsPair('background_scale', 2.25));
+  });
+
 }
