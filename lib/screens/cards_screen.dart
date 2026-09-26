@@ -1029,7 +1029,7 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
-  void _addSelectionToPrintBasket() {
+  Future<void> _addSelectionToPrintBasket() async {
     if (_selectedStudentUuids.isEmpty) return;
     setState(() {
       for (final student in _students) {
@@ -1039,7 +1039,8 @@ class _CardsScreenState extends State<CardsScreen> {
       }
       _selectedStudentUuids.clear();
     });
-    unawaited(_persistPrintBasket());
+    await _persistPrintBasket();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
