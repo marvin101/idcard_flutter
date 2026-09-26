@@ -147,12 +147,26 @@ class DesignDocumentView extends StatelessWidget {
                   case final String url when url.isNotEmpty)
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: Image.network(
-                      url,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) {
-                        return const SizedBox.shrink();
-                      },
+                    child: ClipRect(
+                      child: Opacity(
+                        opacity: document.canvas.backgroundOpacity,
+                        child: Transform.translate(
+                          offset: Offset(
+                            document.canvas.backgroundOffsetX * scale,
+                            document.canvas.backgroundOffsetY * scale,
+                          ),
+                          child: Transform.scale(
+                            scale: document.canvas.backgroundScale,
+                            child: Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) {
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
