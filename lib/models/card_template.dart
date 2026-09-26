@@ -94,8 +94,8 @@ class DesignCanvas {
       orientation: width >= height ? 'landscape' : 'portrait',
       backgroundColor: _safeHex(backgroundColor, '#FFFFFF'),
       backgroundImage: backgroundImage as String?,
-      backgroundOpacity: ((json['background_opacity'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0),
-      backgroundScale: ((json['background_scale'] as num?)?.toDouble() ?? 1).clamp(1.0, 5.0),
+      backgroundOpacity: (((json['background_opacity'] as num?)?.toDouble() ?? 1).clamp(0.0, 1.0)).toDouble(),
+      backgroundScale: (((json['background_scale'] as num?)?.toDouble() ?? 1).clamp(1.0, 5.0)).toDouble(),
       backgroundOffsetX: (json['background_offset_x'] as num?)?.toDouble() ?? 0,
       backgroundOffsetY: (json['background_offset_y'] as num?)?.toDouble() ?? 0,
     );
