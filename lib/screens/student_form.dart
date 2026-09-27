@@ -64,6 +64,12 @@ class _StudentFormView extends StatelessWidget {
       return;
     }
 
+    await provider.revealFirstConflict();
+
+    if (!context.mounted) {
+      return;
+    }
+
     if (provider.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(provider.error!), backgroundColor: Colors.red),

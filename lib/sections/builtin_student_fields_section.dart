@@ -33,7 +33,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
       );
     }
 
-    if (provider.error != null) {
+    if (provider.error != null && provider.builtinFields.isEmpty) {
       return Card(
         margin: EdgeInsets.zero,
         child: Padding(
@@ -276,6 +276,8 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         return _text(
           field,
           provider.admissionNoController,
+          fieldKey: provider.conflictFieldKey('admission_no'),
+          focusNode: provider.conflictFocusNode('admission_no'),
           validator: (value) =>
               provider.conflictError('admission_no') ?? required(value),
         );
@@ -293,6 +295,8 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         return _text(
           field,
           provider.rollNoController,
+          fieldKey: provider.conflictFieldKey('roll_no'),
+          focusNode: provider.conflictFocusNode('roll_no'),
           validator: (value) =>
               provider.conflictError('roll_no') ?? required(value),
         );
@@ -418,6 +422,8 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
   Widget _text(
     BuiltinStudentField field,
     TextEditingController controller, {
+    Key? fieldKey,
+    FocusNode? focusNode,
     String? Function(String?)? validator,
     TextCapitalization capitalization = TextCapitalization.none,
     bool autoCapitalizeWords = false,
@@ -428,6 +434,8 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
   }) {
     return _StudentTextInput(
       controller: controller,
+      fieldKey: fieldKey,
+      focusNode: focusNode,
       label: field.label,
       hintText: 'Enter ${field.label}',
       requiredField: field.required,
@@ -445,6 +453,8 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
 class _StudentTextInput extends StatelessWidget {
   const _StudentTextInput({
     required this.controller,
+    this.fieldKey,
+    this.focusNode,
     required this.label,
     required this.hintText,
     required this.requiredField,
@@ -458,6 +468,8 @@ class _StudentTextInput extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final Key? fieldKey;
+  final FocusNode? focusNode;
   final String label;
   final String hintText;
   final bool requiredField;
@@ -502,7 +514,9 @@ class _StudentTextInput extends StatelessWidget {
           const SizedBox(height: 6),
 
           TextFormField(
+            key: fieldKey,
             controller: controller,
+            focusNode: focusNode,
             keyboardType: maxLines > 1 ? TextInputType.multiline : keyboardType,
             textCapitalization: textCapitalization,
             textInputAction: maxLines > 1

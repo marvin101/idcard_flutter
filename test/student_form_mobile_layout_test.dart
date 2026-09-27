@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:idcard_flutter/providers/api_student_form_provider.dart';
+import 'package:idcard_flutter/screens/student_form.dart';
 import 'package:idcard_flutter/sections/builtin_student_fields_section.dart';
 import 'package:idcard_flutter/services/api_service.dart';
 import 'package:idcard_flutter/widgets/authenticated_app_bar.dart';
@@ -209,6 +210,108 @@ void main() {
     expect(await provider.saveStudent(), isTrue);
     expect(attempts, 2);
   });
+
+  testWidgets(
+    'rendered student route keeps values and fields editable after duplicate',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      var attempts = 0;
+      final api = _buildApi(
+        onStudentCreate: (request) async {
+          attempts++;
+          if (attempts == 1) {
+            return http.Response(
+              jsonEncode({
+                'detail': {
+                  'type': 'duplicate_student',
+                  'fields': ['admission_no'],
+                  'message': 'Admission number already exists in this school',
+                },
+              }),
+              409,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'uuid': 'student-1',
+              'session_uuid': 'session-1',
+              'class_uuid': 'class-1',
+              'section_uuid': 'section-1',
+              'admission_no': 'A-2',
+              'full_name': 'Student Name',
+              'is_active': true,
+            }),
+            201,
+          );
+        },
+      );
+      addTearDown(api.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StudentFormScreen(schoolUuid: 'school-1', api: api),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final section = find.byType(BuiltinStudentFieldsSection);
+      final provider = Provider.of<ApiStudentFormProvider>(
+        tester.element(section),
+        listen: false,
+      );
+      await provider.setClass('class-1');
+      provider.setSection('section-1');
+      provider.setGender('Female');
+      provider.setBloodGroup('O+');
+      provider.admissionNoController.text = 'A-1';
+      provider.fullNameController.text = 'Student Name';
+      provider.fatherNameController.text = 'Parent Name';
+      provider.mobileController.text = '9876543210';
+      await tester.pump();
+
+      final save = find.text('Save Student');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(attempts, 1);
+      expect(find.byType(BuiltinStudentFieldsSection), findsOneWidget);
+      expect(find.text('Student information'), findsOneWidget);
+      expect(find.text('Admission number'), findsOneWidget);
+      expect(find.text('Full name'), findsOneWidget);
+      expect(provider.admissionNoController.text, 'A-1');
+      expect(provider.fullNameController.text, 'Student Name');
+      expect(provider.fatherNameController.text, 'Parent Name');
+      expect(provider.mobileController.text, '9876543210');
+      expect(provider.selectedSessionUuid, 'session-1');
+      expect(provider.selectedClassUuid, 'class-1');
+      expect(provider.selectedSectionUuid, 'section-1');
+      expect(provider.selectedGender, 'Female');
+      expect(provider.selectedBloodGroup, 'O+');
+      expect(find.textContaining('already exists'), findsWidgets);
+      expect(provider.conflictFocusNode('admission_no')!.hasFocus, isTrue);
+
+      final admissionField = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextFormField &&
+            widget.controller == provider.admissionNoController,
+      );
+      expect(tester.getRect(admissionField).bottom, lessThanOrEqualTo(844));
+      await tester.enterText(admissionField, 'A-2');
+      await tester.pump();
+      expect(provider.conflictError('admission_no'), isNull);
+
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Save Student'),
+          )
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('360px mobile layout keeps Class and Section on the same row', (
     tester,

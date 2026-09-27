@@ -684,46 +684,56 @@ class _ClassesSectionsScreenState extends State<ClassesSectionsScreen> {
           ? 'Select a class, or drag it to change the order used throughout CampusID.'
           : 'Select a class to manage its sections.',
       count: _classes.length,
-      child: ReorderableListView(
-        shrinkWrap: true,
-        buildDefaultDragHandles: false,
-        physics: const NeverScrollableScrollPhysics(),
-        onReorderItem: _reorderClasses,
-        children: _classes.asMap().entries.map((entry) {
-          final index = entry.key;
-          final schoolClass = entry.value;
-          final selected = _selectedClass?.uuid == schoolClass.uuid;
+      child: LayoutBuilder(
+        builder: (context, constraints) => ReorderableListView(
+          shrinkWrap: true,
+          buildDefaultDragHandles: false,
+          physics: const NeverScrollableScrollPhysics(),
+          onReorderItem: _reorderClasses,
+          proxyDecorator: (child, index, animation) => SizedBox(
+            width: constraints.maxWidth,
+            child: FadeTransition(
+              opacity: animation.drive(Tween(begin: .92, end: 1.0)),
+              child: child,
+            ),
+          ),
+          children: _classes.asMap().entries.map((entry) {
+            final index = entry.key;
+            final schoolClass = entry.value;
+            final selected = _selectedClass?.uuid == schoolClass.uuid;
 
-          final busy = _busyId == schoolClass.uuid;
+            final busy = _busyId == schoolClass.uuid;
 
-          return Padding(
-            key: ValueKey('class-order-${schoolClass.uuid}'),
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              children: [
-                if (widget.canManage)
-                  ReorderableDragStartListener(
-                    index: index,
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(Icons.drag_handle_rounded),
+            return Padding(
+              key: ValueKey('class-order-${schoolClass.uuid}'),
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  if (widget.canManage)
+                    ReorderableDragStartListener(
+                      key: ValueKey('class-reorder-handle-${schoolClass.uuid}'),
+                      index: index,
+                      child: const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Icon(Icons.drag_handle_rounded),
+                      ),
+                    ),
+                  Expanded(
+                    child: _ClassTile(
+                      schoolClass: schoolClass,
+                      selected: selected,
+                      busy: busy,
+                      canManage: widget.canManage,
+                      onTap: () => _selectClass(schoolClass),
+                      onEdit: () => _editClass(schoolClass),
+                      onDelete: () => _deleteClass(schoolClass),
                     ),
                   ),
-                Expanded(
-                  child: _ClassTile(
-                    schoolClass: schoolClass,
-                    selected: selected,
-                    busy: busy,
-                    canManage: widget.canManage,
-                    onTap: () => _selectClass(schoolClass),
-                    onEdit: () => _editClass(schoolClass),
-                    onDelete: () => _deleteClass(schoolClass),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

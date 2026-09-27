@@ -99,6 +99,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
   String? _gestureId;
   String? _selectedId;
+  String? _anchorPickChildId;
   final Set<String> _selectedIds = <String>{};
   String? _logoUrl;
 
@@ -383,6 +384,15 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         };
 
   void _select(String? id, [bool additive = false]) {
+    if (_anchorPickChildId != null) {
+      if (id == null) {
+        _updateUi(() => _anchorPickChildId = null);
+      } else {
+        _pickAnchorTarget(id);
+      }
+      return;
+    }
+
     if (_inlineEditingId != null && _inlineEditingId != id) {
       _commitInlineTextEdit();
     }
@@ -430,6 +440,53 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
 
       _canvasFocus.requestFocus();
     });
+  }
+
+  void _startAnchorPick(String childId) {
+    _commitInlineTextEdit();
+    _endGesture();
+    _updateUi(() {
+      _anchorPickChildId = childId;
+      _selectedId = childId;
+      _selectedIds
+        ..clear()
+        ..add(childId);
+    });
+  }
+
+  bool _pickAnchorTarget(String targetId) {
+    final childId = _anchorPickChildId;
+    if (childId == null) {
+      return false;
+    }
+
+    if (!canAnchorElement(_document.elements, childId, targetId)) {
+      final message = childId == targetId
+          ? 'An item cannot be anchored to itself.'
+          : 'That anchor would create a circular relationship.';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+      return true;
+    }
+
+    _updateUi(() {
+      _anchorPickChildId = null;
+      _selectedId = childId;
+      _selectedIds
+        ..clear()
+        ..add(childId);
+    });
+    _updateElement(
+      childId,
+      (element) => element.copyWith(anchorParentId: targetId),
+    );
+    return true;
+  }
+
+  void _clearAnchor(String childId) {
+    _updateUi(() => _anchorPickChildId = null);
+    _updateElement(childId, (element) => element.copyWith(clearAnchor: true));
   }
 
   void _beginInlineTextEdit(String id) {
@@ -759,6 +816,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       a.zIndex == b.zIndex &&
       a.locked == b.locked &&
       a.visible == b.visible &&
+      a.anchorParentId == b.anchorParentId &&
       _sameJson(a.style, b.style) &&
       _sameJson(a.data, b.data);
 
@@ -835,6 +893,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     _updateUi(() {
       _template = next;
 
+      if (_anchorPickChildId case final childId?) {
+        if (!_document.elements.any((element) => element.id == childId)) {
+          _anchorPickChildId = null;
+        }
+      }
+
       if (selectedId != null) {
         _selectedId = selectedId;
         _selectedIds
@@ -906,6 +970,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       }
 
       _selectedId = _history[index].selectedId;
+      _anchorPickChildId = null;
       _selectedIds
         ..clear()
         ..addAll(
@@ -944,6 +1009,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       _editingBack = showBack;
 
       _selectedId = null;
+      _anchorPickChildId = null;
 
       _syncCanvasControllers();
 
@@ -2502,6 +2568,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         () => (
                           _document,
                           _selectedId,
+                          _anchorPickChildId,
                           _inlineEditingId,
                           _zoom,
                           _workspacePanning,
@@ -2522,7 +2589,12 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                           ),
                         ),
                         child: _section(
-                          () => (_template, _selectedId, _canvasError),
+                          () => (
+                            _template,
+                            _selectedId,
+                            _anchorPickChildId,
+                            _canvasError,
+                          ),
                           _inspector,
                         ),
                       ),
@@ -3255,7 +3327,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                 focusNode: _canvasFocus,
                 child: AppScaleGestureBoundary(
                   child: MouseRegion(
-                    cursor: _workspacePanning
+                    cursor: _anchorPickChildId != null
+                        ? SystemMouseCursors.click
+                        : _workspacePanning
                         ? SystemMouseCursors.grabbing
                         : SystemMouseCursors.grab,
                     child: InteractiveViewer(
@@ -3359,6 +3433,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                     onInlineTextCancel: _cancelInlineTextEdit,
 
                                     onSelect: _select,
+                                    onAnchorTarget: _anchorPickChildId == null
+                                        ? null
+                                        : _pickAnchorTarget,
                                     onGestureStart: _beginGesture,
                                     onGestureEnd: _endGesture,
                                     isGestureActive: (id) => _gestureId == id,
@@ -3399,6 +3476,40 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                                   ?.toDouble() ??
                                               2,
                                           _document.canvas.width,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (_anchorPickChildId case final childId?)
+                                  Positioned(
+                                    top: 12,
+                                    left: 12,
+                                    right: 12,
+                                    child: IgnorePointer(
+                                      child: Center(
+                                        child: Material(
+                                          key: const Key(
+                                            'anchor-pick-banner',
+                                          ),
+                                          color: AppColors.textPrimary,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          elevation: 3,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 14,
+                                              vertical: 10,
+                                            ),
+                                            child: Text(
+                                              'Click the item that ${_elementLabel(_document.elements.firstWhere((element) => element.id == childId))} should follow',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -4254,36 +4365,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                         ),
                       ],
                     ),
-                    _dropdownProperty<String>(
-                      key: ValueKey('anchor-parent-${e.id}'),
-                      label: 'Anchor to',
-                      value: e.anchorParentId ?? '',
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('No anchor'),
-                        ),
-                        for (final candidate in _document.elements)
-                          if (candidate.id != e.id &&
-                              canAnchorElement(
-                                _document.elements,
-                                e.id,
-                                candidate.id,
-                              ))
-                            DropdownMenuItem<String>(
-                              value: candidate.id,
-                              child: Text(
-                                _elementLabel(candidate),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                      ],
-                      onChanged: (value) => update(
-                        (element) => value == null || value.isEmpty
-                            ? element.copyWith(clearAnchor: true)
-                            : element.copyWith(anchorParentId: value),
-                      ),
-                    ),
+                    _anchorProperty(e),
                     if (e.type == DesignElementType.text ||
                         e.type == DesignElementType.boundText)
                       _inspectorSectionHeader(
@@ -5209,6 +5291,101 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _anchorProperty(DesignElement element) {
+    final parent = _document.elements
+        .where((candidate) => candidate.id == element.anchorParentId)
+        .firstOrNull;
+    final picking = _anchorPickChildId == element.id;
+
+    return Padding(
+      key: ValueKey('anchor-control-${element.id}'),
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                key: ValueKey('anchor-pick-${element.id}'),
+                onPressed: picking ? null : () => _startAnchorPick(element.id),
+                icon: Icon(
+                  Icons.ads_click_rounded,
+                  size: 18,
+                  color: picking ? AppColors.accent : AppColors.textSecondary,
+                ),
+                label: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Anchor',
+                        style: TextStyle(fontSize: 10),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        picking
+                            ? 'Click an item on canvas'
+                            : parent == null
+                            ? 'Pick on canvas'
+                            : 'Follows ${_elementLabel(parent)}',
+                        key: ValueKey('anchor-status-${element.id}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  backgroundColor: picking
+                      ? AppColors.accentSoft
+                      : AppColors.surface,
+                  side: BorderSide(
+                    color: picking ? AppColors.accent : AppColors.border,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (picking || parent != null) ...[
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 48,
+              height: 56,
+              child: IconButton.outlined(
+                key: ValueKey(
+                  picking
+                      ? 'anchor-pick-cancel-${element.id}'
+                      : 'anchor-clear-${element.id}',
+                ),
+                tooltip: picking ? 'Cancel anchor selection' : 'Remove anchor',
+                onPressed: picking
+                    ? () => _updateUi(() => _anchorPickChildId = null)
+                    : () => _clearAnchor(element.id),
+                icon: Icon(
+                  picking ? Icons.close_rounded : Icons.link_off_rounded,
+                  size: 19,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

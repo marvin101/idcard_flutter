@@ -32,6 +32,7 @@ class DesignDocumentView extends StatelessWidget {
     this.selectedIds = const {},
     this.interactive = false,
     this.onSelect,
+    this.onAnchorTarget,
     this.onMove,
     this.onResize,
     this.onResizeHandle,
@@ -74,6 +75,7 @@ class DesignDocumentView extends StatelessWidget {
   final bool interactive;
 
   final void Function(String? id, bool additive)? onSelect;
+  final bool Function(String id)? onAnchorTarget;
   final void Function(String id, double dx, double dy)? onMove;
   final void Function(String id, double dw, double dh)? onResize;
   final void Function(String id, String handle, double dx, double dy)?
@@ -196,6 +198,7 @@ class DesignDocumentView extends StatelessWidget {
                       onGestureEnd: onGestureEnd,
                       isGestureActive: isGestureActive,
                       onSelect: onSelect,
+                      onAnchorTarget: onAnchorTarget,
                       onMove: onMove,
                       onResize: onResize,
                       onResizeHandle: onResizeHandle,
@@ -547,6 +550,7 @@ class _InteractiveElement extends StatefulWidget {
     required this.child,
     required this.editing,
     this.onSelect,
+    this.onAnchorTarget,
     this.onMove,
     this.onResize,
     this.onResizeHandle,
@@ -567,6 +571,7 @@ class _InteractiveElement extends StatefulWidget {
   final Widget child;
 
   final void Function(String? id, bool additive)? onSelect;
+  final bool Function(String id)? onAnchorTarget;
   final ValueChanged<String>? onGestureStart;
   final ValueChanged<String>? onDoubleTap;
   final VoidCallback? onGestureEnd;
@@ -598,6 +603,12 @@ class _InteractiveElementState extends State<_InteractiveElement> {
         widget.editing ||
         event.buttons != 1 ||
         _pointer != null) {
+      return;
+    }
+
+    // Anchor picking owns this click completely. Do not also select, move, or
+    // resize the target that the user is identifying as the parent.
+    if (widget.onAnchorTarget?.call(widget.element.id) == true) {
       return;
     }
 
@@ -875,22 +886,18 @@ class _GroupSelectionOverlay extends StatefulWidget {
 }
 
 class _GroupSelectionOverlayState extends State<_GroupSelectionOverlay> {
-  int? _pointer;
   bool _resizing = false;
 
-  void _down(PointerDownEvent event) {
-    if (event.buttons != 1 || _pointer != null) return;
-    _pointer = event.pointer;
+  void _down(DragDownDetails details) {
     _resizing =
-        event.localPosition.dx >= context.size!.width - 18 &&
-        event.localPosition.dy >= context.size!.height - 18;
+        details.localPosition.dx >= context.size!.width - 18 &&
+        details.localPosition.dy >= context.size!.height - 18;
     widget.onGestureStart?.call(widget.primaryId);
   }
 
-  void _move(PointerMoveEvent event) {
-    if (event.pointer != _pointer) return;
-    final dx = event.delta.dx / widget.scale;
-    final dy = event.delta.dy / widget.scale;
+  void _move(DragUpdateDetails details) {
+    final dx = details.delta.dx / widget.scale;
+    final dy = details.delta.dy / widget.scale;
     if (_resizing) {
       widget.onResize?.call(widget.primaryId, dx, dy);
     } else {
@@ -898,20 +905,19 @@ class _GroupSelectionOverlayState extends State<_GroupSelectionOverlay> {
     }
   }
 
-  void _end(PointerEvent event) {
-    if (event.pointer != _pointer) return;
-    _pointer = null;
+  void _end() {
     _resizing = false;
     widget.onGestureEnd?.call();
   }
 
   @override
-  Widget build(BuildContext context) => Listener(
-    behavior: HitTestBehavior.translucent,
-    onPointerDown: _down,
-    onPointerMove: _move,
-    onPointerUp: _end,
-    onPointerCancel: _end,
+  Widget build(BuildContext context) => GestureDetector(
+    key: const Key('group-selection-overlay'),
+    behavior: HitTestBehavior.opaque,
+    onPanDown: _down,
+    onPanUpdate: _move,
+    onPanEnd: (_) => _end(),
+    onPanCancel: _end,
     child: DecoratedBox(
       decoration: BoxDecoration(
         border: Border.all(color: Colors.blue, width: 2),

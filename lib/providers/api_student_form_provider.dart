@@ -28,6 +28,17 @@ class ApiStudentFormProvider extends ChangeNotifier {
   final ApiStudent? student;
 
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  final Map<String, GlobalKey> _conflictFieldKeys = {
+    'admission_no': GlobalKey(),
+    'roll_no': GlobalKey(),
+  };
+  final Map<String, FocusNode> _conflictFocusNodes = {
+    'admission_no': FocusNode(),
+    'roll_no': FocusNode(),
+  };
+
+  GlobalKey? conflictFieldKey(String field) => _conflictFieldKeys[field];
+  FocusNode? conflictFocusNode(String field) => _conflictFocusNodes[field];
 
   // ----------------------------------------------------------
   // Controllers
@@ -152,6 +163,22 @@ class ApiStudentFormProvider extends ChangeNotifier {
   final Map<String, String> _conflictingValues = {};
 
   String? conflictError(String field) => _conflictErrors[field];
+
+  Future<void> revealFirstConflict() async {
+    if (_conflictErrors.isEmpty) return;
+    final field = _conflictErrors.keys.first;
+    await WidgetsBinding.instance.endOfFrame;
+    final context = _conflictFieldKeys[field]?.currentContext;
+    if (context != null && context.mounted) {
+      await Scrollable.ensureVisible(
+        context,
+        alignment: .25,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    }
+    _conflictFocusNodes[field]?.requestFocus();
+  }
 
   void _clearChangedConflict(String field, String value) {
     if (_conflictingValues[field] == value.trim()) return;
@@ -593,6 +620,9 @@ class ApiStudentFormProvider extends ChangeNotifier {
     addressController.dispose();
     for (final controller in customFieldControllers.values) {
       controller.dispose();
+    }
+    for (final focusNode in _conflictFocusNodes.values) {
+      focusNode.dispose();
     }
 
     super.dispose();

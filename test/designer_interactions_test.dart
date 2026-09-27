@@ -758,6 +758,172 @@ void main() {
     },
   );
 
+  testWidgets(
+    'group move and resize own gestures while background still pans',
+    (t) async {
+      await mount(t);
+      await select(t, 'a');
+      view(t).onSelect!('b', true);
+      await t.pump();
+      final viewer = t.widget<InteractiveViewer>(
+        find.byType(InteractiveViewer),
+      );
+      final controller = viewer.transformationController!;
+      final transformBefore = controller.value.clone();
+      final aBefore = live(t, 'a');
+      final bBefore = live(t, 'b');
+
+      final move = await t.startGesture(
+        t.getCenter(find.byKey(const Key('group-selection-overlay'))),
+        kind: PointerDeviceKind.mouse,
+      );
+      await move.moveBy(const Offset(12, 8));
+      await t.pump();
+      await move.moveBy(const Offset(12, 8));
+      await t.pump();
+      expect(controller.value, transformBefore);
+      expect(live(t, 'a').x, greaterThan(aBefore.x));
+      expect(live(t, 'b').x, greaterThan(bBefore.x));
+      await move.up();
+      await t.pump();
+      expect(
+        t.widget<InteractiveViewer>(find.byType(InteractiveViewer)).panEnabled,
+        isTrue,
+      );
+
+      final widthBefore = live(t, 'a').width;
+      final transformBeforeResize = controller.value.clone();
+      final resize = await t.startGesture(
+        t.getCenter(find.byKey(const Key('group-resize-handle'))),
+        kind: PointerDeviceKind.mouse,
+      );
+      await resize.moveBy(const Offset(10, 5));
+      await t.pump();
+      await resize.moveBy(const Offset(10, 5));
+      await t.pump();
+      expect(controller.value, transformBeforeResize);
+      expect(live(t, 'a').width, greaterThan(widthBefore));
+      await resize.up();
+      await t.pump();
+
+      final background =
+          t.getTopLeft(find.byKey(const Key('design-document-surface'))) +
+          const Offset(5, 5);
+      final pan = await t.startGesture(
+        background,
+        kind: PointerDeviceKind.mouse,
+      );
+      await pan.moveBy(const Offset(15, 10));
+      await t.pump();
+      await pan.moveBy(const Offset(15, 10));
+      await t.pump();
+      await pan.up();
+      await t.pump();
+      expect(controller.value, isNot(transformBeforeResize));
+      expect(controller.value.getTranslation().x, greaterThan(0));
+      expect(t.takeException(), isNull);
+    },
+  );
+
+  testWidgets('anchors update through the inspector and follow transitively', (
+    t,
+  ) async {
+    const elementC = DesignElement(
+      id: 'c',
+      type: DesignElementType.text,
+      x: 55,
+      y: 40,
+      width: 20,
+      height: 10,
+      anchorParentId: 'b',
+      data: {'text': 'Third'},
+    );
+    await mount(t, elements: const [elementA, elementB, elementC]);
+    await select(t, 'b');
+    expect(find.byKey(const ValueKey('anchor-parent-b')), findsNothing);
+    await t.tap(find.byKey(const ValueKey('anchor-pick-b')));
+    await t.pump();
+    expect(find.byKey(const Key('anchor-pick-banner')), findsOneWidget);
+    expect(find.text('Click an item on canvas'), findsOneWidget);
+
+    await t.tap(find.byKey(const Key('design-element-a')));
+    await t.pump();
+    expect(live(t, 'b').anchorParentId, 'a');
+    expect(view(t).selectedId, 'b');
+    expect(find.text('Follows First'), findsOneWidget);
+    expect(find.byKey(const Key('anchor-pick-banner')), findsNothing);
+
+    final beforeA = live(t, 'a');
+    final beforeB = live(t, 'b');
+    final beforeC = live(t, 'c');
+    view(t).onGestureStart!('a');
+    view(t).onMove!('a', 4, 3);
+    view(t).onGestureEnd!();
+    await t.pump();
+    expect(live(t, 'a').x, beforeA.x + 4);
+    expect(live(t, 'b').x, beforeB.x + 4);
+    expect(live(t, 'c').x, beforeC.x + 4);
+
+    final aAfterRoot = live(t, 'a');
+    final bAfterRoot = live(t, 'b');
+    final cAfterRoot = live(t, 'c');
+    view(t).onGestureStart!('b');
+    view(t).onMove!('b', 2, 1);
+    view(t).onGestureEnd!();
+    await t.pump();
+    expect(live(t, 'a').x, aAfterRoot.x);
+    expect(live(t, 'b').x, bAfterRoot.x + 2);
+    expect(live(t, 'c').x, cAfterRoot.x + 2);
+
+    view(t).onSelect!('a', false);
+    view(t).onSelect!('b', true);
+    await t.pump();
+    final groupA = live(t, 'a');
+    final groupB = live(t, 'b');
+    final groupC = live(t, 'c');
+    view(t).onGestureStart!('a');
+    view(t).onMove!('a', 3, 2);
+    view(t).onGestureEnd!();
+    await t.pump();
+    expect(live(t, 'a').x, groupA.x + 3);
+    expect(live(t, 'b').x, groupB.x + 3);
+    expect(live(t, 'c').x, groupC.x + 3);
+
+    final reloaded = DesignDocument.fromJson(view(t).document.toJson());
+    expect(
+      reloaded.elements.firstWhere((e) => e.id == 'b').anchorParentId,
+      'a',
+    );
+    expect(
+      reloaded.elements.firstWhere((e) => e.id == 'c').anchorParentId,
+      'b',
+    );
+
+    await t.tap(find.byKey(const ValueKey('anchor-clear-b')));
+    await t.pump();
+    expect(live(t, 'b').anchorParentId, isNull);
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('anchor canvas picker rejects circular relationships', (t) async {
+    final anchoredB = elementB.copyWith(anchorParentId: 'a');
+    await mount(t, elements: [elementA, anchoredB]);
+    await select(t, 'a');
+
+    await t.tap(find.byKey(const ValueKey('anchor-pick-a')));
+    await t.pump();
+    await t.tap(find.byKey(const Key('design-element-b')));
+    await t.pump();
+
+    expect(live(t, 'a').anchorParentId, isNull);
+    expect(find.byKey(const Key('anchor-pick-banner')), findsOneWidget);
+    expect(
+      find.text('That anchor would create a circular relationship.'),
+      findsOneWidget,
+    );
+    expect(t.takeException(), isNull);
+  });
+
   testWidgets('double click edits static text inline as one history entry', (
     t,
   ) async {
