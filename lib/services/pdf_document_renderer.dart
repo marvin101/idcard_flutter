@@ -38,6 +38,16 @@ class PdfDocumentRenderer {
   /// system have opposite Y directions.
   static double rotation(DesignRenderElement node) => -node.radians;
 
+  /// The single final-boundary conversion used for positioned PDF elements.
+  static ({double left, double top, double width, double height}) geometry(
+    DesignRenderElement node,
+  ) => (
+    left: mm(node.bounds.left),
+    top: mm(node.bounds.top),
+    width: mm(node.bounds.width),
+    height: mm(node.bounds.height),
+  );
+
   pw.Widget build(DesignRenderScene scene) {
     return pw.SizedBox(
       width: mm(scene.canvas.width),
@@ -72,20 +82,24 @@ class PdfDocumentRenderer {
                 ),
               ),
 
-            for (final node in scene.elements)
-              pw.Positioned(
-                left: mm(node.element.x),
-                top: mm(node.element.y),
-                child: pw.Transform.rotate(
-                  angle: rotation(node),
-                  child: pw.SizedBox(
-                    width: mm(node.element.width),
-                    height: mm(node.element.height),
-                    child: element(node),
-                  ),
-                ),
-              ),
+            for (final node in scene.elements) _positionedElement(node),
           ],
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _positionedElement(DesignRenderElement node) {
+    final box = geometry(node);
+    return pw.Positioned(
+      left: box.left,
+      top: box.top,
+      child: pw.Transform.rotate(
+        angle: rotation(node),
+        child: pw.SizedBox(
+          width: box.width,
+          height: box.height,
+          child: element(node),
         ),
       ),
     );
@@ -194,37 +208,51 @@ class PdfDocumentRenderer {
         return pw.CustomPaint(
           painter: (canvas, size) {
             final stroke = mm(style.borderWidth);
+            final inset = stroke / 2;
+            final left = inset;
+            final bottom = inset;
+            final right = math.max(left, size.x - inset);
+            final top = math.max(bottom, size.y - inset);
+            final width = right - left;
+            final height = top - bottom;
             void drawPath() {
               if (node.element.type == DesignElementType.ellipse ||
                   node.element.type == DesignElementType.circle) {
                 canvas.drawEllipse(
                   size.x / 2,
                   size.y / 2,
-                  math.max(0, size.x / 2 - stroke / 2),
-                  math.max(0, size.y / 2 - stroke / 2),
+                  width / 2,
+                  height / 2,
                 );
               } else if (node.element.type == DesignElementType.triangle) {
-                canvas.moveTo(size.x / 2, size.y);
-                canvas.lineTo(size.x, 0);
-                canvas.lineTo(0, 0);
+                canvas.moveTo((left + right) / 2, top);
+                canvas.lineTo(right, bottom);
+                canvas.lineTo(left, bottom);
               } else {
-                canvas.moveTo(size.x / 2, size.y);
+                canvas.moveTo((left + right) / 2, top);
                 canvas.curveTo(
-                  size.x * .14,
-                  size.y * .66,
-                  0,
-                  size.y * .47,
-                  0,
-                  size.y * .31,
+                  left + width * .14,
+                  bottom + height * .66,
+                  left,
+                  bottom + height * .47,
+                  left,
+                  bottom + height * .31,
                 );
-                canvas.curveTo(0, 0, size.x, 0, size.x, size.y * .31);
                 canvas.curveTo(
-                  size.x,
-                  size.y * .47,
-                  size.x * .86,
-                  size.y * .66,
-                  size.x / 2,
-                  size.y,
+                  left,
+                  bottom,
+                  right,
+                  bottom,
+                  right,
+                  bottom + height * .31,
+                );
+                canvas.curveTo(
+                  right,
+                  bottom + height * .47,
+                  left + width * .86,
+                  bottom + height * .66,
+                  (left + right) / 2,
+                  top,
                 );
               }
             }
@@ -247,7 +275,8 @@ class PdfDocumentRenderer {
             width: mm(node.element.width),
             height: mm(node.element.height),
             child: node.element.type == DesignElementType.bloodDrop
-                ? pw.Center(
+                ? pw.Align(
+                    alignment: const pw.Alignment(0, .35),
                     child: pw.Text(
                       node.text,
                       style: pw.TextStyle(

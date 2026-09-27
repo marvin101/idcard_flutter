@@ -21,6 +21,96 @@ enum CanvasElementAlignment {
   bottom,
 }
 
+enum DesignAnchorAlignment {
+  topLeft('top_left', 0, 0),
+  topCenter('top_center', .5, 0),
+  topRight('top_right', 1, 0),
+  centerLeft('center_left', 0, .5),
+  center('center', .5, .5),
+  centerRight('center_right', 1, .5),
+  bottomLeft('bottom_left', 0, 1),
+  bottomCenter('bottom_center', .5, 1),
+  bottomRight('bottom_right', 1, 1);
+
+  const DesignAnchorAlignment(this.wire, this.xFactor, this.yFactor);
+  final String wire;
+  final double xFactor, yFactor;
+
+  static DesignAnchorAlignment? tryParse(String? value) => DesignAnchorAlignment
+      .values
+      .where((alignment) => alignment.wire == value)
+      .firstOrNull;
+}
+
+/// Resolves a child from parent/child anchor points in document millimetres.
+/// Viewport scale and device-pixel ratio never enter this calculation.
+DesignElement alignElementToParent(
+  DesignElement child,
+  DesignElement parent,
+  DesignAnchorAlignment alignment, {
+  double? offsetX,
+  double? offsetY,
+}) => child.copyWith(
+  x:
+      parent.x +
+      parent.width * alignment.xFactor -
+      child.width * alignment.xFactor +
+      (offsetX ?? child.anchorOffsetX),
+  y:
+      parent.y +
+      parent.height * alignment.yFactor -
+      child.height * alignment.yFactor +
+      (offsetY ?? child.anchorOffsetY),
+  anchorParentId: parent.id,
+  anchorAlignment: alignment.wire,
+  anchorOffsetX: offsetX,
+  anchorOffsetY: offsetY,
+);
+
+/// Stores a manually chosen child position as an offset from its configured
+/// anchor without changing the alignment itself.
+DesignElement updateElementAnchorOffset(
+  DesignElement child,
+  DesignElement parent,
+) {
+  final alignment = DesignAnchorAlignment.tryParse(child.anchorAlignment);
+  if (alignment == null) return child;
+  final aligned = alignElementToParent(
+    child,
+    parent,
+    alignment,
+    offsetX: 0,
+    offsetY: 0,
+  );
+  return child.copyWith(
+    anchorOffsetX: child.x - aligned.x,
+    anchorOffsetY: child.y - aligned.y,
+  );
+}
+
+/// Recomputes every configured anchor in dependency order. ID-only anchors
+/// from older documents are deliberately left untouched for compatibility.
+List<DesignElement> resolveDesignAnchors(List<DesignElement> elements) {
+  final source = {for (final element in elements) element.id: element};
+  final resolved = <String, DesignElement>{};
+  final resolving = <String>{};
+
+  DesignElement resolve(DesignElement element) {
+    final cached = resolved[element.id];
+    if (cached != null) return cached;
+    final alignment = DesignAnchorAlignment.tryParse(element.anchorAlignment);
+    final parent = source[element.anchorParentId];
+    if (alignment == null || parent == null || !resolving.add(element.id)) {
+      return resolved[element.id] = element;
+    }
+    final next = alignElementToParent(element, resolve(parent), alignment);
+    resolving.remove(element.id);
+    return resolved[element.id] = next;
+  }
+
+  return [for (final element in elements) resolve(element)];
+}
+
 ({double width, double height}) minimumElementSize(DesignElement element) {
   if (element.type == DesignElementType.barcode &&
       element.data['symbology'] == 'data_matrix') {
@@ -200,6 +290,10 @@ DesignDocument resizeDesignDocument(
           y: element.y * nextCanvas.height / oldCanvas.height,
           width: element.width * nextCanvas.width / oldCanvas.width,
           height: element.height * nextCanvas.height / oldCanvas.height,
+          anchorOffsetX:
+              element.anchorOffsetX * nextCanvas.width / oldCanvas.width,
+          anchorOffsetY:
+              element.anchorOffsetY * nextCanvas.height / oldCanvas.height,
         ),
     ],
     CanvasResizeStrategy.fitToCanvas => [
@@ -207,7 +301,10 @@ DesignDocument resizeDesignDocument(
         _fitElementToCanvas(element, nextCanvas),
     ],
   };
-  return document.copyWith(canvas: nextCanvas, elements: elements);
+  return document.copyWith(
+    canvas: nextCanvas,
+    elements: resolveDesignAnchors(elements),
+  );
 }
 
 DesignElement _fitElementToCanvas(DesignElement element, DesignCanvas canvas) {

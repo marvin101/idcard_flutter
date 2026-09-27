@@ -167,6 +167,9 @@ class DesignElement {
     this.locked = false,
     this.visible = true,
     this.anchorParentId,
+    this.anchorAlignment,
+    this.anchorOffsetX = 0,
+    this.anchorOffsetY = 0,
     this.style = const {},
     this.data = const {},
   });
@@ -176,6 +179,8 @@ class DesignElement {
   final int zIndex;
   final bool locked, visible;
   final String? anchorParentId;
+  final String? anchorAlignment;
+  final double anchorOffsetX, anchorOffsetY;
   final Map<String, dynamic> style, data;
   factory DesignElement.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
@@ -204,6 +209,24 @@ class DesignElement {
         'Card-template element style and data must be objects.',
       );
     }
+    final anchorAlignment = json['anchor_alignment'];
+    if (anchorAlignment != null &&
+        (anchorAlignment is! String ||
+            !const {
+              'top_left',
+              'top_center',
+              'top_right',
+              'center_left',
+              'center',
+              'center_right',
+              'bottom_left',
+              'bottom_center',
+              'bottom_right',
+            }.contains(anchorAlignment))) {
+      throw const FormatException(
+        'Card-template element anchor_alignment is invalid.',
+      );
+    }
     return DesignElement(
       id: id,
       type: DesignElementTypeWire.parse(json['type']),
@@ -216,6 +239,9 @@ class DesignElement {
       locked: locked,
       visible: visible,
       anchorParentId: json['anchor_parent_id'] as String?,
+      anchorAlignment: anchorAlignment as String?,
+      anchorOffsetX: (json['anchor_offset_x'] as num?)?.toDouble() ?? 0,
+      anchorOffsetY: (json['anchor_offset_y'] as num?)?.toDouble() ?? 0,
       style: Map<String, dynamic>.from(style),
       data: Map<String, dynamic>.from(data),
     );
@@ -232,6 +258,9 @@ class DesignElement {
     bool? locked,
     bool? visible,
     String? anchorParentId,
+    String? anchorAlignment,
+    double? anchorOffsetX,
+    double? anchorOffsetY,
     bool clearAnchor = false,
     Map<String, dynamic>? style,
     Map<String, dynamic>? data,
@@ -247,6 +276,11 @@ class DesignElement {
     locked: locked ?? this.locked,
     visible: visible ?? this.visible,
     anchorParentId: clearAnchor ? null : anchorParentId ?? this.anchorParentId,
+    anchorAlignment: clearAnchor
+        ? null
+        : anchorAlignment ?? this.anchorAlignment,
+    anchorOffsetX: clearAnchor ? 0 : anchorOffsetX ?? this.anchorOffsetX,
+    anchorOffsetY: clearAnchor ? 0 : anchorOffsetY ?? this.anchorOffsetY,
     style: style ?? this.style,
     data: data ?? this.data,
   );
@@ -262,6 +296,12 @@ class DesignElement {
     'locked': locked,
     'visible': visible,
     if (anchorParentId != null) 'anchor_parent_id': anchorParentId,
+    if (anchorParentId != null && anchorAlignment != null)
+      'anchor_alignment': anchorAlignment,
+    if (anchorParentId != null && anchorAlignment != null)
+      'anchor_offset_x': anchorOffsetX,
+    if (anchorParentId != null && anchorAlignment != null)
+      'anchor_offset_y': anchorOffsetY,
     'style': style,
     'data': data,
   };

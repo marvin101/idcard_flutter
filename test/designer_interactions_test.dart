@@ -849,9 +849,23 @@ void main() {
     await t.tap(find.byKey(const Key('design-element-a')));
     await t.pump();
     expect(live(t, 'b').anchorParentId, 'a');
+    expect(live(t, 'b').anchorAlignment, 'center');
+    expect(
+      live(t, 'b').x + live(t, 'b').width / 2,
+      live(t, 'a').x + live(t, 'a').width / 2,
+    );
+    expect(
+      live(t, 'b').y + live(t, 'b').height / 2,
+      live(t, 'a').y + live(t, 'a').height / 2,
+    );
     expect(view(t).selectedId, 'b');
     expect(find.text('Follows First'), findsOneWidget);
     expect(find.byKey(const Key('anchor-pick-banner')), findsNothing);
+
+    await t.tap(find.byKey(const ValueKey('anchor-alignment-b-top_left')));
+    await t.pump();
+    expect(live(t, 'b').x, live(t, 'a').x);
+    expect(live(t, 'b').y, live(t, 'a').y);
 
     final beforeA = live(t, 'a');
     final beforeB = live(t, 'b');

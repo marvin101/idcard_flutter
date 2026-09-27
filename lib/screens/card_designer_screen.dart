@@ -477,16 +477,37 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         ..clear()
         ..add(childId);
     });
-    _updateElement(
-      childId,
-      (element) => element.copyWith(anchorParentId: targetId),
-    );
+    _updateElement(childId, (element) {
+      final parent = _document.elements.firstWhere(
+        (candidate) => candidate.id == targetId,
+      );
+      return alignElementToParent(
+        element,
+        parent,
+        DesignAnchorAlignment.center,
+        offsetX: 0,
+        offsetY: 0,
+      );
+    });
     return true;
   }
 
   void _clearAnchor(String childId) {
     _updateUi(() => _anchorPickChildId = null);
     _updateElement(childId, (element) => element.copyWith(clearAnchor: true));
+  }
+
+  void _setAnchorAlignment(String childId, DesignAnchorAlignment alignment) {
+    final child = _document.elements
+        .where((element) => element.id == childId)
+        .firstOrNull;
+    final parent = _document.elements
+        .where((element) => element.id == child?.anchorParentId)
+        .firstOrNull;
+    if (child == null || parent == null) return;
+    _replace(
+      alignElementToParent(child, parent, alignment, offsetX: 0, offsetY: 0),
+    );
   }
 
   void _beginInlineTextEdit(String id) {
@@ -817,6 +838,9 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       a.locked == b.locked &&
       a.visible == b.visible &&
       a.anchorParentId == b.anchorParentId &&
+      a.anchorAlignment == b.anchorAlignment &&
+      a.anchorOffsetX == b.anchorOffsetX &&
+      a.anchorOffsetY == b.anchorOffsetY &&
       _sameJson(a.style, b.style) &&
       _sameJson(a.data, b.data);
 
@@ -1085,6 +1109,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     String id,
     DesignElement Function(DesignElement) change, {
     bool gestureUpdate = false,
+    bool updateAnchorOffset = true,
   }) {
     final live = _document.elements
         .where((element) => element.id == id)
@@ -1107,18 +1132,25 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
           next = next.copyWith(width: bounded, height: bounded);
         }
       }
+      if (updateAnchorOffset && (next.x != live.x || next.y != live.y)) {
+        final parent = _document.elements
+            .where((element) => element.id == next.anchorParentId)
+            .firstOrNull;
+        if (parent != null) {
+          next = updateElementAnchorOffset(next, parent);
+        }
+      }
       _replace(next, gestureUpdate: gestureUpdate);
     }
   }
 
   void _replace(DesignElement replacement, {bool gestureUpdate = false}) {
+    final elements = resolveDesignAnchors([
+      for (final element in _document.elements)
+        if (element.id == replacement.id) replacement else element,
+    ]);
     _commit(
-      _document.copyWith(
-        elements: [
-          for (final element in _document.elements)
-            if (element.id == replacement.id) replacement else element,
-        ],
-      ),
+      _document.copyWith(elements: elements),
       gestureUpdate: gestureUpdate,
     );
   }
@@ -1228,48 +1260,54 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
       return;
     }
 
-    _updateElement(id, (element) {
-      if (element.locked) {
-        return element;
-      }
-
-      final maxX = math.max(0.0, _document.canvas.width - element.width);
-
-      final maxY = math.max(0.0, _document.canvas.height - element.height);
-
-      final remainder = _gestureId == id ? _gestureRemainder : Offset.zero;
-
-      final rawX = (element.x + dx + remainder.dx).clamp(0.0, maxX);
-
-      final rawY = (element.y + dy + remainder.dy).clamp(0.0, maxY);
-
-      var x = rawX;
-      var y = rawY;
-
-      if (_document.settings['snap_enabled'] != false) {
-        final grid = (_document.settings['grid_size'] as num?)?.toDouble() ?? 2;
-
-        if (grid.isFinite && grid > 0) {
-          x = (x / grid).round() * grid;
-
-          y = (y / grid).round() * grid;
+    _updateElement(
+      id,
+      (element) {
+        if (element.locked) {
+          return element;
         }
-      }
 
-      x = x.clamp(0.0, maxX);
+        final maxX = math.max(0.0, _document.canvas.width - element.width);
 
-      y = y.clamp(0.0, maxY);
+        final maxY = math.max(0.0, _document.canvas.height - element.height);
 
-      if (_gestureId == id) {
-        _gestureRemainder = Offset(rawX - x, rawY - y);
-      }
+        final remainder = _gestureId == id ? _gestureRemainder : Offset.zero;
 
-      final next = element.copyWith(x: x, y: y);
+        final rawX = (element.x + dx + remainder.dx).clamp(0.0, maxX);
 
-      _updateGuides(next);
+        final rawY = (element.y + dy + remainder.dy).clamp(0.0, maxY);
 
-      return next;
-    }, gestureUpdate: true);
+        var x = rawX;
+        var y = rawY;
+
+        if (_document.settings['snap_enabled'] != false) {
+          final grid =
+              (_document.settings['grid_size'] as num?)?.toDouble() ?? 2;
+
+          if (grid.isFinite && grid > 0) {
+            x = (x / grid).round() * grid;
+
+            y = (y / grid).round() * grid;
+          }
+        }
+
+        x = x.clamp(0.0, maxX);
+
+        y = y.clamp(0.0, maxY);
+
+        if (_gestureId == id) {
+          _gestureRemainder = Offset(rawX - x, rawY - y);
+        }
+
+        final next = element.copyWith(x: x, y: y);
+
+        _updateGuides(next);
+
+        return next;
+      },
+      gestureUpdate: true,
+      updateAnchorOffset: false,
+    );
   }
 
   void _resize(String id, String handle, double dx, double dy) {
@@ -1278,29 +1316,36 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
     if (selected.length > 1) {
       _commit(
         _document.copyWith(
-          elements: resizeDesignSelection(
-            _document.elements,
-            selected,
-            _document.canvas,
-            dx,
-            dy,
+          elements: resolveDesignAnchors(
+            resizeDesignSelection(
+              _document.elements,
+              selected,
+              _document.canvas,
+              dx,
+              dy,
+            ),
           ),
         ),
         gestureUpdate: true,
       );
       return;
     }
-    _updateElement(id, (element) {
-      final next = resizeElementFromHandle(
-        element,
-        _document.canvas,
-        handle,
-        dx,
-        dy,
-      );
-      _updateGuides(next);
-      return next;
-    }, gestureUpdate: true);
+    _updateElement(
+      id,
+      (element) {
+        final next = resizeElementFromHandle(
+          element,
+          _document.canvas,
+          handle,
+          dx,
+          dy,
+        );
+        _updateGuides(next);
+        return next;
+      },
+      gestureUpdate: true,
+      updateAnchorOffset: false,
+    );
   }
 
   void _remove() {
@@ -3488,9 +3533,7 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
                                     child: IgnorePointer(
                                       child: Center(
                                         child: Material(
-                                          key: const Key(
-                                            'anchor-pick-banner',
-                                          ),
+                                          key: const Key('anchor-pick-banner'),
                                           color: AppColors.textPrimary,
                                           borderRadius: BorderRadius.circular(
                                             10,
@@ -5301,94 +5344,176 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         .firstOrNull;
     final picking = _anchorPickChildId == element.id;
 
+    final alignment = DesignAnchorAlignment.tryParse(element.anchorAlignment);
+
     return Padding(
       key: ValueKey('anchor-control-${element.id}'),
       padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: SizedBox(
-              height: 56,
-              child: OutlinedButton.icon(
-                key: ValueKey('anchor-pick-${element.id}'),
-                onPressed: picking ? null : () => _startAnchorPick(element.id),
-                icon: Icon(
-                  Icons.ads_click_rounded,
-                  size: 18,
-                  color: picking ? AppColors.accent : AppColors.textSecondary,
-                ),
-                label: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Anchor',
-                        style: TextStyle(fontSize: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: OutlinedButton.icon(
+                    key: ValueKey('anchor-pick-${element.id}'),
+                    onPressed: picking
+                        ? null
+                        : () => _startAnchorPick(element.id),
+                    icon: Icon(
+                      Icons.ads_click_rounded,
+                      size: 18,
+                      color: picking
+                          ? AppColors.accent
+                          : AppColors.textSecondary,
+                    ),
+                    label: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Anchor', style: TextStyle(fontSize: 10)),
+                          const SizedBox(height: 2),
+                          Text(
+                            picking
+                                ? 'Click an item on canvas'
+                                : parent == null
+                                ? 'Pick on canvas'
+                                : 'Follows ${_elementLabel(parent)}',
+                            key: ValueKey('anchor-status-${element.id}'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        picking
-                            ? 'Click an item on canvas'
-                            : parent == null
-                            ? 'Pick on canvas'
-                            : 'Follows ${_elementLabel(parent)}',
-                        key: ValueKey('anchor-status-${element.id}'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      backgroundColor: picking
+                          ? AppColors.accentSoft
+                          : AppColors.surface,
+                      side: BorderSide(
+                        color: picking ? AppColors.accent : AppColors.border,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (picking || parent != null) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 48,
+                  height: 56,
+                  child: IconButton.outlined(
+                    key: ValueKey(
+                      picking
+                          ? 'anchor-pick-cancel-${element.id}'
+                          : 'anchor-clear-${element.id}',
+                    ),
+                    tooltip: picking
+                        ? 'Cancel anchor selection'
+                        : 'Remove anchor',
+                    onPressed: picking
+                        ? () => _updateUi(() => _anchorPickChildId = null)
+                        : () => _clearAnchor(element.id),
+                    icon: Icon(
+                      picking ? Icons.close_rounded : Icons.link_off_rounded,
+                      size: 19,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (parent != null) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Align child to parent',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            for (final row in const [
+              [
+                DesignAnchorAlignment.topLeft,
+                DesignAnchorAlignment.topCenter,
+                DesignAnchorAlignment.topRight,
+              ],
+              [
+                DesignAnchorAlignment.centerLeft,
+                DesignAnchorAlignment.center,
+                DesignAnchorAlignment.centerRight,
+              ],
+              [
+                DesignAnchorAlignment.bottomLeft,
+                DesignAnchorAlignment.bottomCenter,
+                DesignAnchorAlignment.bottomRight,
+              ],
+            ])
+              Row(
+                children: [
+                  for (final option in row)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: OutlinedButton(
+                          key: ValueKey(
+                            'anchor-alignment-${element.id}-${option.wire}',
+                          ),
+                          onPressed: () =>
+                              _setAnchorAlignment(element.id, option),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 34),
+                            padding: EdgeInsets.zero,
+                            backgroundColor: alignment == option
+                                ? AppColors.accentSoft
+                                : AppColors.surface,
+                            side: BorderSide(
+                              color: alignment == option
+                                  ? AppColors.accent
+                                  : AppColors.border,
+                            ),
+                          ),
+                          child: Icon(
+                            _anchorIcon(option),
+                            size: 17,
+                            color: alignment == option
+                                ? AppColors.accent
+                                : AppColors.textSecondary,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  backgroundColor: picking
-                      ? AppColors.accentSoft
-                      : AppColors.surface,
-                  side: BorderSide(
-                    color: picking ? AppColors.accent : AppColors.border,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
+                    ),
+                ],
               ),
-            ),
-          ),
-          if (picking || parent != null) ...[
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 48,
-              height: 56,
-              child: IconButton.outlined(
-                key: ValueKey(
-                  picking
-                      ? 'anchor-pick-cancel-${element.id}'
-                      : 'anchor-clear-${element.id}',
-                ),
-                tooltip: picking ? 'Cancel anchor selection' : 'Remove anchor',
-                onPressed: picking
-                    ? () => _updateUi(() => _anchorPickChildId = null)
-                    : () => _clearAnchor(element.id),
-                icon: Icon(
-                  picking ? Icons.close_rounded : Icons.link_off_rounded,
-                  size: 19,
-                ),
-              ),
-            ),
           ],
         ],
       ),
     );
   }
+
+  IconData _anchorIcon(DesignAnchorAlignment alignment) => switch (alignment) {
+    DesignAnchorAlignment.topLeft => Icons.north_west_rounded,
+    DesignAnchorAlignment.topCenter => Icons.north_rounded,
+    DesignAnchorAlignment.topRight => Icons.north_east_rounded,
+    DesignAnchorAlignment.centerLeft => Icons.west_rounded,
+    DesignAnchorAlignment.center => Icons.center_focus_strong_rounded,
+    DesignAnchorAlignment.centerRight => Icons.east_rounded,
+    DesignAnchorAlignment.bottomLeft => Icons.south_west_rounded,
+    DesignAnchorAlignment.bottomCenter => Icons.south_rounded,
+    DesignAnchorAlignment.bottomRight => Icons.south_east_rounded,
+  };
 
   Widget _inspectorSectionHeader({
     required IconData icon,

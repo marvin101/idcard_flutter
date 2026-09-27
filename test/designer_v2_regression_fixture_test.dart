@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 import 'package:idcard_flutter/models/api_student.dart';
 import 'package:idcard_flutter/models/card_template.dart';
 import 'package:idcard_flutter/models/design_bindings.dart';
@@ -102,9 +103,10 @@ void main() {
       final surface = find.byKey(const Key('design-document-surface'));
       final origin = tester.getTopLeft(surface);
       final scale = tester.getSize(surface).width / document.canvas.width;
-    final fonts = (await tester.runAsync(() => DesignFonts.pdfFonts()))!;
+      final fonts = (await tester.runAsync(() => DesignFonts.pdfFonts()))!;
       final pdfRenderer = PdfDocumentRenderer(fonts, const {});
       for (final node in scene.elements) {
+        final pdfGeometry = PdfDocumentRenderer.geometry(node);
         final target = find.byKey(Key('design-element-${node.element.id}'));
         final rect = tester.getRect(target);
         expect(
@@ -117,6 +119,22 @@ void main() {
         );
         expect(rect.width / scale, closeTo(node.element.width, 0.000001));
         expect(rect.height / scale, closeTo(node.element.height, 0.000001));
+        expect(
+          pdfGeometry.left / PdfPageFormat.mm,
+          closeTo(node.bounds.left, 0.000001),
+        );
+        expect(
+          pdfGeometry.top / PdfPageFormat.mm,
+          closeTo(node.bounds.top, 0.000001),
+        );
+        expect(
+          pdfGeometry.width / PdfPageFormat.mm,
+          closeTo(node.bounds.width, 0.000001),
+        );
+        expect(
+          pdfGeometry.height / PdfPageFormat.mm,
+          closeTo(node.bounds.height, 0.000001),
+        );
         expect(() => pdfRenderer.element(node), returnsNormally);
       }
       expect(tester.takeException(), isNull);

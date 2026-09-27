@@ -179,10 +179,10 @@ class DesignDocumentView extends StatelessWidget {
                 if (node.element.visible)
                   Positioned(
                     key: ValueKey(node.element.id),
-                    left: node.element.x * scale,
-                    top: node.element.y * scale,
-                    width: node.element.width * scale,
-                    height: node.element.height * scale,
+                    left: node.bounds.left * scale,
+                    top: node.bounds.top * scale,
+                    width: node.bounds.width * scale,
+                    height: node.bounds.height * scale,
                     child: _InteractiveElement(
                       element: node.element,
                       selected:
@@ -486,12 +486,12 @@ class _DesignerShapePainter extends CustomPainter {
       case DesignElementType.bloodDrop:
         path.moveTo(rect.center.dx, rect.top);
         path.cubicTo(
-          rect.width * .14,
-          rect.height * .34,
+          rect.left + rect.width * .14,
+          rect.top + rect.height * .34,
           rect.left,
-          rect.height * .53,
+          rect.top + rect.height * .53,
           rect.left,
-          rect.height * .69,
+          rect.top + rect.height * .69,
         );
         path.cubicTo(
           rect.left,
@@ -499,13 +499,13 @@ class _DesignerShapePainter extends CustomPainter {
           rect.right,
           rect.bottom,
           rect.right,
-          rect.height * .69,
+          rect.top + rect.height * .69,
         );
         path.cubicTo(
           rect.right,
-          rect.height * .53,
-          rect.width * .86,
-          rect.height * .34,
+          rect.top + rect.height * .53,
+          rect.left + rect.width * .86,
+          rect.top + rect.height * .34,
           rect.center.dx,
           rect.top,
         );

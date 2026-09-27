@@ -3,6 +3,7 @@
 import 'dart:math' as math;
 
 import 'card_template.dart';
+import 'design_geometry.dart';
 
 class DesignSelectionBounds {
   const DesignSelectionBounds(this.left, this.top, this.right, this.bottom);
@@ -58,6 +59,20 @@ Set<String> anchoredClosure(List<DesignElement> elements, Set<String> roots) {
   return result;
 }
 
+bool _hasSelectedAnchorAncestor(
+  DesignElement element,
+  Map<String, DesignElement> byId,
+  Set<String> selectedIds,
+) {
+  var parentId = element.anchorParentId;
+  final visited = <String>{};
+  while (parentId != null && visited.add(parentId)) {
+    if (selectedIds.contains(parentId)) return true;
+    parentId = byId[parentId]?.anchorParentId;
+  }
+  return false;
+}
+
 List<DesignElement> translateDesignSelection(
   List<DesignElement> elements,
   Set<String> selectedIds,
@@ -66,6 +81,7 @@ List<DesignElement> translateDesignSelection(
   double dy,
 ) {
   final moving = anchoredClosure(elements, selectedIds);
+  final byId = {for (final element in elements) element.id: element};
   final bounds = designSelectionBounds(elements, moving);
   if (bounds == null) return elements;
   final boundedDx = dx
@@ -74,13 +90,29 @@ List<DesignElement> translateDesignSelection(
   final boundedDy = dy
       .clamp(-bounds.top, canvas.height - bounds.bottom)
       .toDouble();
-  return [
+  final translated = [
     for (final item in elements)
       if (moving.contains(item.id) && !item.locked)
-        item.copyWith(x: item.x + boundedDx, y: item.y + boundedDy)
+        item.copyWith(
+          x: item.x + boundedDx,
+          y: item.y + boundedDy,
+          anchorOffsetX:
+              selectedIds.contains(item.id) &&
+                  !_hasSelectedAnchorAncestor(item, byId, selectedIds) &&
+                  DesignAnchorAlignment.tryParse(item.anchorAlignment) != null
+              ? item.anchorOffsetX + boundedDx
+              : null,
+          anchorOffsetY:
+              selectedIds.contains(item.id) &&
+                  !_hasSelectedAnchorAncestor(item, byId, selectedIds) &&
+                  DesignAnchorAlignment.tryParse(item.anchorAlignment) != null
+              ? item.anchorOffsetY + boundedDy
+              : null,
+        )
       else
         item,
   ];
+  return resolveDesignAnchors(translated);
 }
 
 List<DesignElement> resizeDesignSelection(

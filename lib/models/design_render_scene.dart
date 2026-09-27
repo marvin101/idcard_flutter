@@ -64,6 +64,8 @@ class DesignRenderElement {
   final DesignRenderStyle style;
 
   double get radians => element.rotation * math.pi / 180;
+  Rect get bounds =>
+      Rect.fromLTWH(element.x, element.y, element.width, element.height);
 }
 
 class DesignRenderStyle {
