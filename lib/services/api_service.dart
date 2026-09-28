@@ -1959,7 +1959,7 @@ class ApiService {
           'aadhaar': aadhaar,
         if (enabledFields == null || enabledFields.contains('address'))
           'address': address,
-        'photo_path': photoPath,
+        'photo_path': ?photoPath,
         if (customFields != null)
           'custom_fields': customFields.map((item) => item.toJson()).toList(),
       }),
