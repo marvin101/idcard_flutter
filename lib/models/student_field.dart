@@ -110,3 +110,56 @@ class StudentCustomFieldValue {
         isActive: json['is_active'] != false,
       );
 }
+
+class StreamOption {
+  const StreamOption({required this.name, required this.code});
+
+  final String name;
+  final String code;
+
+  factory StreamOption.fromJson(Map<String, dynamic> json) => StreamOption(
+    name: (json['name'] as String?)?.trim() ?? '',
+    code: (json['code'] as String?)?.trim() ?? '',
+  );
+
+  Map<String, dynamic> toJson() => {'name': name, 'code': code};
+
+  StreamOption copyWith({String? name, String? code}) => StreamOption(
+    name: name ?? this.name,
+    code: code ?? this.code,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StreamOption &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          code == other.code;
+
+  @override
+  int get hashCode => Object.hash(name, code);
+}
+
+class StudentFieldConfigResponse {
+  const StudentFieldConfigResponse({
+    required this.fields,
+    this.autoAdmissionFormat = false,
+    this.streamOptions = const [],
+  });
+
+  final List<BuiltinStudentField> fields;
+  final bool autoAdmissionFormat;
+  final List<StreamOption> streamOptions;
+
+  factory StudentFieldConfigResponse.fromJson(Map<String, dynamic> json) =>
+      StudentFieldConfigResponse(
+        fields: (json['fields'] as List<dynamic>? ?? const [])
+            .map((item) => BuiltinStudentField.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        autoAdmissionFormat: json['auto_admission_format'] as bool? ?? false,
+        streamOptions: (json['stream_options'] as List<dynamic>? ?? const [])
+            .map((item) => StreamOption.fromJson(item as Map<String, dynamic>))
+            .toList(),
+      );
+}

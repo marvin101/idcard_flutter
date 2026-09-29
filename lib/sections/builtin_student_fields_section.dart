@@ -94,6 +94,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
                 SizedBox(height: compact ? 18 : 24),
 
                 _buildFields(
+                  context,
                   provider,
                   fields,
                   compact: compact,
@@ -108,19 +109,26 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
   }
 
   Widget _buildFields(
+    BuildContext context,
     ApiStudentFormProvider provider,
     List<BuiltinStudentField> fields, {
     required bool compact,
     required double availableWidth,
   }) {
     if (!compact) {
-      return _buildDesktopFields(provider, fields);
+      return _buildDesktopFields(context, provider, fields);
     }
 
-    return _buildMobileFields(provider, fields, availableWidth: availableWidth);
+    return _buildMobileFields(
+      context,
+      provider,
+      fields,
+      availableWidth: availableWidth,
+    );
   }
 
   Widget _buildDesktopFields(
+    BuildContext context,
     ApiStudentFormProvider provider,
     List<BuiltinStudentField> fields,
   ) {
@@ -131,11 +139,11 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _field(provider, fields[index])),
+            Expanded(child: _field(context, provider, fields[index])),
             const SizedBox(width: 20),
             Expanded(
               child: index + 1 < fields.length
-                  ? _field(provider, fields[index + 1])
+                  ? _field(context, provider, fields[index + 1])
                   : const SizedBox(),
             ),
           ],
@@ -151,6 +159,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
   }
 
   Widget _buildMobileFields(
+    BuildContext context,
     ApiStudentFormProvider provider,
     List<BuiltinStudentField> fields, {
     required double availableWidth,
@@ -176,16 +185,16 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _field(provider, current)),
+              Expanded(child: _field(context, provider, current)),
               const SizedBox(width: 12),
-              Expanded(child: _field(provider, next!)),
+              Expanded(child: _field(context, provider, next!)),
             ],
           ),
         );
 
         index += 2;
       } else {
-        children.add(_field(provider, current));
+        children.add(_field(context, provider, current));
 
         index++;
       }
@@ -201,7 +210,11 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
     );
   }
 
-  Widget _field(ApiStudentFormProvider provider, BuiltinStudentField field) {
+  Widget _field(
+    BuildContext context,
+    ApiStudentFormProvider provider,
+    BuiltinStudentField field,
+  ) {
     String? required(String? value) =>
         field.required ? Validators.required(value, field.label) : null;
 
@@ -273,13 +286,50 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         );
 
       case 'admission_no':
-        return _text(
-          field,
-          provider.admissionNoController,
-          fieldKey: provider.conflictFieldKey('admission_no'),
-          focusNode: provider.conflictFocusNode('admission_no'),
-          validator: (value) =>
-              provider.conflictError('admission_no') ?? required(value),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _text(
+              field,
+              provider.admissionNoController,
+              fieldKey: provider.conflictFieldKey('admission_no'),
+              focusNode: provider.conflictFocusNode('admission_no'),
+              hintText: provider.autoAdmissionFormat
+                  ? 'Auto-generated e.g. SCI/31'
+                  : null,
+              validator: (value) =>
+                  provider.conflictError('admission_no') ?? required(value),
+            ),
+            if (provider.autoAdmissionFormat) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Auto-formats from Stream & Roll No.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (provider.userOverrodeAdmissionNo)
+                    InkWell(
+                      onTap: provider.resetToAutoAdmission,
+                      child: Text(
+                        'Reset to auto format',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.primary,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
         );
 
       case 'full_name':
@@ -302,7 +352,40 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
         );
 
       case 'stream':
-        return _text(field, provider.streamController, validator: required);
+        final currentStream = provider.selectedStream ??
+            (provider.streamController.text.isNotEmpty
+                ? provider.streamController.text
+                : null);
+        final options = [...provider.streamOptions];
+        if (currentStream != null &&
+            !options.any((opt) => opt.name == currentStream)) {
+          options.add(StreamOption(name: currentStream, code: currentStream));
+        }
+
+        return _StudentDropdown<String>(
+          label: field.label,
+          value: currentStream,
+          requiredField: field.required,
+          hintText: 'Select ${field.label}',
+          items: options
+              .map(
+                (opt) => DropdownMenuItem<String>(
+                  value: opt.name,
+                  child: Text(
+                    opt.code.isNotEmpty
+                        ? '${opt.name} (${opt.code})'
+                        : opt.name,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: provider.setStream,
+          validator: (value) =>
+              field.required && (value == null || value.isEmpty)
+                  ? '${field.label} is required'
+                  : null,
+        );
 
       case 'father_name':
         return _text(
@@ -424,6 +507,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
     TextEditingController controller, {
     Key? fieldKey,
     FocusNode? focusNode,
+    String? hintText,
     String? Function(String?)? validator,
     TextCapitalization capitalization = TextCapitalization.none,
     bool autoCapitalizeWords = false,
@@ -437,7 +521,7 @@ class BuiltinStudentFieldsSection extends StatelessWidget {
       fieldKey: fieldKey,
       focusNode: focusNode,
       label: field.label,
-      hintText: 'Enter ${field.label}',
+      hintText: hintText ?? 'Enter ${field.label}',
       requiredField: field.required,
       validator: validator,
       textCapitalization: capitalization,

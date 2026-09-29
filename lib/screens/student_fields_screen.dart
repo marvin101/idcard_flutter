@@ -28,6 +28,12 @@ class StudentFieldsScreen extends StatefulWidget {
 class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
   List<BuiltinStudentField> _builtinFields = const [];
   List<StudentFieldDefinition> _fields = const [];
+  bool _autoAdmissionFormat = false;
+  List<StreamOption> _streamOptions = const [
+    StreamOption(name: 'Science', code: 'SCI'),
+    StreamOption(name: 'Arts', code: 'ARTS'),
+    StreamOption(name: 'Commerce', code: 'COM'),
+  ];
   bool _loading = true;
   String? _error;
 
@@ -44,12 +50,17 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
     });
     try {
       final values = await Future.wait([
-        widget.api.getBuiltinStudentFields(widget.schoolUuid),
+        widget.api.getStudentFieldConfig(widget.schoolUuid),
         widget.api.getStudentFields(widget.schoolUuid, includeInactive: true),
       ]);
       if (mounted) {
+        final config = values[0] as StudentFieldConfigResponse;
         setState(() {
-          _builtinFields = values[0] as List<BuiltinStudentField>;
+          _builtinFields = config.fields;
+          _autoAdmissionFormat = config.autoAdmissionFormat;
+          if (config.streamOptions.isNotEmpty) {
+            _streamOptions = config.streamOptions;
+          }
           _fields = values[1] as List<StudentFieldDefinition>;
         });
       }
@@ -63,11 +74,21 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
   Future<void> _saveBuiltin(List<BuiltinStudentField> fields) async {
     setState(() => _builtinFields = fields);
     try {
-      final saved = await widget.api.updateBuiltinStudentFields(
+      final saved = await widget.api.updateStudentFieldConfig(
         schoolUuid: widget.schoolUuid,
         fields: fields,
+        autoAdmissionFormat: _autoAdmissionFormat,
+        streamOptions: _streamOptions,
       );
-      if (mounted) setState(() => _builtinFields = saved);
+      if (mounted) {
+        setState(() {
+          _builtinFields = saved.fields;
+          _autoAdmissionFormat = saved.autoAdmissionFormat;
+          if (saved.streamOptions.isNotEmpty) {
+            _streamOptions = saved.streamOptions;
+          }
+        });
+      }
     } catch (error) {
       await _load();
       if (mounted) {
@@ -76,6 +97,196 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
             content: Text(error.toString()),
             backgroundColor: Colors.red,
           ),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleAutoAdmission(bool enabled) async {
+    if (enabled) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Enable Automated Admission Numbers?'),
+          content: const Text(
+            'This will automatically format Admission Numbers as STREAM/ROLL (e.g. SCI/31, ARTS/31, COM/31).\n\n'
+            'Admission numbers for all existing students who have a stream and roll number will be updated to this format.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Enable & Update Students'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    try {
+      final saved = await widget.api.updateStudentFieldConfig(
+        schoolUuid: widget.schoolUuid,
+        fields: _builtinFields,
+        autoAdmissionFormat: enabled,
+        streamOptions: _streamOptions,
+      );
+      if (mounted) {
+        setState(() {
+          _autoAdmissionFormat = saved.autoAdmissionFormat;
+          _builtinFields = saved.fields;
+          if (saved.streamOptions.isNotEmpty) {
+            _streamOptions = saved.streamOptions;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Automated admission format enabled and existing students updated.'
+                  : 'Automated admission format disabled.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Cannot Enable Automated Admission Numbers'),
+            content: Text(error.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _addStream() async {
+    final nameController = TextEditingController();
+    final codeController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add School Stream'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Stream Name *',
+                  hintText: 'e.g. Science, Vocational',
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Enter stream name';
+                  if (_streamOptions.any(
+                    (opt) => opt.name.toLowerCase() == val.trim().toLowerCase(),
+                  )) {
+                    return 'Stream already exists';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: codeController,
+                decoration: const InputDecoration(
+                  labelText: 'Stream Code (Prefix) *',
+                  hintText: 'e.g. SCI, VOC',
+                ),
+                textCapitalization: TextCapitalization.characters,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Enter stream code';
+                  if (_streamOptions.any(
+                    (opt) => opt.code.toLowerCase() == val.trim().toLowerCase(),
+                  )) {
+                    return 'Code already in use';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() == true) {
+                Navigator.of(context).pop(true);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (created == true) {
+      final updated = [
+        ..._streamOptions,
+        StreamOption(
+          name: nameController.text.trim(),
+          code: codeController.text.trim().toUpperCase(),
+        ),
+      ];
+      try {
+        final saved = await widget.api.updateStudentFieldConfig(
+          schoolUuid: widget.schoolUuid,
+          fields: _builtinFields,
+          autoAdmissionFormat: _autoAdmissionFormat,
+          streamOptions: updated,
+        );
+        if (mounted) {
+          setState(() {
+            _streamOptions = saved.streamOptions;
+          });
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _removeStream(int index) async {
+    final updated = [..._streamOptions]..removeAt(index);
+    try {
+      final saved = await widget.api.updateStudentFieldConfig(
+        schoolUuid: widget.schoolUuid,
+        fields: _builtinFields,
+        autoAdmissionFormat: _autoAdmissionFormat,
+        streamOptions: updated,
+      );
+      if (mounted) {
+        setState(() {
+          _streamOptions = saved.streamOptions;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
         );
       }
     }
@@ -270,6 +481,88 @@ class _StudentFieldsScreenState extends State<StudentFieldsScreen> {
                       ),
                     );
                   },
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'ADMISSION NUMBER AUTOMATION',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Auto-generate Admission No. from Stream & Roll No.',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Combines stream code and roll number into STREAM/ROLL (e.g. SCI/31, ARTS/31, COM/31). '
+                                    'Enabling will also update existing students with valid stream and roll numbers.',
+                                    style: TextStyle(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              key: const Key('auto-admission-format-switch'),
+                              value: _autoAdmissionFormat,
+                              onChanged: _toggleAutoAdmission,
+                            ),
+                          ],
+                        ),
+                        if (_autoAdmissionFormat) ...[
+                          const Divider(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Allowed School Streams',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _addStream,
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Add Stream'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _streamOptions.asMap().entries.map((entry) {
+                              final idx = entry.key;
+                              final opt = entry.value;
+                              return Chip(
+                                label: Text('${opt.name} (${opt.code})'),
+                                onDeleted: _streamOptions.length > 1
+                                    ? () => _removeStream(idx)
+                                    : null,
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 28),
                 Row(

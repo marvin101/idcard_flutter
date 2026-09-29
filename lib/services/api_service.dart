@@ -1984,38 +1984,56 @@ class ApiService {
         .toList();
   }
 
-  Future<List<BuiltinStudentField>> getBuiltinStudentFields(
+  Future<StudentFieldConfigResponse> getStudentFieldConfig(
     String schoolUuid,
   ) async {
     final response = await _client.get(
       _uri('/schools/$schoolUuid/student-field-config'),
       headers: _headers,
     );
-    final fields = _decodeMap(response)['fields'] as List<dynamic>? ?? const [];
-    return fields
-        .map(
-          (item) => BuiltinStudentField.fromJson(item as Map<String, dynamic>),
-        )
-        .toList();
+    return StudentFieldConfigResponse.fromJson(_decodeMap(response));
+  }
+
+  Future<List<BuiltinStudentField>> getBuiltinStudentFields(
+    String schoolUuid,
+  ) async {
+    final config = await getStudentFieldConfig(schoolUuid);
+    return config.fields;
+  }
+
+  Future<StudentFieldConfigResponse> updateStudentFieldConfig({
+    required String schoolUuid,
+    required List<BuiltinStudentField> fields,
+    bool? autoAdmissionFormat,
+    List<StreamOption>? streamOptions,
+  }) async {
+    final payload = <String, dynamic>{
+      'fields': fields.map((item) => item.toJson()).toList(),
+    };
+    if (autoAdmissionFormat != null) {
+      payload['auto_admission_format'] = autoAdmissionFormat;
+    }
+    if (streamOptions != null) {
+      payload['stream_options'] =
+          streamOptions.map((item) => item.toJson()).toList();
+    }
+    final response = await _client.put(
+      _uri('/schools/$schoolUuid/student-field-config'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    return StudentFieldConfigResponse.fromJson(_decodeMap(response));
   }
 
   Future<List<BuiltinStudentField>> updateBuiltinStudentFields({
     required String schoolUuid,
     required List<BuiltinStudentField> fields,
   }) async {
-    final response = await _client.put(
-      _uri('/schools/$schoolUuid/student-field-config'),
-      headers: _headers,
-      body: jsonEncode({
-        'fields': fields.map((item) => item.toJson()).toList(),
-      }),
+    final result = await updateStudentFieldConfig(
+      schoolUuid: schoolUuid,
+      fields: fields,
     );
-    final values = _decodeMap(response)['fields'] as List<dynamic>? ?? const [];
-    return values
-        .map(
-          (item) => BuiltinStudentField.fromJson(item as Map<String, dynamic>),
-        )
-        .toList();
+    return result.fields;
   }
 
   Future<StudentFieldDefinition> createStudentField({
