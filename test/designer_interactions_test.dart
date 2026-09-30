@@ -1092,4 +1092,94 @@ void main() {
     expect(view(t).selectedIds, {'a'});
     expect(find.byKey(const Key('group-resize-handle')), findsNothing);
   });
+
+  testWidgets('clicking elsewhere applies the inline text edit', (t) async {
+    await mount(t, openPanels: false);
+
+    final element = find.byKey(const Key('design-element-a'));
+
+    await t.tap(element);
+    await t.pump(const Duration(milliseconds: 50));
+    await t.tap(element);
+    await t.pump();
+
+    expect(find.byKey(const Key('inline-text-editor-a')), findsOneWidget);
+
+    await t.enterText(
+      find.byKey(const Key('inline-text-editor-a')),
+      'Applied by click-away',
+    );
+
+    // Clicking empty canvas space must commit, not cancel.
+    await t.tapAt(
+      t.getTopLeft(find.byKey(const Key('design-document-surface'))) +
+          const Offset(5, 5),
+    );
+    await t.pump();
+
+    expect(find.byKey(const Key('inline-text-editor-a')), findsNothing);
+    expect(live(t).data['text'], 'Applied by click-away');
+
+    // The commit must be undoable as a single history entry.
+    await t.tap(find.byTooltip('Undo'));
+    await t.pump();
+
+    expect(live(t).data['text'], 'First');
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('dragging stays disabled while the inline editor is open', (
+    t,
+  ) async {
+    await mount(t, openPanels: false);
+
+    final element = find.byKey(const Key('design-element-a'));
+
+    await t.tap(element);
+    await t.pump(const Duration(milliseconds: 50));
+    await t.tap(element);
+    await t.pump();
+
+    final editor = find.byKey(const Key('inline-text-editor-a'));
+    expect(editor, findsOneWidget);
+
+    await t.enterText(editor, 'Typing');
+
+    // A pointer drag starting on the element being edited must not move it.
+    final pointer = await t.startGesture(
+      t.getCenter(element),
+      kind: PointerDeviceKind.mouse,
+    );
+    await pointer.moveBy(const Offset(30, 15));
+    await t.pump();
+    await pointer.up();
+    await t.pump();
+
+    expect(live(t).x, 10);
+    expect(live(t).y, 10);
+
+    // The editor must still be open with the typed text intact.
+    expect(editor, findsOneWidget);
+    expect(
+      t.widget<TextField>(editor).controller!.text,
+      'Typing',
+    );
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('F2 enters inline editing without moving the element', (t) async {
+    await mount(t, openPanels: false);
+
+    await select(t, 'a');
+
+    await t.sendKeyEvent(LogicalKeyboardKey.f2);
+    await t.pump();
+
+    expect(find.byKey(const Key('inline-text-editor-a')), findsOneWidget);
+
+    // The shortcut handler must never leak the nudge delta into position.
+    expect(live(t).x, 10);
+    expect(live(t).y, 10);
+    expect(t.takeException(), isNull);
+  });
 }

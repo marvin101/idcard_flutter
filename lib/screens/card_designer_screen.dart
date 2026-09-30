@@ -1581,28 +1581,6 @@ class _CardDesignerScreenState extends State<CardDesignerScreen> {
         if (id != null) {
           _beginInlineTextEdit(id);
         }
-
-        if (id == null) {
-          return;
-        }
-
-        // Keyboard nudges remain precise even when
-        // pointer grid snapping is enabled.
-        _updateElement(
-          id,
-          (element) => element.locked
-              ? element
-              : element.copyWith(
-                  x: (element.x + delta.dx).clamp(
-                    0.0,
-                    math.max(0.0, _document.canvas.width - element.width),
-                  ),
-                  y: (element.y + delta.dy).clamp(
-                    0.0,
-                    math.max(0.0, _document.canvas.height - element.height),
-                  ),
-                ),
-        );
     }
   }
 
