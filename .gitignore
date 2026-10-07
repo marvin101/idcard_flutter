@@ -60,3 +60,4 @@ app.*.map.json
 .vscode/
 .vercel
 .env*
+.freebuff/project-id
