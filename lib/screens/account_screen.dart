@@ -569,6 +569,10 @@ class _SecurityPanelState extends State<_SecurityPanel> {
                   label: const Text('Change password'),
                 ),
               ),
+              const SizedBox(height: 28),
+              const Divider(),
+              const SizedBox(height: 20),
+              const _AccountActivityPanel(),
             ],
           ),
         ),
@@ -643,6 +647,248 @@ class _SecurityPanelState extends State<_SecurityPanel> {
       if (mounted) setState(() => _saving = false);
     }
   }
+}
+
+class _AccountActivityPanel extends StatefulWidget {
+  const _AccountActivityPanel();
+
+  @override
+  State<_AccountActivityPanel> createState() => _AccountActivityPanelState();
+}
+
+class _AccountActivityPanelState extends State<_AccountActivityPanel> {
+  static const _pageSize = 20;
+  final List<SecurityEvent> _events = [];
+  bool _loading = true;
+  bool _loadingMore = false;
+  String? _error;
+  int _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEvents();
+  }
+
+  Future<void> _loadEvents({bool loadMore = false}) async {
+    if (loadMore) {
+      if (_loadingMore || _loading || _events.length >= _total) return;
+      setState(() => _loadingMore = true);
+    } else {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final page = await context.read<AuthProvider>().api.getSecurityEvents(
+        limit: _pageSize,
+        offset: loadMore ? _events.length : 0,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (loadMore) {
+          final known = _events.map((event) => event.uuid).toSet();
+          _events.addAll(page.items.where((event) => !known.contains(event.uuid)));
+        } else {
+          _events
+            ..clear()
+            ..addAll(page.items);
+        }
+        _total = page.total;
+        _error = null;
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not load account activity.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadingMore = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: Text('Account activity', style: Theme.of(context).textTheme.titleLarge),
+          ),
+          IconButton(
+            key: const Key('account-activity-refresh'),
+            tooltip: 'Refresh activity',
+            onPressed: _loading || _loadingMore ? null : _loadEvents,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      const Text(
+        'Recent security-related changes to your account.',
+        style: TextStyle(color: AppColors.textSecondary),
+      ),
+      const SizedBox(height: 16),
+      if (_loading && _events.isEmpty)
+        const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: CircularProgressIndicator(),
+          ),
+        )
+      else if (_error != null && _events.isEmpty)
+        _ActivityMessage(message: _error!, actionLabel: 'Try again', onAction: _loadEvents)
+      else if (_events.isEmpty)
+        const _ActivityMessage(message: 'No account activity has been recorded yet.')
+      else ...[
+        for (final event in _events) _SecurityEventTile(event: event),
+        if (_error != null)
+          _ActivityMessage(
+            message: _error!,
+            actionLabel: 'Retry',
+            onAction: () => _loadEvents(loadMore: true),
+          ),
+        if (_events.length < _total)
+          Align(
+            alignment: Alignment.center,
+            child: OutlinedButton.icon(
+              key: const Key('account-activity-load-more'),
+              onPressed: _loadingMore ? null : () => _loadEvents(loadMore: true),
+              icon: _loadingMore
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(_loadingMore ? 'Loading…' : 'Load more'),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            'Showing ${_events.length} of $_total events',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
+class _SecurityEventTile extends StatelessWidget {
+  const _SecurityEventTile({required this.event});
+  final SecurityEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = <String>[];
+    if (event.ipAddress?.isNotEmpty == true) details.add('IP address: ${event.ipAddress}');
+    final browser = _browserLabel(event.userAgent);
+    if (browser != null) details.add('Device: $browser');
+    if (event.details['other_sessions_revoked'] == true) details.add('Other sessions were signed out');
+    if (event.details['current_session_preserved'] == true) details.add('Current session preserved');
+
+    return Card(
+      key: Key('security-event-${event.uuid}'),
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0,
+      color: AppColors.surfaceSoft,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(_eventIcon(event.eventType), color: AppColors.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_eventLabel(event.eventType), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 3),
+                  Text(_formatDate(event.createdAt), style: const TextStyle(color: AppColors.textSecondary)),
+                  for (final detail in details) ...[
+                    const SizedBox(height: 5),
+                    Text(detail, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityMessage extends StatelessWidget {
+  const _ActivityMessage({required this.message, this.actionLabel, this.onAction});
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 18),
+    child: Column(
+      children: [
+        Text(message, textAlign: TextAlign.center),
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(height: 8),
+          TextButton(onPressed: onAction, child: Text(actionLabel!)),
+        ],
+      ],
+    ),
+  );
+}
+
+String _eventLabel(String value) => switch (value) {
+  'password_changed' => 'Password changed',
+  'login' => 'Signed in',
+  'logout' => 'Signed out',
+  'mfa_enabled' => 'Two-factor authentication enabled',
+  'mfa_disabled' => 'Two-factor authentication disabled',
+  _ => _humanize(value),
+};
+
+IconData _eventIcon(String value) => switch (value) {
+  'password_changed' => Icons.password_rounded,
+  'login' => Icons.login_rounded,
+  'logout' => Icons.logout_rounded,
+  'mfa_enabled' || 'mfa_disabled' => Icons.phonelink_lock_rounded,
+  _ => Icons.shield_outlined,
+};
+
+String? _browserLabel(String? userAgent) {
+  if (userAgent == null || userAgent.trim().isEmpty) return null;
+  final value = userAgent.toLowerCase();
+  final browser = value.contains('edg/')
+      ? 'Microsoft Edge'
+      : value.contains('firefox/')
+      ? 'Firefox'
+      : value.contains('chrome/')
+      ? 'Chrome'
+      : value.contains('safari/')
+      ? 'Safari'
+      : 'Browser';
+  final platform = value.contains('windows')
+      ? 'Windows'
+      : value.contains('android')
+      ? 'Android'
+      : value.contains('iphone') || value.contains('ipad')
+      ? 'iOS'
+      : value.contains('mac os')
+      ? 'macOS'
+      : value.contains('linux')
+      ? 'Linux'
+      : null;
+  return platform == null ? browser : '$browser on $platform';
 }
 
 String _roleLabel(AuthProvider auth, AuthUser user) {

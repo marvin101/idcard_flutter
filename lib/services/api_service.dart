@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import '../models/auth_models.dart';
 import '../models/api_student.dart';
 import '../models/api_personnel.dart';
 import '../models/academic_session.dart';
@@ -604,6 +605,20 @@ class ApiService {
   Future<Map<String, dynamic>> removeProfilePhoto() async => _decodeMap(
     await _client.delete(_uri('/users/me/profile-photo'), headers: _headers),
   );
+
+  Future<SecurityEventPage> getSecurityEvents({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    if (limit < 1 || limit > 100 || offset < 0) {
+      throw ArgumentError('Limit must be between 1 and 100 and offset non-negative.');
+    }
+    final uri = _uri('/users/me/security-events').replace(
+      queryParameters: {'limit': '$limit', 'offset': '$offset'},
+    );
+    final response = await _client.get(uri, headers: _headers);
+    return SecurityEventPage.fromJson(_decodeMap(response));
+  }
 
   Future<void> changePassword({
     required String currentPassword,

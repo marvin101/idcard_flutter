@@ -153,3 +153,61 @@ LifecyclePermissions lifecyclePermissionsFor({
     canMarkPrinted: isAdministrator || schoolRole == 'card_operator',
   );
 }
+
+
+class SecurityEvent {
+  const SecurityEvent({
+    required this.uuid,
+    required this.eventType,
+    required this.createdAt,
+    this.ipAddress,
+    this.userAgent,
+    this.details = const {},
+  });
+
+  final String uuid;
+  final String eventType;
+  final DateTime createdAt;
+  final String? ipAddress;
+  final String? userAgent;
+  final Map<String, dynamic> details;
+
+  factory SecurityEvent.fromJson(Map<String, dynamic> json) => SecurityEvent(
+    uuid: json['uuid'] as String,
+    eventType: json['event_type'] as String? ?? 'unknown',
+    createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    ipAddress: json['ip_address'] as String?,
+    userAgent: json['user_agent'] as String?,
+    details: json['details'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(json['details'] as Map<String, dynamic>)
+        : const {},
+  );
+}
+
+class SecurityEventPage {
+  const SecurityEventPage({
+    required this.items,
+    required this.total,
+    required this.limit,
+    required this.offset,
+  });
+
+  final List<SecurityEvent> items;
+  final int total;
+  final int limit;
+  final int offset;
+
+  bool get hasMore => offset + items.length < total;
+
+  factory SecurityEventPage.fromJson(Map<String, dynamic> json) =>
+      SecurityEventPage(
+        items: (json['items'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(SecurityEvent.fromJson)
+            .toList(),
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        limit: (json['limit'] as num?)?.toInt() ?? 20,
+        offset: (json['offset'] as num?)?.toInt() ?? 0,
+      );
+}

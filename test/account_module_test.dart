@@ -12,6 +12,21 @@ class _AccountApi extends ApiService {
   String? currentPassword;
   String? newPassword;
   ApiException? passwordError;
+  List<SecurityEvent> activityEvents = const [];
+  int activityTotal = 0;
+  ApiException? activityError;
+
+  @override
+  Future<SecurityEventPage> getSecurityEvents({int limit = 20, int offset = 0}) async {
+    if (activityError != null) throw activityError!;
+    final items = activityEvents.skip(offset).take(limit).toList();
+    return SecurityEventPage(
+      items: items,
+      total: activityTotal == 0 ? activityEvents.length : activityTotal,
+      limit: limit,
+      offset: offset,
+    );
+  }
 
   @override
   Future<void> changePassword({
@@ -329,4 +344,33 @@ void main() {
     expect(find.byKey(const Key('authenticated-sign-out')), findsNothing);
     expect(find.text('CampusID'), findsWidgets);
   });
+  testWidgets('security displays account activity returned by the API', (tester) async {
+    final provider = await _pumpAccount(tester, route: AppRoutes.accountSecurity);
+    provider.accountApi
+      ..activityEvents = [
+        SecurityEvent(
+          uuid: 'event-1',
+          eventType: 'password_changed',
+          createdAt: DateTime.utc(2026, 10, 20, 13, 29),
+          ipAddress: '127.0.0.1',
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/155.0',
+          details: const {
+            'other_sessions_revoked': true,
+            'current_session_preserved': true,
+          },
+        ),
+      ]
+      ..activityTotal = 1;
+    // The panel loads when it is mounted, so refresh after setting the fixture.
+    await tester.tap(find.byKey(const Key('account-activity-refresh')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account activity'), findsOneWidget);
+    expect(find.text('Password changed'), findsOneWidget);
+    expect(find.text('IP address: 127.0.0.1'), findsOneWidget);
+    expect(find.text('Device: Chrome on Windows'), findsOneWidget);
+    expect(find.text('Other sessions were signed out'), findsOneWidget);
+    expect(find.text('Current session preserved'), findsOneWidget);
+  });
+
 }
