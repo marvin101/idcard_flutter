@@ -536,6 +536,27 @@ class ApiService {
     return _decodeMap(response);
   }
 
+  Future<List<Map<String, dynamic>>> getMySessions() async {
+    final response = await _client.get(
+      _uri('/users/me/sessions'),
+      headers: _headers,
+    );
+    final decoded = _decodeMap(response);
+    return (decoded['items'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
+
+  Future<void> revokeMySession(String sessionId) async {
+    final response = await _client.delete(
+      _uri('/users/me/sessions/$sessionId'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeMap(response);
+    }
+  }
+
   Future<void> acknowledgeRecoveryCodesSaved() async {
     final response = await _client.post(
       _uri('/users/me/mfa/recovery-codes/acknowledge'),

@@ -256,6 +256,7 @@ void main() {
       find.byKey(const Key('confirm-password')),
       'different',
     );
+    await tester.ensureVisible(find.byKey(const Key('change-password-submit')));
     await tester.tap(find.byKey(const Key('change-password-submit')));
     await tester.pump();
 
@@ -286,6 +287,7 @@ void main() {
       find.byKey(const Key('confirm-password')),
       'new-password',
     );
+    await tester.ensureVisible(find.byKey(const Key('change-password-submit')));
     await tester.tap(find.byKey(const Key('change-password-submit')));
     await tester.pumpAndSettle();
 
@@ -311,6 +313,7 @@ void main() {
       find.byKey(const Key('confirm-password')),
       'new-password',
     );
+    await tester.ensureVisible(find.byKey(const Key('change-password-submit')));
     await tester.tap(find.byKey(const Key('change-password-submit')));
     await tester.pumpAndSettle();
 
@@ -363,8 +366,10 @@ void main() {
       ..activityTotal = 1;
     // Activity is collapsed by default; expand it before refreshing the fixture.
     expect(find.byKey(const Key('account-activity-refresh')), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('account-activity-toggle')));
     await tester.tap(find.byKey(const Key('account-activity-toggle')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('account-activity-refresh')));
     await tester.tap(find.byKey(const Key('account-activity-refresh')));
     await tester.pumpAndSettle();
 

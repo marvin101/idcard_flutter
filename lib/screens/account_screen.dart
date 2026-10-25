@@ -522,6 +522,8 @@ class _SecurityPanelState extends State<_SecurityPanel> {
               ),
               const SizedBox(height: 24),
               const _MfaManagementPanel(),
+              const SizedBox(height: 24),
+              const _ActiveSessionsPanel(),
               const SizedBox(height: 28),
               const Divider(),
               const SizedBox(height: 24),
@@ -651,6 +653,146 @@ class _SecurityPanelState extends State<_SecurityPanel> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+
+class _ActiveSessionsPanel extends StatefulWidget {
+  const _ActiveSessionsPanel();
+
+  @override
+  State<_ActiveSessionsPanel> createState() => _ActiveSessionsPanelState();
+}
+
+class _ActiveSessionsPanelState extends State<_ActiveSessionsPanel> {
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _sessions = [];
+  final Set<String> _revoking = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final sessions = await context.read<AuthProvider>().api.getMySessions();
+      if (!mounted) return;
+      setState(() { _sessions = sessions; _loading = false; });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() { _error = error.message; _loading = false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _error = 'Could not load signed-in devices.'; _loading = false; });
+    }
+  }
+
+  String _deviceName(String? userAgent) {
+    final value = (userAgent ?? '').toLowerCase();
+    final browser = value.contains('edg/') ? 'Microsoft Edge'
+        : value.contains('firefox/') ? 'Firefox'
+        : value.contains('chrome/') ? 'Chrome'
+        : value.contains('safari/') ? 'Safari'
+        : 'Unknown browser';
+    final os = value.contains('windows') ? 'Windows'
+        : value.contains('android') ? 'Android'
+        : value.contains('iphone') || value.contains('ipad') ? 'iOS'
+        : value.contains('mac os') || value.contains('macintosh') ? 'macOS'
+        : value.contains('linux') ? 'Linux'
+        : 'Unknown OS';
+    return '$browser • $os';
+  }
+
+  Future<void> _revoke(Map<String, dynamic> session) async {
+    final id = session['session_id'] as String?;
+    if (id == null || id.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out this device?'),
+        content: const Text('This device will no longer be able to use this session.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Log out')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _revoking.add(id));
+    try {
+      await context.read<AuthProvider>().api.revokeMySession(id);
+      if (!mounted) return;
+      setState(() => _sessions.removeWhere((item) => item['session_id'] == id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session revoked.'), backgroundColor: AppColors.success),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message), backgroundColor: AppColors.danger),
+      );
+      await _load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not revoke this session.'), backgroundColor: AppColors.danger),
+      );
+    } finally {
+      if (mounted) setState(() => _revoking.remove(id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('Signed-in devices', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600))),
+            IconButton(tooltip: 'Refresh sessions', onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh)),
+          ]),
+          const Text('Review active sessions and sign out devices you no longer use.', style: TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          if (_loading) const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
+          else if (_error != null) Row(children: [Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.danger))), TextButton(onPressed: _load, child: const Text('Retry'))])
+          else if (_sessions.isEmpty) const Text('No active sessions found.')
+          else ..._sessions.map((session) {
+            final id = session['session_id'] as String? ?? '';
+            final current = session['is_current'] == true;
+            final created = DateTime.tryParse(session['created_at'] as String? ?? '')?.toLocal();
+            final lastSeen = DateTime.tryParse(session['last_seen_at'] as String? ?? '')?.toLocal();
+            final ip = session['ip_address'] as String?;
+            return Container(
+              key: Key('auth-session-$id'),
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(border: Border.all(color: Theme.of(context).dividerColor), borderRadius: BorderRadius.circular(10)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.devices_other_rounded),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(_deviceName(session['user_agent'] as String?), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  if (current) const Padding(padding: EdgeInsets.only(top: 3), child: Text('Current session', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w600))),
+                  if (ip != null && ip.isNotEmpty) Text('IP address: $ip'),
+                  if (created != null) Text('Signed in: $created'),
+                  if (lastSeen != null) Text('Last refreshed: $lastSeen'),
+                ])),
+                if (!current) IconButton(
+                  tooltip: 'Log out this device',
+                  onPressed: _revoking.contains(id) ? null : () => _revoke(session),
+                  icon: _revoking.contains(id) ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.logout_rounded),
+                ),
+              ]),
+            );
+          }),
+        ]),
+      ),
+    );
   }
 }
 
