@@ -536,6 +536,24 @@ class ApiService {
     return _decodeMap(response);
   }
 
+  Future<void> acknowledgeRecoveryCodesSaved() async {
+    final response = await _client.post(
+      _uri('/users/me/mfa/recovery-codes/acknowledge'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeMap(response);
+    }
+  }
+
+  Future<Map<String, dynamic>> regenerateMfaRecoveryCodes() async {
+    final response = await _client.post(
+      _uri('/users/me/mfa/recovery-codes/regenerate'),
+      headers: _headers,
+    );
+    return _decodeMap(response);
+  }
+
   Future<Map<String, dynamic>> getMfaStatus() async {
     final response = await _client.get(
       _uri('/users/me/mfa/status'),

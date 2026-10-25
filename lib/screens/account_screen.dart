@@ -7,6 +7,7 @@ import '../models/auth_models.dart';
 import '../navigation/app_navigation.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/recovery_code_download.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_dimensions.dart';
 import '../widgets/authenticated_app_bar.dart';
@@ -667,6 +668,7 @@ class _MfaManagementPanelState extends State<_MfaManagementPanel> {
   bool _busy = false;
   bool _enabled = false;
   int _recoveryRemaining = 0;
+  bool _recoveryCanRegenerate = false;
   String? _provisioningUri;
   String? _manualSecret;
   String? _error;
@@ -694,6 +696,7 @@ class _MfaManagementPanelState extends State<_MfaManagementPanel> {
       setState(() {
         _enabled = result['enabled'] == true;
         _recoveryRemaining = (result['recovery_codes_remaining'] as num?)?.toInt() ?? 0;
+        _recoveryCanRegenerate = result['recovery_codes_can_regenerate'] == true;
       });
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -769,6 +772,24 @@ class _MfaManagementPanelState extends State<_MfaManagementPanel> {
     }
   }
 
+  Future<void> _regenerateRecoveryCodes() async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      final result = await context.read<AuthProvider>().api.regenerateMfaRecoveryCodes();
+      final codes = (result['recovery_codes'] as List<dynamic>? ?? const []).whereType<String>().toList();
+      if (!mounted) return;
+      setState(() { _recoveryRemaining = codes.length; _recoveryCanRegenerate = false; });
+      await _showRecoveryCodes(codes);
+      await _loadStatus();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not generate new recovery codes.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _showRecoveryCodes(List<String> codes) async {
     if (!mounted || codes.isEmpty) return;
     await showDialog<void>(
@@ -790,8 +811,34 @@ class _MfaManagementPanelState extends State<_MfaManagementPanel> {
           ),
         ),
         actions: [
+          TextButton.icon(
+            key: const Key('mfa-download-recovery-codes'),
+            onPressed: () async {
+              final contents = 'CampusID - Recovery Codes\n'
+                  '=========================\n\n'
+                  'Each code can be used only once. Keep this file secure.\n\n'
+                  '${codes.join('\n')}\n';
+              final username = context.read<AuthProvider>().user?.username ?? 'campusid';
+              final downloaded = await downloadRecoveryCodes(contents, username: username);
+              if (!dialogContext.mounted) return;
+              ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
+                content: Text(downloaded ? 'Recovery codes downloaded.' : 'Recovery-code download is supported in the web app.'),
+              ));
+            },
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('Download .txt'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () async {
+              try {
+                await context.read<AuthProvider>().api.acknowledgeRecoveryCodesSaved();
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+              } on ApiException catch (error) {
+                if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(error.message)));
+              } catch (_) {
+                if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('Could not record acknowledgement. Please try again.')));
+              }
+            },
             child: const Text('I have saved them'),
           ),
         ],
@@ -972,6 +1019,18 @@ class _MfaManagementPanelState extends State<_MfaManagementPanel> {
               icon: const Icon(Icons.lock_open_outlined),
               label: const Text('Disable two-factor authentication'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const Key('mfa-regenerate-recovery-codes'),
+              onPressed: (_busy || !_recoveryCanRegenerate) ? null : _regenerateRecoveryCodes,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Generate new recovery codes'),
+            ),
+            if (!_recoveryCanRegenerate)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text('New codes become available after all 10 current recovery codes have been used.'),
+              ),
           ],
         ],
       ),
@@ -1230,6 +1289,8 @@ String _eventLabel(String value) => switch (value) {
   'login_mfa_failed' => 'Two-factor verification failed',
   'mfa_enabled' => 'Two-factor authentication enabled',
   'mfa_disabled' => 'Two-factor authentication disabled',
+  'recovery_codes_saved_acknowledged' => 'Recovery codes saved — acknowledgement received',
+  'mfa_recovery_codes_regenerated' => 'Recovery codes regenerated',
   _ => _humanize(value),
 };
 
@@ -1238,7 +1299,8 @@ IconData _eventIcon(String value) => switch (value) {
   'login' || 'login_mfa_verified' => Icons.login_rounded,
   'login_failed' || 'login_mfa_failed' => Icons.warning_amber_rounded,
   'logout' => Icons.logout_rounded,
-  'mfa_enabled' || 'mfa_disabled' => Icons.phonelink_lock_rounded,
+  'mfa_enabled' || 'mfa_disabled' || 'mfa_recovery_codes_regenerated' => Icons.phonelink_lock_rounded,
+  'recovery_codes_saved_acknowledged' => Icons.download_done_rounded,
   _ => Icons.shield_outlined,
 };
 
