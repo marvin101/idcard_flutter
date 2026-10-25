@@ -576,7 +576,7 @@ class _SecurityPanelState extends State<_SecurityPanel> {
               const SizedBox(height: 28),
               const Divider(),
               const SizedBox(height: 20),
-              const _AccountActivityPanel(),
+              const _AccountActivityDisclosure(),
             ],
           ),
         ),
@@ -979,6 +979,35 @@ class _MfaManagementPanelState extends State<_MfaManagementPanel> {
   }
 }
 
+class _AccountActivityDisclosure extends StatefulWidget {
+  const _AccountActivityDisclosure();
+
+  @override
+  State<_AccountActivityDisclosure> createState() =>
+      _AccountActivityDisclosureState();
+}
+
+class _AccountActivityDisclosureState extends State<_AccountActivityDisclosure> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      OutlinedButton.icon(
+        key: const Key('account-activity-toggle'),
+        onPressed: () => setState(() => _expanded = !_expanded),
+        icon: Icon(_expanded ? Icons.expand_less_rounded : Icons.history_rounded),
+        label: Text(_expanded ? 'Hide account activity' : 'View account activity'),
+      ),
+      if (_expanded) ...[
+        const SizedBox(height: 12),
+        const _AccountActivityPanel(),
+      ],
+    ],
+  );
+}
+
 class _AccountActivityPanel extends StatefulWidget {
   const _AccountActivityPanel();
 
@@ -1123,6 +1152,20 @@ class _SecurityEventTile extends StatelessWidget {
     if (browser != null) details.add('Device: $browser');
     if (event.details['other_sessions_revoked'] == true) details.add('Other sessions were signed out');
     if (event.details['current_session_preserved'] == true) details.add('Current session preserved');
+    if (event.eventType == 'login_mfa_verified') {
+      final method = event.details['method'];
+      if (method == 'recovery_code') {
+        details.add('Method: recovery code');
+      } else if (method == 'totp') {
+        details.add('Method: authenticator app');
+      }
+    }
+    if (event.eventType == 'login_failed' || event.eventType == 'login_mfa_failed') {
+      final stage = event.details['stage'];
+      if (stage == 'password') details.add('Stage: password');
+      if (stage == 'second_factor') details.add('Stage: two-factor verification');
+      if (stage == 'account_status') details.add('Stage: account status');
+    }
 
     return Card(
       key: Key('security-event-${event.uuid}'),
@@ -1182,6 +1225,9 @@ String _eventLabel(String value) => switch (value) {
   'password_changed' => 'Password changed',
   'login' => 'Signed in',
   'logout' => 'Signed out',
+  'login_mfa_verified' => 'Sign-in successful',
+  'login_failed' => 'Sign-in failed',
+  'login_mfa_failed' => 'Two-factor verification failed',
   'mfa_enabled' => 'Two-factor authentication enabled',
   'mfa_disabled' => 'Two-factor authentication disabled',
   _ => _humanize(value),
@@ -1189,7 +1235,8 @@ String _eventLabel(String value) => switch (value) {
 
 IconData _eventIcon(String value) => switch (value) {
   'password_changed' => Icons.password_rounded,
-  'login' => Icons.login_rounded,
+  'login' || 'login_mfa_verified' => Icons.login_rounded,
+  'login_failed' || 'login_mfa_failed' => Icons.warning_amber_rounded,
   'logout' => Icons.logout_rounded,
   'mfa_enabled' || 'mfa_disabled' => Icons.phonelink_lock_rounded,
   _ => Icons.shield_outlined,

@@ -361,7 +361,10 @@ void main() {
         ),
       ]
       ..activityTotal = 1;
-    // The panel loads when it is mounted, so refresh after setting the fixture.
+    // Activity is collapsed by default; expand it before refreshing the fixture.
+    expect(find.byKey(const Key('account-activity-refresh')), findsNothing);
+    await tester.tap(find.byKey(const Key('account-activity-toggle')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('account-activity-refresh')));
     await tester.pumpAndSettle();
 
