@@ -504,6 +504,61 @@ class ApiService {
     return _decodeMap(response);
   }
 
+  Future<Map<String, dynamic>> verifyMfaLogin({
+    required String challengeToken,
+    required String code,
+  }) async {
+    final response = await _client.post(
+      _uri('/auth/mfa/verify'),
+      headers: _headers,
+      body: jsonEncode({
+        'challenge_token': challengeToken,
+        'code': code.trim(),
+      }),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> startMfaEnrollment() async {
+    final response = await _client.post(
+      _uri('/users/me/mfa/enrollment'),
+      headers: _headers,
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> verifyMfaEnrollment(String code) async {
+    final response = await _client.post(
+      _uri('/users/me/mfa/enrollment/verify'),
+      headers: _headers,
+      body: jsonEncode({'code': code.trim()}),
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> getMfaStatus() async {
+    final response = await _client.get(
+      _uri('/users/me/mfa/status'),
+      headers: _headers,
+    );
+    return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> disableMfa({
+    required String currentPassword,
+    required String code,
+  }) async {
+    final response = await _client.post(
+      _uri('/users/me/mfa/disable'),
+      headers: _headers,
+      body: jsonEncode({
+        'current_password': currentPassword,
+        'code': code.trim(),
+      }),
+    );
+    return _decodeMap(response);
+  }
+
   Future<Map<String, dynamic>> register({
     required String username,
     required String password,

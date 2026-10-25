@@ -43,6 +43,7 @@ class AuthProvider extends ChangeNotifier {
   bool _busy = false;
   String? _error;
   String? _sessionMessage;
+  String? _mfaChallengeToken;
   Future<void>? _sessionInvalidationFuture;
 
   AuthUser? get user => _user;
@@ -53,6 +54,7 @@ class AuthProvider extends ChangeNotifier {
   bool get busy => _busy;
   String? get error => _error;
   String? get sessionMessage => _sessionMessage;
+  bool get mfaRequired => _mfaChallengeToken != null;
   bool get isAuthenticated => _user != null;
   bool get isPlatformAdmin => _user?.isPlatformAdministrator ?? false;
 
@@ -140,9 +142,19 @@ class AuthProvider extends ChangeNotifier {
     _setBusy(true);
     _error = null;
     _sessionMessage = null;
+    _mfaChallengeToken = null;
     _sessionInvalidationFuture = null;
     try {
       final result = await _api.login(username.trim(), password);
+      if (result['mfa_required'] == true) {
+        final challenge = result['challenge_token'] as String?;
+        if (challenge == null || challenge.isEmpty) {
+          throw const ApiException(500, 'Login response did not contain an MFA challenge.');
+        }
+        _mfaChallengeToken = challenge;
+        _error = null;
+        return;
+      }
       final token = result['access_token'] as String?;
       if (token == null || token.isEmpty) {
         throw const ApiException(
@@ -150,7 +162,7 @@ class AuthProvider extends ChangeNotifier {
           'Login response did not contain an access token.',
         );
       }
-
+      _mfaChallengeToken = null;
       final refresh = result['refresh_token'] as String?;
       _api.setToken(token);
       _api.setRefreshToken(refresh);
@@ -168,6 +180,48 @@ class AuthProvider extends ChangeNotifier {
     } finally {
       _setBusy(false);
     }
+  }
+
+  Future<void> verifyMfaLogin(String code) async {
+    final challenge = _mfaChallengeToken;
+    if (challenge == null) {
+      throw const ApiException(400, 'There is no pending MFA sign-in.');
+    }
+    _setBusy(true);
+    _error = null;
+    try {
+      final result = await _api.verifyMfaLogin(
+        challengeToken: challenge,
+        code: code,
+      );
+      final token = result['access_token'] as String?;
+      if (token == null || token.isEmpty) {
+        throw const ApiException(500, 'MFA verification did not return an access token.');
+      }
+      final refresh = result['refresh_token'] as String?;
+      _mfaChallengeToken = null;
+      _api.setToken(token);
+      _api.setRefreshToken(refresh);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(accessTokenPreferenceKey, token);
+      if (refresh != null && refresh.isNotEmpty) {
+        await prefs.setString(refreshTokenPreferenceKey, refresh);
+      } else {
+        await prefs.remove(refreshTokenPreferenceKey);
+      }
+      await _loadCurrentUser();
+    } on ApiException catch (error) {
+      _error = error.message;
+      rethrow;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  void cancelMfaLogin() {
+    _mfaChallengeToken = null;
+    _error = null;
+    notifyListeners();
   }
 
   bool _refreshingAuthority = false;
@@ -329,6 +383,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout({bool notify = true}) async {
     _sessionMessage = null;
+    _mfaChallengeToken = null;
     _sessionInvalidationFuture = null;
     final revocation = _api.revokeSession();
     await _clearSession(notify: notify);
@@ -353,6 +408,7 @@ class AuthProvider extends ChangeNotifier {
     final lastSelectedSchoolUuid = _selectedSchool?.uuid;
     _api.setToken(null);
     _user = null;
+    _mfaChallengeToken = null;
     _schools = const [];
     _accesses = const [];
     _selectedSchool = null;

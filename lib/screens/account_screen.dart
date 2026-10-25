@@ -519,7 +519,11 @@ class _SecurityPanelState extends State<_SecurityPanel> {
                 'Change your password. Other signed-in sessions will be revoked.',
                 style: TextStyle(color: AppColors.textSecondary),
               ),
+              const SizedBox(height: 24),
+              const _MfaManagementPanel(),
               const SizedBox(height: 28),
+              const Divider(),
+              const SizedBox(height: 24),
               _passwordField(
                 key: const Key('current-password'),
                 controller: _currentController,
@@ -646,6 +650,332 @@ class _SecurityPanelState extends State<_SecurityPanel> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+
+class _MfaManagementPanel extends StatefulWidget {
+  const _MfaManagementPanel();
+
+  @override
+  State<_MfaManagementPanel> createState() => _MfaManagementPanelState();
+}
+
+class _MfaManagementPanelState extends State<_MfaManagementPanel> {
+  final _codeController = TextEditingController();
+  bool _loading = true;
+  bool _busy = false;
+  bool _enabled = false;
+  int _recoveryRemaining = 0;
+  String? _provisioningUri;
+  String? _manualSecret;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadStatus() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await context.read<AuthProvider>().api.getMfaStatus();
+      if (!mounted) return;
+      setState(() {
+        _enabled = result['enabled'] == true;
+        _recoveryRemaining = (result['recovery_codes_remaining'] as num?)?.toInt() ?? 0;
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not load MFA status.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _startEnrollment() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await context.read<AuthProvider>().api.startMfaEnrollment();
+      final uri = result['provisioning_uri'] as String?;
+      if (uri == null || uri.isEmpty) {
+        throw const ApiException(500, 'The server did not return an authenticator setup URI.');
+      }
+      final parsed = Uri.tryParse(uri);
+      final secret = parsed?.queryParameters['secret'];
+      if (secret == null || secret.isEmpty) {
+        throw const ApiException(500, 'The authenticator setup URI did not contain a secret.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _provisioningUri = uri;
+        _manualSecret = secret;
+        _codeController.clear();
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not start MFA enrollment.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _verifyEnrollment() async {
+    final code = _codeController.text.trim();
+    if (code.length != 6 || !RegExp(r'^\d{6}$').hasMatch(code)) {
+      setState(() => _error = 'Enter the six-digit code from your authenticator app.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await context.read<AuthProvider>().api.verifyMfaEnrollment(code);
+      final recoveryCodes = (result['recovery_codes'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _enabled = true;
+        _recoveryRemaining = recoveryCodes.length;
+        _provisioningUri = null;
+        _manualSecret = null;
+        _codeController.clear();
+      });
+      await _showRecoveryCodes(recoveryCodes);
+      await _loadStatus();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not verify MFA enrollment.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _showRecoveryCodes(List<String> codes) async {
+    if (!mounted || codes.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Save your recovery codes'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'These codes are shown only once. Store them somewhere secure. Each code can be used once if you lose access to your authenticator.',
+              ),
+              const SizedBox(height: 16),
+              SelectableText(codes.join('\n'), style: const TextStyle(fontFamily: 'monospace', height: 1.8)),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('I have saved them'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _disableMfa() async {
+    final formKey = GlobalKey<FormState>();
+    final password = TextEditingController();
+    final code = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Disable two-factor authentication?'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Confirm your password and enter a current authenticator code or an unused recovery code.'),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: password,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Current password'),
+                validator: (value) => value == null || value.isEmpty ? 'Enter your password.' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: code,
+                decoration: const InputDecoration(labelText: 'Authentication or recovery code'),
+                validator: (value) => value == null || value.trim().length < 6 ? 'Enter a valid code.' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.of(dialogContext).pop(true);
+            },
+            child: const Text('Disable MFA'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      password.dispose();
+      code.dispose();
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthProvider>().api.disableMfa(
+        currentPassword: password.text,
+        code: code.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _enabled = false;
+        _recoveryRemaining = 0;
+        _provisioningUri = null;
+        _manualSecret = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Two-factor authentication disabled.')),
+      );
+      await _loadStatus();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not disable MFA.');
+    } finally {
+      password.dispose();
+      code.dispose();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(AppDimensions.borderRadius),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.phonelink_lock_outlined, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Two-factor authentication', style: Theme.of(context).textTheme.titleMedium)),
+              if (_loading || _busy)
+                const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                IconButton(
+                  key: const Key('mfa-status-refresh'),
+                  tooltip: 'Refresh MFA status',
+                  onPressed: _loadStatus,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _loading
+                ? 'Checking account security…'
+                : _enabled
+                    ? 'Enabled. Your account requires an authenticator code when signing in. $_recoveryRemaining recovery codes remain.'
+                    : 'Add an authenticator app as a second sign-in step.',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, style: const TextStyle(color: AppColors.danger)),
+          ],
+          if (!_loading && !_enabled && _provisioningUri == null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const Key('mfa-start-enrollment'),
+              onPressed: _busy ? null : _startEnrollment,
+              icon: const Icon(Icons.security_rounded),
+              label: const Text('Set up authenticator'),
+            ),
+          ],
+          if (!_loading && !_enabled && _provisioningUri != null) ...[
+            const SizedBox(height: 14),
+            const Text('1. Open an authenticator app and choose to add an account manually.'),
+            const SizedBox(height: 6),
+            const Text('2. Enter this setup key. Keep it private; anyone with this key can generate your sign-in codes.'),
+            const SizedBox(height: 8),
+            SelectableText(_manualSecret ?? '', key: const Key('mfa-manual-secret'), style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+            const SizedBox(height: 8),
+            const Text('3. Enter the six-digit code shown by the app to finish setup.'),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('mfa-enrollment-code'),
+              controller: _codeController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              decoration: const InputDecoration(labelText: 'Six-digit authenticator code'),
+            ),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(
+                  key: const Key('mfa-enrollment-verify'),
+                  onPressed: _busy ? null : _verifyEnrollment,
+                  child: const Text('Verify and enable'),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : () => setState(() {
+                    _provisioningUri = null;
+                    _manualSecret = null;
+                    _codeController.clear();
+                    _error = null;
+                  }),
+                  child: const Text('Cancel setup'),
+                ),
+              ],
+            ),
+          ],
+          if (!_loading && _enabled) ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              key: const Key('mfa-disable'),
+              onPressed: _busy ? null : _disableMfa,
+              icon: const Icon(Icons.lock_open_outlined),
+              label: const Text('Disable two-factor authentication'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

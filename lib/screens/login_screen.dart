@@ -20,12 +20,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _mfaCodeController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _mfaCodeController.dispose();
     super.dispose();
   }
 
@@ -34,6 +36,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     try {
       await auth.login(_usernameController.text, _passwordController.text);
+      if (auth.mfaRequired) {
+        TextInput.finishAutofillContext();
+        return;
+      }
       TextInput.finishAutofillContext();
       if (mounted) {
         AppNavigation.completeAuthentication(
@@ -55,6 +61,40 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Unable to connect to the server.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _verifyMfa() async {
+    final code = _mfaCodeController.text.trim();
+    if (code.length < 6) return;
+    final auth = context.read<AuthProvider>();
+    try {
+      await auth.verifyMfaLogin(code);
+      TextInput.finishAutofillContext();
+      if (mounted) {
+        AppNavigation.completeAuthentication(
+          context,
+          resumeProtectedRoute: auth.selectedSchool != null,
+        );
+      }
+    } on ApiException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(auth.error ?? 'MFA verification failed.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to verify the authentication code.'),
             backgroundColor: AppColors.danger,
           ),
         );
@@ -131,53 +171,89 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                         const SizedBox(height: 30),
-                        TextFormField(
-                          controller: _usernameController,
-                          autofillHints: const [AutofillHints.username],
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Username',
-                            prefixIcon: Icon(Icons.person_outline),
+                        if (!auth.mfaRequired) ...[
+                          TextFormField(
+                            controller: _usernameController,
+                            autofillHints: const [AutofillHints.username],
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            keyboardType: TextInputType.text,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Username',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                ? 'Enter your username.'
+                                : null,
                           ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Enter your username.'
-                              : null,
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _passwordController,
-                          autofillHints: const [AutofillHints.password],
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          obscureText: _obscurePassword,
-                          onFieldSubmitted: (_) => _submit(),
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _passwordController,
+                            autofillHints: const [AutofillHints.password],
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            obscureText: _obscurePassword,
+                            onFieldSubmitted: (_) => _submit(),
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
                               ),
                             ),
+                            validator: (value) => value == null || value.isEmpty
+                                ? 'Enter your password.'
+                                : null,
                           ),
-                          validator: (value) => value == null || value.isEmpty
-                              ? 'Enter your password.'
-                              : null,
-                        ),
+                        ] else ...[
+                          const Text(
+                            'Two-factor authentication',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Enter the six-digit code from your authenticator app, or use a recovery code.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            key: const Key('mfa-login-code'),
+                            controller: _mfaCodeController,
+                            autofocus: true,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            keyboardType: TextInputType.text,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _verifyMfa(),
+                            decoration: const InputDecoration(
+                              labelText: 'Authentication or recovery code',
+                              prefixIcon: Icon(Icons.phonelink_lock_outlined),
+                            ),
+                            validator: (value) => value == null || value.trim().length < 6
+                                ? 'Enter a valid authentication or recovery code.'
+                                : null,
+                          ),
+                        ],
                         const SizedBox(height: 24),
                         SizedBox(
                           height: 50,
                           child: FilledButton(
-                            onPressed: auth.busy ? null : _submit,
+                            onPressed: auth.busy
+                                ? null
+                                : auth.mfaRequired
+                                ? _verifyMfa
+                                : _submit,
                             child: auth.busy
                                 ? const SizedBox(
                                     width: 22,
@@ -187,19 +263,30 @@ class _LoginScreenState extends State<LoginScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text('Sign in'),
+                                : Text(auth.mfaRequired ? 'Verify code' : 'Sign in'),
                           ),
                         ),
                         const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: auth.busy
-                              ? null
-                              : () => AppNavigation.navigateToPublicRoute<void>(
-                                  context,
-                                  AppRoutes.register,
-                                ),
-                          child: const Text("Don't have an account? Register"),
-                        ),
+                        if (auth.mfaRequired)
+                          TextButton(
+                            onPressed: auth.busy
+                                ? null
+                                : () {
+                                    auth.cancelMfaLogin();
+                                    _mfaCodeController.clear();
+                                  },
+                            child: const Text('Back to sign in'),
+                          )
+                        else
+                          TextButton(
+                            onPressed: auth.busy
+                                ? null
+                                : () => AppNavigation.navigateToPublicRoute<void>(
+                                    context,
+                                    AppRoutes.register,
+                                  ),
+                            child: const Text("Don't have an account? Register"),
+                          ),
                         const SizedBox(height: 18),
                         const Text(
                           'Your permissions and school access are loaded from the server after sign-in.',
