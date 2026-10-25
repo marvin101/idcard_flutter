@@ -611,11 +611,13 @@ class ApiService {
     int offset = 0,
   }) async {
     if (limit < 1 || limit > 100 || offset < 0) {
-      throw ArgumentError('Limit must be between 1 and 100 and offset non-negative.');
+      throw ArgumentError(
+        'Limit must be between 1 and 100 and offset non-negative.',
+      );
     }
-    final uri = _uri('/users/me/security-events').replace(
-      queryParameters: {'limit': '$limit', 'offset': '$offset'},
-    );
+    final uri = _uri(
+      '/users/me/security-events',
+    ).replace(queryParameters: {'limit': '$limit', 'offset': '$offset'});
     final response = await _client.get(uri, headers: _headers);
     return SecurityEventPage.fromJson(_decodeMap(response));
   }
@@ -630,6 +632,7 @@ class ApiService {
       body: jsonEncode({
         'current_password': currentPassword,
         'new_password': newPassword,
+        "confirm_new_password": newPassword,
       }),
     );
     _decode(response);
@@ -2029,8 +2032,9 @@ class ApiService {
       payload['auto_admission_format'] = autoAdmissionFormat;
     }
     if (streamOptions != null) {
-      payload['stream_options'] =
-          streamOptions.map((item) => item.toJson()).toList();
+      payload['stream_options'] = streamOptions
+          .map((item) => item.toJson())
+          .toList();
     }
     final response = await _client.put(
       _uri('/schools/$schoolUuid/student-field-config'),
