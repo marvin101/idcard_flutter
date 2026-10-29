@@ -61,3 +61,5 @@ app.*.map.json
 .vercel
 .env*
 .freebuff/project-id
+# Widget Preview related
+.widget_preview/

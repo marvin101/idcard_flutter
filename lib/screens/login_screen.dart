@@ -22,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _mfaCodeController = TextEditingController();
   bool _obscurePassword = true;
+  bool _rememberDevice = false;
 
   @override
   void dispose() {
@@ -35,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
     try {
-      await auth.login(_usernameController.text, _passwordController.text);
+      await auth.login(_usernameController.text, _passwordController.text, rememberDevice: _rememberDevice);
       if (auth.mfaRequired) {
         TextInput.finishAutofillContext();
         return;
@@ -244,6 +245,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? 'Enter a valid authentication or recovery code.'
                                 : null,
                           ),
+                        ],
+                        if (!auth.mfaRequired) ...[
+                          CheckboxListTile(
+                            key: const Key('remember-this-device-checkbox'),
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: _rememberDevice,
+                            onChanged: auth.busy ? null : (value) => setState(() => _rememberDevice = value ?? false),
+                            title: const Text('Remember this device'),
+                            subtitle: const Text('Trust this device for up to 30 days after MFA verification.'),
+                          ),
+                          const SizedBox(height: 8),
                         ],
                         const SizedBox(height: 24),
                         SizedBox(

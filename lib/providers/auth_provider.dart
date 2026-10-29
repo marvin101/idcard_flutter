@@ -29,6 +29,9 @@ class AuthProvider extends ChangeNotifier {
       'Your session has expired. Please sign in again.';
   static const accessTokenPreferenceKey = 'access_token';
   static const refreshTokenPreferenceKey = 'refresh_token';
+  static const trustedDeviceTokenPreferenceKey = 'trusted_device_token';
+  bool _rememberDevice = false;
+  bool get rememberDevice => _rememberDevice;
   static const selectedSchoolPreferenceKey = 'selected_school_uuid';
   static const lastSelectedSchoolPreferenceKey = 'last_selected_school_uuid';
 
@@ -137,15 +140,17 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> login(String username, String password) async {
+  Future<void> login(String username, String password, {bool rememberDevice = false}) async {
     _authEpoch++;
     _setBusy(true);
     _error = null;
     _sessionMessage = null;
     _mfaChallengeToken = null;
+    _rememberDevice = rememberDevice;
     _sessionInvalidationFuture = null;
     try {
-      final result = await _api.login(username.trim(), password);
+      final prefs = await SharedPreferences.getInstance();
+      final result = await _api.login(username.trim(), password, rememberDevice: rememberDevice, trustedDeviceToken: prefs.getString(trustedDeviceTokenPreferenceKey));
       if (result['mfa_required'] == true) {
         final challenge = result['challenge_token'] as String?;
         if (challenge == null || challenge.isEmpty) {
@@ -164,9 +169,12 @@ class AuthProvider extends ChangeNotifier {
       }
       _mfaChallengeToken = null;
       final refresh = result['refresh_token'] as String?;
+      final issuedTrustedToken = result['trusted_device_token'] as String?;
+      if (issuedTrustedToken != null && issuedTrustedToken.isNotEmpty) {
+        await prefs.setString(trustedDeviceTokenPreferenceKey, issuedTrustedToken);
+      }
       _api.setToken(token);
       _api.setRefreshToken(refresh);
-      final prefs = await SharedPreferences.getInstance();
       if (refresh != null) {
         await prefs.setString(refreshTokenPreferenceKey, refresh);
       } else {
@@ -193,16 +201,21 @@ class AuthProvider extends ChangeNotifier {
       final result = await _api.verifyMfaLogin(
         challengeToken: challenge,
         code: code,
+        deviceName: kIsWeb ? 'Trusted browser' : 'Trusted device',
       );
       final token = result['access_token'] as String?;
       if (token == null || token.isEmpty) {
         throw const ApiException(500, 'MFA verification did not return an access token.');
       }
       final refresh = result['refresh_token'] as String?;
+      final prefs = await SharedPreferences.getInstance();
+      final issuedTrustedToken = result['trusted_device_token'] as String?;
+      if (issuedTrustedToken != null && issuedTrustedToken.isNotEmpty) {
+        await prefs.setString(trustedDeviceTokenPreferenceKey, issuedTrustedToken);
+      }
       _mfaChallengeToken = null;
       _api.setToken(token);
       _api.setRefreshToken(refresh);
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setString(accessTokenPreferenceKey, token);
       if (refresh != null && refresh.isNotEmpty) {
         await prefs.setString(refreshTokenPreferenceKey, refresh);

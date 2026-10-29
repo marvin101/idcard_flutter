@@ -7,7 +7,11 @@ import 'package:provider/provider.dart';
 
 class _SuccessfulAuthProvider extends AuthProvider {
   @override
-  Future<void> login(String username, String password) async {}
+  Future<void> login(
+    String username,
+    String password, {
+    bool rememberDevice = false,
+  }) async {}
 }
 
 void main() {

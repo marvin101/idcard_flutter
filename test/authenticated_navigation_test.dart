@@ -214,7 +214,11 @@ class _FakeAuthProvider extends AuthProvider {
   bool get isAuthenticated => _authenticated;
 
   @override
-  Future<void> login(String username, String password) async {
+  Future<void> login(
+    String username,
+    String password, {
+    bool rememberDevice = false,
+  }) async {
     _authenticated = true;
     notifyListeners();
   }

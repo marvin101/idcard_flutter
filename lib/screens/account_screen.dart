@@ -524,6 +524,8 @@ class _SecurityPanelState extends State<_SecurityPanel> {
               const _MfaManagementPanel(),
               const SizedBox(height: 24),
               const _ActiveSessionsPanel(),
+              const SizedBox(height: 24),
+              const _TrustedDevicesPanel(),
               const SizedBox(height: 28),
               const Divider(),
               const SizedBox(height: 24),
@@ -796,6 +798,64 @@ class _ActiveSessionsPanelState extends State<_ActiveSessionsPanel> {
   }
 }
 
+
+class _TrustedDevicesPanel extends StatefulWidget {
+  const _TrustedDevicesPanel();
+  @override
+  State<_TrustedDevicesPanel> createState() => _TrustedDevicesPanelState();
+}
+
+class _TrustedDevicesPanelState extends State<_TrustedDevicesPanel> {
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _devices = const [];
+  final Set<String> _revoking = {};
+  @override
+  void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final result = await context.read<AuthProvider>().api.getTrustedDevices();
+      final rows = (result['devices'] as List? ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      if (mounted) setState(() => _devices = rows);
+    } on ApiException catch (e) { if (mounted) setState(() => _error = e.message); }
+    catch (_) { if (mounted) setState(() => _error = 'Could not load trusted devices.'); }
+    finally { if (mounted) setState(() => _loading = false); }
+  }
+  Future<void> _revoke(String id) async {
+    setState(() => _revoking.add(id));
+    try {
+      await context.read<AuthProvider>().api.revokeTrustedDevice(id);
+      if (!mounted) return;
+      setState(() => _devices.removeWhere((d) => d['id'] == id));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Trusted device revoked.')));
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not revoke trusted device.')));
+    } finally { if (mounted) setState(() => _revoking.remove(id)); }
+  }
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [Expanded(child: Text('Trusted devices', style: Theme.of(context).textTheme.titleLarge)), IconButton(tooltip: 'Refresh trusted devices', onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh))]),
+    const Text('Devices can bypass MFA only while their trust credential remains valid. Trust expires after 30 days.', style: TextStyle(color: AppColors.textSecondary)),
+    if (_loading) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()))
+    else if (_error != null) Padding(padding: const EdgeInsets.all(8), child: Text(_error!, style: const TextStyle(color: AppColors.danger)))
+    else if (_devices.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No trusted devices.'))
+    else ..._devices.map((device) {
+      final id = device['id']?.toString() ?? '';
+      final expired = device['is_expired'] == true;
+      return ListTile(
+        key: Key('trusted-device-$id'), contentPadding: EdgeInsets.zero,
+        leading: Icon(expired ? Icons.schedule : Icons.verified_user_outlined),
+        title: Text((device['device_name'] as String?)?.trim().isNotEmpty == true ? device['device_name'] as String : 'Trusted device'),
+        subtitle: Text('${expired ? 'Expired' : 'Expires'}: ${device['expires_at'] ?? 'Unknown'}\n${device['user_agent'] ?? 'Browser details unavailable'}'),
+        isThreeLine: true,
+        trailing: IconButton(tooltip: 'Revoke trusted device', onPressed: id.isEmpty || _revoking.contains(id) ? null : () => _revoke(id), icon: _revoking.contains(id) ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.delete_outline)),
+      );
+    }),
+  ]);
+}
 
 class _MfaManagementPanel extends StatefulWidget {
   const _MfaManagementPanel();

@@ -495,11 +495,21 @@ class ApiService {
     ),
   );
 
-  Future<Map<String, dynamic>> login(String username, String password) async {
+  Future<Map<String, dynamic>> login(
+    String username,
+    String password, {
+    bool rememberDevice = false,
+    String? trustedDeviceToken,
+  }) async {
     final response = await _client.post(
       _uri('/auth/login'),
       headers: _headers,
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+        'remember_device': rememberDevice,
+        'trusted_device_token': ?trustedDeviceToken,
+      }),
     );
     return _decodeMap(response);
   }
@@ -507,6 +517,7 @@ class ApiService {
   Future<Map<String, dynamic>> verifyMfaLogin({
     required String challengeToken,
     required String code,
+    String? deviceName,
   }) async {
     final response = await _client.post(
       _uri('/auth/mfa/verify'),
@@ -514,9 +525,22 @@ class ApiService {
       body: jsonEncode({
         'challenge_token': challengeToken,
         'code': code.trim(),
+        'device_name': ?deviceName,
       }),
     );
     return _decodeMap(response);
+  }
+
+  Future<Map<String, dynamic>> getTrustedDevices() async => _decodeMap(
+    await _client.get(_uri('/users/me/trusted-devices'), headers: _headers),
+  );
+
+  Future<void> revokeTrustedDevice(String id) async {
+    final response = await _client.delete(
+      _uri('/users/me/trusted-devices/$id'),
+      headers: _headers,
+    );
+    if (response.statusCode != 204) _decodeMap(response);
   }
 
   Future<Map<String, dynamic>> startMfaEnrollment() async {
